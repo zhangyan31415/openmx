@@ -1,3 +1,7 @@
+> **Local development fork:** validated snapshots, local acceleration changes,
+> version tags and installation notes are documented in [local-records/README.md](local-records/README.md).
+> Current local validation is short MoTe2 SOC smoke testing, not large-system production convergence.
+
 # openmx4.0_gpu
 
 This repository includes both the NVIDIA CUDA and AMD HIP backends. Select one

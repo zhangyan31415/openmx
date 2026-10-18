@@ -1,0 +1,3 @@
+
+# Preserve context whitespace in archived unified patches.
+local-records/provenance/**/*.patch -whitespace
