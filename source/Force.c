@@ -4556,15 +4556,17 @@ void Force3()
 
             /* part-1 write targets: the flat per-atom slices on the GPU
                path, the shared per-atom buffers on the CPU path */
-            double* vpot_dst[4];
-            {
-                int s;
-                for (s = 0; s <= SpinP_switch; s++) {
-                    vpot_dst[s] = use_gpu_trace
-                        ? (vpot_stage + (size_t)s * (size_t)GridN_Atom[Gc_AN])
-                        : Vpot_grid[s];
-                }
-            }
+            /* NVHPC 24.1 can lower stores through a private pointer array
+               to stack writes in this OpenMP region. Use scalar pointers;
+               only access components present in the current spin mode. */
+            size_t vpot_stride = (size_t)GridN_Atom[Gc_AN];
+            double* vpot_dst0 = use_gpu_trace ? vpot_stage : Vpot_grid[0];
+            double* vpot_dst1 = SpinP_switch >= 1
+                ? (use_gpu_trace ? vpot_stage + vpot_stride : Vpot_grid[1]) : NULL;
+            double* vpot_dst2 = SpinP_switch == 3
+                ? (use_gpu_trace ? vpot_stage + 2 * vpot_stride : Vpot_grid[2]) : NULL;
+            double* vpot_dst3 = SpinP_switch == 3
+                ? (use_gpu_trace ? vpot_stage + 3 * vpot_stride : Vpot_grid[3]) : NULL;
 
             /***********************************
                          calc dOrb0
@@ -5030,9 +5032,10 @@ void Force3()
                         }
 
                         if (SpinP_switch == 0) {
-                            vpot_dst[0][Nc] = 4.0 * Vpt;
+                            vpot_dst0[Nc] = 4.0 * Vpt;
                         } else if (SpinP_switch == 1) {
-                            vpot_dst[spin][Nc] = 2.0 * Vpt;
+                            if (spin == 0) vpot_dst0[Nc] = 2.0 * Vpt;
+                            else vpot_dst1[Nc] = 2.0 * Vpt;
                         }
                     }
                 }
@@ -5108,10 +5111,10 @@ void Force3()
                         ImVpt21 = 0.0;
                     }
 
-                    vpot_dst[0][Nc] = 2.0 * ReVpt11;
-                    vpot_dst[1][Nc] = 2.0 * ReVpt22;
-                    vpot_dst[2][Nc] = 4.0 * ReVpt21;
-                    vpot_dst[3][Nc] = 4.0 * ImVpt21;
+                    vpot_dst0[Nc] = 2.0 * ReVpt11;
+                    vpot_dst1[Nc] = 2.0 * ReVpt22;
+                    vpot_dst2[Nc] = 4.0 * ReVpt21;
+                    vpot_dst3[Nc] = 4.0 * ImVpt21;
                 }
 
             } /* Nc, here omp barrier is called implicitly because of end of for loop */
