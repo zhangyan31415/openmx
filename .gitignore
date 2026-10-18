@@ -92,3 +92,8 @@ __pycache__/
 # Documentation shipped with the integrated AMD backend
 !/docs/GPU_BACKENDS.md
 !/source/third_party/hip/*.md
+
+# Local engineering records; upstream ignores untracked *.md files.
+!/local-records/**/*.md
+/local-records/build/
+/local-records/results/
