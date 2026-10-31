@@ -1,6 +1,9 @@
 > **Local development fork:** validated snapshots, local acceleration changes,
 > version tags and installation notes are documented in [local-records/README.md](local-records/README.md).
-> Current local validation is short MoTe2 SOC smoke testing, not large-system production convergence.
+> GPU smoke-test notes and CPU validation have separate scopes.
+> The [standalone CPU target](cpu/README.md) combines the NSOC/SOC symmetry paths,
+> with its own source build, explicit single/multi-node workflow and acceptance records.
+> Its compiler and bundled ELPA requirements differ from the GPU targets below.
 
 # openmx4.0_gpu
 

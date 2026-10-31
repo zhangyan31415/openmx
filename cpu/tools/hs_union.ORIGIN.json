@@ -1,0 +1,10 @@
+{
+  "schema": 1,
+  "module": "hs_union.py",
+  "source_description": "Previously verified complete periodic atom-block OpenMX format12/15 reader; copied byte-for-byte into self-contained CPU user tools",
+  "source_path": "snapshots/work/software/2.mp_openmx/results/openmx_multinode_efficiency_20261025/analysis/hs_union.py",
+  "source_sha256": "23012deed688c0fd5e8f4f7c48fd0e69945eec92661438ab974193538da7578b",
+  "copied_sha256": "23012deed688c0fd5e8f4f7c48fd0e69945eec92661438ab974193538da7578b",
+  "license": "GPL-3.0; repository LICENSE retained unchanged",
+  "runtime_dependency": "same-directory hs_union.py and NumPy; no result-tree module or historical software objects"
+}

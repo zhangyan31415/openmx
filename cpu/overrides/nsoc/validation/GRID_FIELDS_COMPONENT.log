@@ -1,0 +1,24 @@
+[CPU_GRID_FIELDS_SHARED] active=1 fields=8 points=21 shared_bytes=1344 old_C_bytes=1344 single_node=1 nodes=1 leader_scratch_bytes=0
+[CPU_GRID_FIELDS_SHARED_WRITE] field=Density components=2 generation=1 points=21 source=B snapshot=1 nodes=1
+[CPU_GRID_FIELDS_SHARED_WRITE] field=Vxc components=2 generation=1 points=21 source=B snapshot=1 nodes=1
+[CPU_GRID_FIELDS_SHARED_WRITE] field=Vpot components=2 generation=1 points=21 source=B snapshot=1 nodes=1
+[CPU_GRID_FIELDS_SHARED_WRITE] field=RefVxc components=1 generation=1 points=21 source=B snapshot=1 nodes=1
+[CPU_GRID_FIELDS_SHARED_WRITE] field=dVHart components=1 generation=1 points=21 source=B snapshot=1 nodes=1
+[CPU_GRID_FIELDS_SHARED_WRITE] field=Density components=2 generation=2 points=21 source=B snapshot=1 nodes=1
+[CPU_GRID_FIELDS_SHARED_WRITE] field=Vxc components=2 generation=2 points=21 source=B snapshot=1 nodes=1
+[CPU_GRID_FIELDS_SHARED_WRITE] field=Vpot components=2 generation=2 points=21 source=B snapshot=1 nodes=1
+[CPU_GRID_FIELDS_SHARED_WRITE] field=RefVxc components=1 generation=2 points=21 source=B snapshot=1 nodes=1
+[CPU_GRID_FIELDS_SHARED_WRITE] field=dVHart components=1 generation=2 points=21 source=B snapshot=1 nodes=1
+[CPU_GRID_FIELDS_SHARED_WRITE] field=Density components=2 generation=3 points=21 source=B snapshot=1 nodes=1
+[CPU_GRID_FIELDS_SHARED] active=1 fields=14 points=21 shared_bytes=2352 old_C_bytes=2352 single_node=1 nodes=1 leader_scratch_bytes=0
+[CPU_GRID_FIELDS_SHARED_WRITE] field=Density components=4 generation=1 points=21 source=B snapshot=1 nodes=1
+[CPU_GRID_FIELDS_SHARED_WRITE] field=Vxc components=4 generation=1 points=21 source=B snapshot=1 nodes=1
+[CPU_GRID_FIELDS_SHARED_WRITE] field=Vpot components=4 generation=1 points=21 source=B snapshot=1 nodes=1
+[CPU_GRID_FIELDS_SHARED_WRITE] field=RefVxc components=1 generation=1 points=21 source=B snapshot=1 nodes=1
+[CPU_GRID_FIELDS_SHARED_WRITE] field=dVHart components=1 generation=1 points=21 source=B snapshot=1 nodes=1
+[CPU_GRID_FIELDS_SHARED_WRITE] field=Density components=4 generation=2 points=21 source=B snapshot=1 nodes=1
+[CPU_GRID_FIELDS_SHARED_WRITE] field=Vxc components=4 generation=2 points=21 source=B snapshot=1 nodes=1
+[CPU_GRID_FIELDS_SHARED_WRITE] field=Vpot components=4 generation=2 points=21 source=B snapshot=1 nodes=1
+[CPU_GRID_FIELDS_SHARED_WRITE] field=RefVxc components=1 generation=2 points=21 source=B snapshot=1 nodes=1
+[CPU_GRID_FIELDS_SHARED_WRITE] field=dVHart components=1 generation=2 points=21 source=B snapshot=1 nodes=1
+UNIFIED_GRID_FIELDS widths=2,4 publication=all_fields scalar_duplicate=checked layout_bytes=8,14 rank_disagreement=rejected active_reconfigure=rejected errors=0

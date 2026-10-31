@@ -1,3 +1,8 @@
 
 # Preserve context whitespace in archived unified patches.
 local-records/provenance/**/*.patch -whitespace
+
+# Retain source bytes and historical hashes; upstream formatting is archival.
+cpu/vendor/** -text -whitespace
+cpu/overrides/soc/source/** -text -whitespace
+cpu/overrides/nsoc/source/** -text -whitespace

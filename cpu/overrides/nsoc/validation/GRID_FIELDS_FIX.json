@@ -1,0 +1,35 @@
+{
+  "root_cause": "NSOC and SOC grid-field C bodies matched, but their private headers defined incompatible packed layouts (8 vs14). Unifiedclean2 linked a14-field helper with2-component scalar callers. Initial density publication rejected.",
+  "failed_native_run": "results/openmx_unified_cpu_20261031/runs/tiny_D2_optimized_node042_4x1",
+  "failed_binary_sha256": "9370d07bc34c6ae73789ff811d8e38ce1b95c62725ad994423ca07a954c249a6",
+  "fix": "Every compiled consumer includes explicit unified header; collective Configure agrees2/4 components before allocation. Runtime offsets and payload8/14 derivefromsame agreedwidth. Originalarchiveheadersunchanged.",
+  "component": {
+    "node": "node042",
+    "ranks": 4,
+    "threads": 1,
+    "all_fields": [
+      "density",
+      "Vxc",
+      "Vpot",
+      "RefVxc",
+      "dVHart"
+    ],
+    "epochs": 2,
+    "scalar_one_to_two_duplicate": true,
+    "packed_payload_field_counts": [
+      8,
+      14
+    ],
+    "rank_disagreement": "rejected_without_hang",
+    "active_reconfiguration": "rejected",
+    "errors": 0
+  },
+  "new_native_status": "clean4 full 23-step NSOC and own one-step SOC complete; numerical comparisons in CLEAN4_TINY_COMPARISONS.json",
+  "source_sha256": {
+    "source/cpu_grid_fields_shared.unified.c": "d4b2d5c146f8de4df8cc15c9d7139d71bcca62a3edddec14055bdd9d4b574858",
+    "source/cpu_grid_fields_shared.unified.h": "f6964eaac33bcbab8f5cb1c733534a34e2400e0963ef6049213e718bbdc7b7ba",
+    "tests/grid_fields_unified.c": "95d553b3cd83ddb9ef18fee69dc91ebe73355e614817e3c6578e9f2ff3f2172f"
+  },
+  "new_native_output": "snapshots/work/software/2.mp_openmx/results/openmx_unified_cpu_20261031/runs/tiny_D2_optimized_clean4_node042_4x1",
+  "native_guard_followup": "clean3 initial publication fixed then exposed legacy SOC-only LOCAL_HS one-step guard; clean4 scopes that guard to spinor SOC, actual C-predicate test red-to-green"
+}

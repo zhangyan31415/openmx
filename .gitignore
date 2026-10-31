@@ -95,5 +95,6 @@ __pycache__/
 
 # Local engineering records; upstream ignores untracked *.md files.
 !/local-records/**/*.md
+!/cpu/**/*.md
 /local-records/build/
 /local-records/results/

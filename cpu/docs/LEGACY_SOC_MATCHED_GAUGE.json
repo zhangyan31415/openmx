@@ -1,0 +1,35 @@
+{
+  "header_equal": true,
+  "geometry_prefix_equal": true,
+  "indptr_equal": true,
+  "rows_equal": true,
+  "coefficient_max": 0.0,
+  "old_sha256": "f605c9ff3a8ee254d9680bdf81c7725ad636a20433b12dacdc701e7cbca7468e",
+  "new_sha256": "f605c9ff3a8ee254d9680bdf81c7725ad636a20433b12dacdc701e7cbca7468e",
+  "checks": {
+    "C3_spinor_cube_error": 1.27675647831893e-15,
+    "C3_basis_generator_error": 7.108895957933346e-16,
+    "C2_spinor_square_error": 1.1102230246251565e-15,
+    "D3_spinor_group_relation_error": 1.0190492755571723e-15,
+    "D3_partner_gauge_error": 0.0,
+    "C2_plus_sector_error": 5.661048867003677e-16,
+    "C2_minus_sector_error": 5.661048867003677e-16,
+    "basis_unitarity_error": 1.1102230246251565e-15,
+    "map_SU2_angular_error": 2.1421246255163845e-15
+  },
+  "scope": "metadata gauge equivalence, no native SCF",
+  "node": "node041",
+  "environment_prefix": "snapshots/home/mambaforge",
+  "threads": 1,
+  "native_export_map": {
+    "header_equal": true,
+    "cell_max": 0.0,
+    "coordinates_max": 7.105427357601002e-15,
+    "species_equal": true,
+    "integer_actions_equal": true,
+    "orbital_rotation_max": 0.0,
+    "spin_rotation_max": 0.0,
+    "map_old_sha256": "d551e8e0121323a35239ab782d343ac26cc13688bfbf5a268d6d482f28667479",
+    "map_new_sha256": "5104519299c2a025c168841aa043fc8371c168a0edbff2099b33e1d65fa56cbc"
+  }
+}

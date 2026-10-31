@@ -1,0 +1,385 @@
+{
+  "nsoc_vs_raw_implementation": {
+    "passed": false,
+    "comparison": "implementation equivalence",
+    "gates": {
+      "energy": true,
+      "force": true,
+      "H": true,
+      "S": true,
+      "DM": false,
+      "electrons": true,
+      "Hermiticity": true
+    },
+    "errors": {
+      "energy_delta_Ha": 0.0,
+      "energy_error_meV_atom": 0.0,
+      "force_max_vector_meV_A": 6.684868771918999e-06
+    },
+    "HS": {
+      "reference": "snapshots/work/software/2.mp_openmx/results/openmx_unified_cpu_20261031/workflow_probe/raw3atom_foreground040_041/nsoc/hgi2_tiny.scfout",
+      "candidate": "snapshots/work/software/2.mp_openmx/results/openmx_unified_cpu_20261031/runs/tiny_D2_optimized_clean4_node042_4x1/nsoc/hgi2_tiny.scfout",
+      "atom_count": 3,
+      "scalar_AO_count": 57,
+      "header_spin": 12,
+      "geometry_sha256": "8efa7da5eb29af25d37914ce64da12cc242c93b24eebc60888d329266cf6859a",
+      "reference_blocks": 9,
+      "candidate_blocks": 9,
+      "added_candidate_blocks": 0,
+      "removed_candidate_blocks": 0,
+      "fields": {
+        "H": {
+          "max_absolute_difference": 6.523993619097262e-11,
+          "RMS_difference": 4.212993405453186e-12,
+          "relative_Frobenius_difference": 4.367091497607149e-11,
+          "additional_candidate_blocks_max_absolute_value": 0.0,
+          "missing_candidate_blocks_max_reference_value": 0.0
+        },
+        "S": {
+          "max_absolute_difference": 2.220446049250313e-16,
+          "RMS_difference": 1.5792895960878666e-17,
+          "relative_Frobenius_difference": 1.0473477079762598e-16,
+          "additional_candidate_blocks_max_absolute_value": 0.0,
+          "missing_candidate_blocks_max_reference_value": 0.0
+        }
+      },
+      "max_H": 6.523993619097262e-11,
+      "max_S": 2.220446049250313e-16,
+      "comparison": "explicit union of periodic atom blocks; absent blocks are zero for comparison only; full exported H spinor fields and nonorthogonal S retained"
+    },
+    "density": {
+      "DM_all_exported_fields_max_difference": 5.849776075345277e-10,
+      "TrDS_reference": 32.00000000000004,
+      "TrDS_candidate": 31.999999999999886,
+      "electron_error_reference": 4.263256414560601e-14,
+      "electron_error_candidate": 1.1368683772161603e-13,
+      "DM_diagonal_spin_Hermiticity_max": 0.0,
+      "reverse_blocks_missing": 0,
+      "EDM_scope": "not in scfout; requires native gsoc_density_rank*.bin audit",
+      "finite": true
+    },
+    "reader_sha256": "23012deed688c0fd5e8f4f7c48fd0e69945eec92661438ab974193538da7578b"
+  },
+  "nsoc_vs_raw_physical": {
+    "passed": true,
+    "comparison": "physical projection accuracy",
+    "gates": {
+      "energy": true,
+      "force": true,
+      "electrons": true,
+      "Hermiticity": true
+    },
+    "errors": {
+      "energy_delta_Ha": 0.0,
+      "energy_error_meV_atom": 0.0,
+      "force_max_vector_meV_A": 6.684868771918999e-06
+    },
+    "HS": {
+      "reference": "snapshots/work/software/2.mp_openmx/results/openmx_unified_cpu_20261031/workflow_probe/raw3atom_foreground040_041/nsoc/hgi2_tiny.scfout",
+      "candidate": "snapshots/work/software/2.mp_openmx/results/openmx_unified_cpu_20261031/runs/tiny_D2_optimized_clean4_node042_4x1/nsoc/hgi2_tiny.scfout",
+      "atom_count": 3,
+      "scalar_AO_count": 57,
+      "header_spin": 12,
+      "geometry_sha256": "8efa7da5eb29af25d37914ce64da12cc242c93b24eebc60888d329266cf6859a",
+      "reference_blocks": 9,
+      "candidate_blocks": 9,
+      "added_candidate_blocks": 0,
+      "removed_candidate_blocks": 0,
+      "fields": {
+        "H": {
+          "max_absolute_difference": 6.523993619097262e-11,
+          "RMS_difference": 4.212993405453186e-12,
+          "relative_Frobenius_difference": 4.367091497607149e-11,
+          "additional_candidate_blocks_max_absolute_value": 0.0,
+          "missing_candidate_blocks_max_reference_value": 0.0
+        },
+        "S": {
+          "max_absolute_difference": 2.220446049250313e-16,
+          "RMS_difference": 1.5792895960878666e-17,
+          "relative_Frobenius_difference": 1.0473477079762598e-16,
+          "additional_candidate_blocks_max_absolute_value": 0.0,
+          "missing_candidate_blocks_max_reference_value": 0.0
+        }
+      },
+      "max_H": 6.523993619097262e-11,
+      "max_S": 2.220446049250313e-16,
+      "comparison": "explicit union of periodic atom blocks; absent blocks are zero for comparison only; full exported H spinor fields and nonorthogonal S retained"
+    },
+    "density": {
+      "DM_all_exported_fields_max_difference": 5.849776075345277e-10,
+      "TrDS_reference": 32.00000000000004,
+      "TrDS_candidate": 31.999999999999886,
+      "electron_error_reference": 4.263256414560601e-14,
+      "electron_error_candidate": 1.1368683772161603e-13,
+      "DM_diagonal_spin_Hermiticity_max": 0.0,
+      "reverse_blocks_missing": 0,
+      "EDM_scope": "not in scfout; requires native gsoc_density_rank*.bin audit",
+      "finite": true
+    },
+    "reader_sha256": "23012deed688c0fd5e8f4f7c48fd0e69945eec92661438ab974193538da7578b"
+  },
+  "soc_vs_raw_implementation": {
+    "passed": false,
+    "comparison": "implementation equivalence",
+    "gates": {
+      "energy": true,
+      "force": true,
+      "H": true,
+      "S": true,
+      "DM": false,
+      "electrons": true,
+      "Hermiticity": true
+    },
+    "errors": {
+      "energy_delta_Ha": -8.01492205937393e-12,
+      "energy_error_meV_atom": 7.269904662970452e-08,
+      "force_max_vector_meV_A": 1.4657183598545767e-05
+    },
+    "HS": {
+      "reference": "snapshots/work/software/2.mp_openmx/results/openmx_unified_cpu_20261031/workflow_probe/raw3atom_foreground040_041/soc/hgi2_tiny.scfout",
+      "candidate": "snapshots/work/software/2.mp_openmx/results/openmx_unified_cpu_20261031/runs/tiny_D2_optimized_clean4_node042_4x1/soc/hgi2_tiny.scfout",
+      "atom_count": 3,
+      "scalar_AO_count": 57,
+      "header_spin": 15,
+      "geometry_sha256": "8efa7da5eb29af25d37914ce64da12cc242c93b24eebc60888d329266cf6859a",
+      "reference_blocks": 9,
+      "candidate_blocks": 9,
+      "added_candidate_blocks": 0,
+      "removed_candidate_blocks": 0,
+      "fields": {
+        "H.real.0": {
+          "max_absolute_difference": 6.523861501070254e-11,
+          "RMS_difference": 4.212975699917742e-12,
+          "relative_Frobenius_difference": 4.350244599538435e-11,
+          "additional_candidate_blocks_max_absolute_value": 0.0,
+          "missing_candidate_blocks_max_reference_value": 0.0
+        },
+        "H.real.1": {
+          "max_absolute_difference": 6.523861501070254e-11,
+          "RMS_difference": 4.212975699917742e-12,
+          "relative_Frobenius_difference": 4.350244599538435e-11,
+          "additional_candidate_blocks_max_absolute_value": 0.0,
+          "missing_candidate_blocks_max_reference_value": 0.0
+        },
+        "H.real.2": {
+          "max_absolute_difference": 3.0531133177191805e-16,
+          "RMS_difference": 7.855763606818829e-18,
+          "relative_Frobenius_difference": 1.366883089567146e-15,
+          "additional_candidate_blocks_max_absolute_value": 0.0,
+          "missing_candidate_blocks_max_reference_value": 0.0
+        },
+        "H.real.3": {
+          "max_absolute_difference": 0.0,
+          "RMS_difference": 0.0,
+          "relative_Frobenius_difference": 0.0,
+          "additional_candidate_blocks_max_absolute_value": 0.0,
+          "missing_candidate_blocks_max_reference_value": 0.0
+        },
+        "H.imag.0": {
+          "max_absolute_difference": 1.1102230246251565e-16,
+          "RMS_difference": 3.038067079662523e-18,
+          "relative_Frobenius_difference": 5.297977856520187e-16,
+          "additional_candidate_blocks_max_absolute_value": 0.0,
+          "missing_candidate_blocks_max_reference_value": 0.0
+        },
+        "H.imag.1": {
+          "max_absolute_difference": 1.1102230246251565e-16,
+          "RMS_difference": 3.038067079662523e-18,
+          "relative_Frobenius_difference": 5.297977856520187e-16,
+          "additional_candidate_blocks_max_absolute_value": 0.0,
+          "missing_candidate_blocks_max_reference_value": 0.0
+        },
+        "H.imag.2": {
+          "max_absolute_difference": 3.0531133177191805e-16,
+          "RMS_difference": 7.855502513262552e-18,
+          "relative_Frobenius_difference": 1.3668376599456948e-15,
+          "additional_candidate_blocks_max_absolute_value": 0.0,
+          "missing_candidate_blocks_max_reference_value": 0.0
+        },
+        "S": {
+          "max_absolute_difference": 2.220446049250313e-16,
+          "RMS_difference": 1.5792895960878666e-17,
+          "relative_Frobenius_difference": 1.0473477079762598e-16,
+          "additional_candidate_blocks_max_absolute_value": 0.0,
+          "missing_candidate_blocks_max_reference_value": 0.0
+        }
+      },
+      "max_H": 6.523861501070254e-11,
+      "max_S": 2.220446049250313e-16,
+      "comparison": "explicit union of periodic atom blocks; absent blocks are zero for comparison only; full exported H spinor fields and nonorthogonal S retained"
+    },
+    "density": {
+      "DM_all_exported_fields_max_difference": 5.894107233533896e-10,
+      "TrDS_reference": 32.00000000000006,
+      "TrDS_candidate": 32.0,
+      "electron_error_reference": 5.684341886080802e-14,
+      "electron_error_candidate": 0.0,
+      "DM_diagonal_spin_Hermiticity_max": 0.0,
+      "reverse_blocks_missing": 0,
+      "EDM_scope": "not in scfout; requires native gsoc_density_rank*.bin audit",
+      "finite": true
+    },
+    "reader_sha256": "23012deed688c0fd5e8f4f7c48fd0e69945eec92661438ab974193538da7578b"
+  },
+  "soc_vs_raw_physical": {
+    "passed": true,
+    "comparison": "physical projection accuracy",
+    "gates": {
+      "energy": true,
+      "force": true,
+      "electrons": true,
+      "Hermiticity": true
+    },
+    "errors": {
+      "energy_delta_Ha": -8.01492205937393e-12,
+      "energy_error_meV_atom": 7.269904662970452e-08,
+      "force_max_vector_meV_A": 1.4657183598545767e-05
+    },
+    "HS": {
+      "reference": "snapshots/work/software/2.mp_openmx/results/openmx_unified_cpu_20261031/workflow_probe/raw3atom_foreground040_041/soc/hgi2_tiny.scfout",
+      "candidate": "snapshots/work/software/2.mp_openmx/results/openmx_unified_cpu_20261031/runs/tiny_D2_optimized_clean4_node042_4x1/soc/hgi2_tiny.scfout",
+      "atom_count": 3,
+      "scalar_AO_count": 57,
+      "header_spin": 15,
+      "geometry_sha256": "8efa7da5eb29af25d37914ce64da12cc242c93b24eebc60888d329266cf6859a",
+      "reference_blocks": 9,
+      "candidate_blocks": 9,
+      "added_candidate_blocks": 0,
+      "removed_candidate_blocks": 0,
+      "fields": {
+        "H.real.0": {
+          "max_absolute_difference": 6.523861501070254e-11,
+          "RMS_difference": 4.212975699917742e-12,
+          "relative_Frobenius_difference": 4.350244599538435e-11,
+          "additional_candidate_blocks_max_absolute_value": 0.0,
+          "missing_candidate_blocks_max_reference_value": 0.0
+        },
+        "H.real.1": {
+          "max_absolute_difference": 6.523861501070254e-11,
+          "RMS_difference": 4.212975699917742e-12,
+          "relative_Frobenius_difference": 4.350244599538435e-11,
+          "additional_candidate_blocks_max_absolute_value": 0.0,
+          "missing_candidate_blocks_max_reference_value": 0.0
+        },
+        "H.real.2": {
+          "max_absolute_difference": 3.0531133177191805e-16,
+          "RMS_difference": 7.855763606818829e-18,
+          "relative_Frobenius_difference": 1.366883089567146e-15,
+          "additional_candidate_blocks_max_absolute_value": 0.0,
+          "missing_candidate_blocks_max_reference_value": 0.0
+        },
+        "H.real.3": {
+          "max_absolute_difference": 0.0,
+          "RMS_difference": 0.0,
+          "relative_Frobenius_difference": 0.0,
+          "additional_candidate_blocks_max_absolute_value": 0.0,
+          "missing_candidate_blocks_max_reference_value": 0.0
+        },
+        "H.imag.0": {
+          "max_absolute_difference": 1.1102230246251565e-16,
+          "RMS_difference": 3.038067079662523e-18,
+          "relative_Frobenius_difference": 5.297977856520187e-16,
+          "additional_candidate_blocks_max_absolute_value": 0.0,
+          "missing_candidate_blocks_max_reference_value": 0.0
+        },
+        "H.imag.1": {
+          "max_absolute_difference": 1.1102230246251565e-16,
+          "RMS_difference": 3.038067079662523e-18,
+          "relative_Frobenius_difference": 5.297977856520187e-16,
+          "additional_candidate_blocks_max_absolute_value": 0.0,
+          "missing_candidate_blocks_max_reference_value": 0.0
+        },
+        "H.imag.2": {
+          "max_absolute_difference": 3.0531133177191805e-16,
+          "RMS_difference": 7.855502513262552e-18,
+          "relative_Frobenius_difference": 1.3668376599456948e-15,
+          "additional_candidate_blocks_max_absolute_value": 0.0,
+          "missing_candidate_blocks_max_reference_value": 0.0
+        },
+        "S": {
+          "max_absolute_difference": 2.220446049250313e-16,
+          "RMS_difference": 1.5792895960878666e-17,
+          "relative_Frobenius_difference": 1.0473477079762598e-16,
+          "additional_candidate_blocks_max_absolute_value": 0.0,
+          "missing_candidate_blocks_max_reference_value": 0.0
+        }
+      },
+      "max_H": 6.523861501070254e-11,
+      "max_S": 2.220446049250313e-16,
+      "comparison": "explicit union of periodic atom blocks; absent blocks are zero for comparison only; full exported H spinor fields and nonorthogonal S retained"
+    },
+    "density": {
+      "DM_all_exported_fields_max_difference": 5.894107233533896e-10,
+      "TrDS_reference": 32.00000000000006,
+      "TrDS_candidate": 32.0,
+      "electron_error_reference": 5.684341886080802e-14,
+      "electron_error_candidate": 0.0,
+      "DM_diagonal_spin_Hermiticity_max": 0.0,
+      "reverse_blocks_missing": 0,
+      "EDM_scope": "not in scfout; requires native gsoc_density_rank*.bin audit",
+      "finite": true
+    },
+    "reader_sha256": "23012deed688c0fd5e8f4f7c48fd0e69945eec92661438ab974193538da7578b"
+  },
+  "nsoc_vs_historical_optimized": {
+    "passed": true,
+    "comparison": "implementation equivalence",
+    "gates": {
+      "energy": true,
+      "force": true,
+      "H": true,
+      "S": true,
+      "DM": true,
+      "electrons": true,
+      "Hermiticity": true
+    },
+    "errors": {
+      "energy_delta_Ha": 0.0,
+      "energy_error_meV_atom": 0.0,
+      "force_max_vector_meV_A": 0.0
+    },
+    "HS": {
+      "reference": "snapshots/work/software/2.mp_openmx/results/openmx_generic_soc_20261028/c2n/scalar/hgi2_tiny.scfout",
+      "candidate": "snapshots/work/software/2.mp_openmx/results/openmx_unified_cpu_20261031/runs/tiny_D2_optimized_clean4_node042_4x1/nsoc/hgi2_tiny.scfout",
+      "atom_count": 3,
+      "scalar_AO_count": 57,
+      "header_spin": 12,
+      "geometry_sha256": "8efa7da5eb29af25d37914ce64da12cc242c93b24eebc60888d329266cf6859a",
+      "reference_blocks": 9,
+      "candidate_blocks": 9,
+      "added_candidate_blocks": 0,
+      "removed_candidate_blocks": 0,
+      "fields": {
+        "H": {
+          "max_absolute_difference": 2.1360690993788012e-13,
+          "RMS_difference": 6.34643930167161e-15,
+          "relative_Frobenius_difference": 6.578572156922039e-14,
+          "additional_candidate_blocks_max_absolute_value": 0.0,
+          "missing_candidate_blocks_max_reference_value": 0.0
+        },
+        "S": {
+          "max_absolute_difference": 3.3306690738754696e-16,
+          "RMS_difference": 3.340856927307657e-17,
+          "relative_Frobenius_difference": 2.215577721881991e-16,
+          "additional_candidate_blocks_max_absolute_value": 0.0,
+          "missing_candidate_blocks_max_reference_value": 0.0
+        }
+      },
+      "max_H": 2.1360690993788012e-13,
+      "max_S": 3.3306690738754696e-16,
+      "comparison": "explicit union of periodic atom blocks; absent blocks are zero for comparison only; full exported H spinor fields and nonorthogonal S retained"
+    },
+    "density": {
+      "DM_all_exported_fields_max_difference": 1.9594395550548427e-13,
+      "TrDS_reference": 31.99999999999997,
+      "TrDS_candidate": 31.999999999999886,
+      "electron_error_reference": 2.842170943040401e-14,
+      "electron_error_candidate": 1.1368683772161603e-13,
+      "DM_diagonal_spin_Hermiticity_max": 0.0,
+      "reverse_blocks_missing": 0,
+      "EDM_scope": "not in scfout; requires native gsoc_density_rank*.bin audit",
+      "finite": true
+    },
+    "reader_sha256": "23012deed688c0fd5e8f4f7c48fd0e69945eec92661438ab974193538da7578b"
+  }
+}

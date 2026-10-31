@@ -1,0 +1,104 @@
+[
+  {
+    "object": "DFT.compact.o",
+    "source": "cpu/overrides/nsoc/source/DFT.unified.c",
+    "sha256": "0d5cb6bfee4b335b9be5b74ddf806757c95f5e4141fc993b33ea290481e60820",
+    "status": "compile_pass"
+  },
+  {
+    "object": "Cluster_DFT_Col.o",
+    "source": "cpu/overrides/nsoc/source/Cluster_DFT_Col.unified.c",
+    "sha256": "b47498b5b61543d0b123bb12ca3220895336fd2129075b1687f8d09c81de2ff6",
+    "status": "compile_pass"
+  },
+  {
+    "object": "truncation.generic-soc.o",
+    "source": "cpu/overrides/nsoc/source/truncation.unified.c",
+    "sha256": "7b4a9248941f5990f6de0731bfe4f13e1e75cd7c619f6b0ec2f988381734413a",
+    "status": "compile_pass"
+  },
+  {
+    "object": "Free_Arrays.fields.o",
+    "source": "cpu/overrides/nsoc/source/Free_Arrays.unified.c",
+    "sha256": "c6f12d9e28bc1acaa42235ac9ba164b18c51b6573b1abd0b4607478f1fa5f398",
+    "status": "compile_pass"
+  },
+  {
+    "object": "DIIS_Mixing_DM.o",
+    "source": "cpu/overrides/nsoc/source/DIIS_Mixing_DM.unified.c",
+    "sha256": "038f826405df6cded53c823bd19ebe18cdf70547b5dfc20977bf7b43e20ebcb8",
+    "status": "compile_pass"
+  },
+  {
+    "object": "Mixing_H.o",
+    "source": "cpu/overrides/nsoc/source/Mixing_H.unified.c",
+    "sha256": "904a5fe2023f6293e89c1120c9e05870467bee9fc033a8e53572382c352f045b",
+    "status": "compile_pass"
+  },
+  {
+    "object": "Hamiltonian_Cluster_Hs.o",
+    "source": "cpu/overrides/nsoc/source/Hamiltonian_Cluster_Hs.unified.c",
+    "sha256": "44f8139f64386da2aa8935b77a2740574475fe79848f86772ddc53ff70d5d206",
+    "status": "compile_pass"
+  },
+  {
+    "object": "Mixing_DM.c3.o",
+    "source": "cpu/overrides/nsoc/source/Mixing_DM.unified.c",
+    "sha256": "127db328c415ef6e16dae266346c3731b9b0ec817d4da745fbcad90ca8b48312",
+    "status": "compile_pass"
+  },
+  {
+    "object": "SCF2File.soc_native.o",
+    "source": "cpu/overrides/nsoc/source/SCF2File.unified.c",
+    "sha256": "bb0cc65b685c2383be44c070352545af1a819cf7f83b5b79358b81e0dae31112",
+    "status": "compile_pass"
+  },
+  {
+    "object": "Set_Orbitals_Grid.shared.o",
+    "source": "cpu/overrides/nsoc/source/Set_Orbitals_Grid.numa.c",
+    "sha256": "0ff1ce6a0fc7424337f4fe7bef3046028693d519c76762da6bea525d0f2d8bdb",
+    "status": "compile_pass"
+  },
+  {
+    "object": "Set_dOrbitals_Grid.shared.o",
+    "source": "cpu/overrides/nsoc/source/Set_dOrbitals_Grid.numa.c",
+    "sha256": "fd2db0641186a492d57ba2f7d6b3b0882d931a7e0e44d33db4937850790a6c4c",
+    "status": "compile_pass"
+  },
+  {
+    "object": "Set_Aden_Grid.fields.o",
+    "source": "cpu/overrides/nsoc/source/Set_Aden_Grid.unified.c",
+    "sha256": "8de499191e15ffed7516029fc1e65634e76c47fc9f5fb5504f9504472cc82961",
+    "status": "compile_pass"
+  },
+  {
+    "object": "Set_Hamiltonian.fields.o",
+    "source": "cpu/overrides/nsoc/source/Set_Hamiltonian.unified.c",
+    "sha256": "5578bd03ebb40d3ac0d3c9b018d444932e6d4034ee15fda53d0b554e7ead0054",
+    "status": "compile_pass"
+  },
+  {
+    "object": "Set_XC_Grid.o",
+    "source": "cpu/overrides/nsoc/source/Set_XC_Grid.workspace.c",
+    "sha256": "4c01d2630282e232aaa2ee10765f1db80c02b3879c70418a8e6199fc950e6ac2",
+    "status": "compile_pass"
+  },
+  {
+    "object": "cpu_grid_fields_shared.o",
+    "source": "cpu/overrides/nsoc/source/cpu_grid_fields_shared.unified.c",
+    "sha256": "d4b2d5c146f8de4df8cc15c9d7139d71bcca62a3edddec14055bdd9d4b574858",
+    "status": "compile_pass"
+  },
+  {
+    "object": "Force.batch.o",
+    "source": "cpu/overrides/nsoc/source/Force.unified.c",
+    "sha256": "e46dada040b10186ca72bf3a19dba6fe0f4dc565dea01de6a0229fe8963384fc",
+    "status": "compile_pass"
+  },
+  {
+    "object": "Set_Density_Grid.fields.o",
+    "source": "cpu/overrides/nsoc/source/Set_Density_Grid.unified.c",
+    "sha256": "65b684a7228eb06beaf8849a8422d62c8e3dbbfb697982300dad7f04bcfbcdd1",
+    "status": "compile_pass"
+  }
+]

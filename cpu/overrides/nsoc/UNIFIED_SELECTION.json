@@ -1,0 +1,147 @@
+{
+  "schema": "openmx-unified-cpu-selection-v1",
+  "replacements": {
+    "DFT.compact.o": "cpu/overrides/nsoc/source/DFT.unified.c",
+    "Cluster_DFT_Col.o": "cpu/overrides/nsoc/source/Cluster_DFT_Col.unified.c",
+    "truncation.generic-soc.o": "cpu/overrides/nsoc/source/truncation.unified.c",
+    "Free_Arrays.fields.o": "cpu/overrides/nsoc/source/Free_Arrays.unified.c",
+    "DIIS_Mixing_DM.o": "cpu/overrides/nsoc/source/DIIS_Mixing_DM.unified.c",
+    "Mixing_H.o": "cpu/overrides/nsoc/source/Mixing_H.unified.c",
+    "Hamiltonian_Cluster_Hs.o": "cpu/overrides/nsoc/source/Hamiltonian_Cluster_Hs.unified.c",
+    "Mixing_DM.c3.o": "cpu/overrides/nsoc/source/Mixing_DM.unified.c",
+    "SCF2File.soc_native.o": "cpu/overrides/nsoc/source/SCF2File.unified.c",
+    "Set_Orbitals_Grid.shared.o": "cpu/overrides/nsoc/source/Set_Orbitals_Grid.numa.c",
+    "Set_dOrbitals_Grid.shared.o": "cpu/overrides/nsoc/source/Set_dOrbitals_Grid.numa.c",
+    "Set_Aden_Grid.fields.o": "cpu/overrides/nsoc/source/Set_Aden_Grid.unified.c",
+    "Set_Hamiltonian.fields.o": "cpu/overrides/nsoc/source/Set_Hamiltonian.unified.c",
+    "Set_XC_Grid.o": "cpu/overrides/nsoc/source/Set_XC_Grid.workspace.c",
+    "cpu_grid_fields_shared.o": "cpu/overrides/nsoc/source/cpu_grid_fields_shared.unified.c",
+    "Force.batch.o": "cpu/overrides/nsoc/source/Force.unified.c",
+    "Set_Density_Grid.fields.o": "cpu/overrides/nsoc/source/Set_Density_Grid.unified.c"
+  },
+  "extra_units": [
+    {
+      "object": "cpu_nsoc_sym.o",
+      "source": "cpu/overrides/nsoc/source/cpu_nsoc_sym.direct.c",
+      "language": "c"
+    },
+    {
+      "object": "cpu_realspace_d3.o",
+      "source": "cpu/overrides/nsoc/source/cpu_realspace_d3.panel.c",
+      "language": "c"
+    },
+    {
+      "object": "cpu_nsoc_owner.o",
+      "source": "cpu/overrides/nsoc/source/cpu_nsoc_owner.c",
+      "language": "c"
+    },
+    {
+      "object": "cpu_nsoc_owner_openmx.o",
+      "source": "cpu/overrides/nsoc/source/cpu_nsoc_owner_openmx.c",
+      "language": "c"
+    },
+    {
+      "object": "cpu_nsoc_rep_tail.o",
+      "source": "cpu/overrides/nsoc/source/cpu_nsoc_rep_tail.c",
+      "language": "c"
+    },
+    {
+      "object": "rep_panel.o",
+      "source": "cpu/overrides/nsoc/source/rep_panel.c",
+      "language": "c"
+    },
+    {
+      "object": "selected_left.o",
+      "source": "cpu/overrides/nsoc/source/selected_left.c",
+      "language": "c"
+    },
+    {
+      "object": "cpu_nsoc_sparse.o",
+      "source": "cpu/overrides/nsoc/source/cpu_nsoc_sparse.c",
+      "language": "c"
+    },
+    {
+      "object": "cpu_nsoc_imag.o",
+      "source": "cpu/overrides/nsoc/source/cpu_nsoc_imag.c",
+      "language": "c"
+    },
+    {
+      "object": "cpu_symhistory_diis.o",
+      "source": "cpu/overrides/nsoc/source/cpu_symhistory_diis.c",
+      "language": "c"
+    },
+    {
+      "object": "cpu_h_grid_blas3.o",
+      "source": "cpu/overrides/nsoc/source/cpu_h_grid_blas3.c",
+      "language": "c"
+    }
+  ],
+  "include_dirs": [
+    "cpu/overrides/nsoc/source"
+  ],
+  "capabilities": {
+    "nsoc_symmetry": true,
+    "nsoc_positive_history": true,
+    "nsoc_xc_workspace": true
+  },
+  "provenance": [
+    {
+      "object": "DFT.compact.o",
+      "nsoc_source": "cpu/overrides/nsoc/source/DFT.direct.c",
+      "soc_source": "cpu/overrides/soc/source/DFT.compact.c",
+      "sha256": "a476065d3bc4c4edbd4028dc68000b8c12713382b5bcde2680200cee8a8c3127"
+    },
+    {
+      "object": "Cluster_DFT_Col.o",
+      "nsoc_source": "cpu/overrides/nsoc/source/Cluster_DFT_Col.direct.c",
+      "soc_source": "cpu/vendor/openmx4.0/source/Cluster_DFT_Col.c",
+      "sha256": "b47498b5b61543d0b123bb12ca3220895336fd2129075b1687f8d09c81de2ff6"
+    },
+    {
+      "object": "truncation.generic-soc.o",
+      "nsoc_source": "cpu/overrides/nsoc/source/truncation.symhistory.c",
+      "soc_source": "cpu/overrides/soc/source/truncation.generic-soc.c",
+      "sha256": "e865758fb0429cab618440154c91b9795ba85fcd942d11d6025c4801923825d1"
+    },
+    {
+      "object": "Free_Arrays.fields.o",
+      "nsoc_source": "cpu/overrides/nsoc/source/Free_Arrays.symhistory.c",
+      "soc_source": "cpu/overrides/soc/source/Free_Arrays.fields.c",
+      "sha256": "dc125260e3385daba3a252828f862bdf190bb53f8c10ceca47d3185f96591066"
+    },
+    {
+      "object": "DIIS_Mixing_DM.o",
+      "nsoc_source": "cpu/overrides/nsoc/source/DIIS_Mixing_DM.symhistory.c",
+      "soc_source": "cpu/vendor/openmx4.0/source/DIIS_Mixing_DM.c",
+      "sha256": "038f826405df6cded53c823bd19ebe18cdf70547b5dfc20977bf7b43e20ebcb8"
+    },
+    {
+      "object": "Mixing_H.o",
+      "nsoc_source": "cpu/overrides/nsoc/source/Mixing_H.compact.c",
+      "soc_source": "cpu/vendor/openmx4.0/source/Mixing_H.c",
+      "sha256": "904a5fe2023f6293e89c1120c9e05870467bee9fc033a8e53572382c352f045b"
+    },
+    {
+      "object": "Hamiltonian_Cluster_Hs.o",
+      "nsoc_source": "cpu/overrides/nsoc/source/Hamiltonian_Cluster_Hs.compact.c",
+      "soc_source": "cpu/vendor/openmx4.0/source/Hamiltonian_Cluster_Hs.c",
+      "sha256": "44f8139f64386da2aa8935b77a2740574475fe79848f86772ddc53ff70d5d206"
+    },
+    {
+      "object": "Mixing_DM.c3.o",
+      "nsoc_source": "cpu/overrides/nsoc/source/Mixing_DM.nsym.c",
+      "soc_source": "cpu/overrides/soc/source/Mixing_DM.c3.c",
+      "sha256": "127db328c415ef6e16dae266346c3731b9b0ec817d4da745fbcad90ca8b48312"
+    },
+    {
+      "object": "SCF2File.soc_native.o",
+      "nsoc_source": "cpu/overrides/nsoc/source/SCF2File.realspace.c",
+      "soc_source": "cpu/overrides/soc/source/SCF2File.soc_native.c",
+      "sha256": "bb0cc65b685c2383be44c070352545af1a819cf7f83b5b79358b81e0dae31112"
+    },
+    {
+      "object": "Force.batch.o",
+      "policy": "retain SOC batch force superset of native NSOC field path"
+    }
+  ]
+}
