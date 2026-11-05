@@ -1,6 +1,7 @@
-> **Local development fork:** validated snapshots, local acceleration changes,
-> version tags and installation notes are documented in [local-records/README.md](local-records/README.md).
-> Current local validation is short MoTe2 SOC smoke testing, not large-system production convergence.
+> **Standalone CPU target:** The CPU symmetry workflow has its own source build and runtime.
+> See the [CPU quick start](https://github.com/zhangyan31415/openmx/tree/experiments/cpu-d3-20261019#cpu-quick-start)
+> and [CPU guide](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/README.md).
+> This branch retains the GPU implementation documented below.
 
 # openmx4.0_gpu
 

@@ -94,6 +94,3 @@ __pycache__/
 !/source/third_party/hip/*.md
 
 # Local engineering records; upstream ignores untracked *.md files.
-!/local-records/**/*.md
-/local-records/build/
-/local-records/results/
