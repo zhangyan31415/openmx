@@ -1,7 +1,85 @@
-> **Standalone CPU target:** The CPU symmetry workflow has its own source build and runtime.
-> See the [CPU quick start](https://github.com/zhangyan31415/openmx/tree/experiments/cpu-d3-20261019#cpu-quick-start)
-> and [CPU guide](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/README.md).
-> This branch retains the GPU implementation documented below.
+# OpenMX — CPU symmetry optimization and GPU acceleration
+
+## CPU用户：先选择CPU分支 / Choose the CPU branch
+
+**当前默认分支 `main` 保留GPU实现。完整CPU代码、独立构建和对称性工作流在
+`experiments/cpu-d3-20261019`，直接克隆main不会得到CPU包。**
+
+```bash
+git clone --branch experiments/cpu-d3-20261019 --single-branch \
+  https://github.com/zhangyan31415/openmx.git openmx-cpu
+cd openmx-cpu
+conda create -n openmx-cpu python=3.12 numpy scipy spglib
+conda activate openmx-cpu
+```
+
+### 目录与安装
+
+| 目录 | 内容 |
+|---|---|
+| `cpu/vendor/` | OpenMX CPU及ELPA源码和许可证 |
+| `cpu/overrides/` | NSOC/SOC求解器及内存优化 |
+| `cpu/geometry/` | 对称性识别、子群验证及对称基准备 |
+| `cpu/tools/` | 单／多节点工作流、输入模板和数值验收 |
+| `cpu/tests/`、`cpu/docs/` | 测试、安装说明和性能报告 |
+
+Python环境只用于元数据工具。原生构建另需Intel oneAPI classic、
+Intel MPI2021.7.1、MKL2022.2.1及匹配安装布局；任意新版本尚未验证。
+运行控制器需要Linux、SSH、用户systemd服务及cgroup v2。赝势和PAO基组通过
+输入的`DATA.PATH`提供。运行不依赖个人实验目录或历史编译对象。
+
+在已有授权的计算主机上编译：
+
+```bash
+python cpu/build.py --profile unified --oneapi-prefix /path/to/oneapi \
+  --output /path/to/new-build --jobs 8 --execute
+```
+
+生成`openmx-cpu`和`build-manifest.json`。准备匹配的NSOC、SOC输入，复制
+`cpu/tools/examples/input_request.json`，填写二进制、manifest、输入、全新结果
+目录、主机、CPU布局和运行库路径。两个输入用相同的对称性请求，例如：
+
+```text
+scf.Symmetry.Mode       Auto
+scf.Symmetry.Tolerance  1e-5
+scf.Symmetry.HSExport   Symmetrize
+```
+
+```bash
+python cpu/tools/workflow.py configure /path/to/request.json \
+  --output /path/to/new-prepared-config
+python cpu/tools/workflow.py plan /path/to/new-prepared-config/workflow.json
+python cpu/tools/workflow.py run /path/to/new-prepared-config/workflow.json --wait
+```
+
+当前验证范围：固定几何、非磁Gamma，收敛NSOC后从自身检查点接一步SOC。
+一步SOC不是完整SOC自洽。Auto/User通过准备入口接入求解器，裸二进制没有
+匹配元数据时会拒绝运行；识别到几何对称性也不保证电子算子协变检查通过。
+
+### 与CPU参考的实测差别
+
+以下为同节点64 MPI×1，MoTe2 9.43°、222原子／3848标量AO的保存结果：
+
+| 配置 | NSOC秒 | 一步SOC秒 | 合计秒 | 流程峰值GiB |
+|---|---:|---:|---:|---:|
+| CPU4.0源码快照参考 | 86.17 | 69.11 | 155.27 | 70.41 |
+| 优化D3＋legacy SOC配置 | 41.80 | 33.95 | 75.75 | 22.84 |
+
+该完整配置约快2.05倍，峰值约少3.08倍；均为150 Ry、300 K、SCF 1e-7、
+StartPulay15、History30。包含对称约束和SCF轨迹变化，不能归因成纯代码加速。
+参考是已安装CPU4.0源码快照，未认证为原封上游发行包，也没有本轮匹配的
+3.9对照。历史MoTe2投影相对raw的NSOC最大力差约12.44 meV/Å，未通过
+1 meV/Å物理门限；不能声称与原版结果全部等价。
+
+**自动configure入口目前选择通用GSOC，表中的最快legacy D3配置需显式选择；
+上述计时不是自动入口的新实测。** 多节点虽可运行，但不保证核时或总内存降低。
+
+- [CPU完整说明](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/README.md)
+- [编译依赖与构建](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/BUILD.zh-CN.md)
+- [Auto/User输入和H/S导出](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/INPUT_SYMMETRY.zh-CN.md)
+- [实测时间、内存和未通过项](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/BENCHMARKS_20261031.md)
+
+## GPU实现 / GPU implementation on this branch
 
 # openmx4.0_gpu
 
@@ -650,7 +728,7 @@ NVIDIA CUDA and AMD HIP backends) are also licensed under GPL-3.0-or-later.
 
 This project incorporates source code from the following third-party projects.
 Each component retains its original license; their original license files are
-preserved under `third_party/<component>/`.
+preserved in the corresponding `source/third_party/` submodules.
 
 #### FFTW3
 
@@ -660,7 +738,7 @@ preserved under `third_party/<component>/`.
   - Copyright (c) 2003, 2007-14 Massachusetts Institute of Technology
 - **License**: GNU General Public License v2.0 or later (`GPL-2.0-or-later`)
 - **Used here under**: GPL v3 (selected via the "or any later version" clause)
-- **Original license file**: [`third_party/fftw3/COPYING`](third_party/fftw3/COPYING)
+- **Original license file**: `COPYING` in the [FFTW3 submodule](source/third_party/fftw3)
 
 #### GEMMul8
 
@@ -668,7 +746,7 @@ preserved under `third_party/<component>/`.
 - **Copyright**: Copyright (c) 2025- RIKEN R-CCS
 - **Responsible developer**: Yuki Uchino (RIKEN Center for Computational Science)
 - **License**: MIT License (`MIT`)
-- **Original license file**: [`third_party/gemmul8/LICENSE`](third_party/gemmul8/LICENSE)
+- **Original license file**: `LICENSE` in the [GEMMul8 submodule](source/third_party/GEMMul8)
 
 GEMMul8 (GEMMulate) is a library for emulating high-precision matrix
 multiplication (SGEMM, DGEMM, CGEMM, ZGEMM) using INT8/FP8 matrix engines
