@@ -1,881 +1,139 @@
-# OpenMX: CPU symmetry solvers and CUDA/HIP acceleration
+# OpenMX CPU：对称性优化 / Symmetry optimization
 
-This repository extends [OpenMX](https://www.openmx-square.org/), a
-first-principles electronic-structure code based on numerical atomic orbitals,
-with two independently built targets:
+[中文](#中文) · [English](#english)
 
-| Target | Entry point | Intended use |
-|---|---|---|
-| Standalone CPU | [CPU guide](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/README.md), `cpu/build.py` | Symmetry-aware NSOC and SOC solvers, memory optimizations, reproducible single- and multi-node workflows |
-| NVIDIA CUDA / AMD HIP | [GPU build guide](docs/GPU_BACKENDS.md), CMake or the existing GPU Makefile | GPU-accelerated solvers, matrix construction, grids and related stages |
+## 中文
 
-The CPU and GPU targets have different compiler, library and validation
-requirements. A GPU build's CPU fallback is not the standalone optimized CPU
-target. Choose a target before following its build instructions.
+这是基于 [OpenMX](https://www.openmx-square.org/) 的 CPU 优化版本，主要改进对称性分块求解、密度矩阵计算及内存使用。同一个可执行文件包含 NSOC 和 SOC 路径，使用普通 OpenMX 输入文件和 MPI 启动方式。
 
-The GitHub default branch is `main`, which currently contains the GPU target.
-The standalone CPU package is published on **`experiments/cpu-d3-20261019`**.
-Clone that branch explicitly to obtain the `cpu/` directory:
+**CPU 源码目前在 `experiments/cpu-d3-20261019` 分支。请按下面命令克隆；只克隆默认分支不会取得 `cpu/` 目录。**
+
+### 1. 获取与安装
+
+已验证的构建环境：Linux、Intel oneAPI 2022.3 classic 编译器、Intel MPI 2021.7.1、MKL 2022.2.1，以及 Python 3.12、NumPy、SciPy、spglib。构建器要求对应的 oneAPI 目录布局，详见[构建说明](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/BUILD.zh-CN.md)。
 
 ```bash
 git clone --branch experiments/cpu-d3-20261019 --single-branch \
   https://github.com/zhangyan31415/openmx.git openmx-cpu
 cd openmx-cpu
-```
 
-### Directory layout
-
-| Directory | Contents |
-|---|---|
-| `cpu/vendor/` | OpenMX CPU and bundled ELPA source snapshots, with licenses |
-| `cpu/overrides/` | Optimized scalar/spinor solvers and memory kernels |
-| `cpu/geometry/` | Geometry detection, subgroup validation and basis/map preparation |
-| `cpu/tools/` | Single/multi-node workflow, templates and output comparison |
-| `cpu/tests/`, `cpu/docs/` | Regression tests, installation instructions and measured limits |
-| `source/`, `doc/`, `docs/` | Existing CUDA/HIP implementation and GPU documentation |
-
-CPU builds and runtime preparation are self-contained under `cpu/`; no personal
-experiment tree, historical result directory or external OpenMX object file is
-required. Basis/pseudopotential data and the compiler/MPI/MKL installation are
-external inputs.
-
-## CPU quick start
-
-The unified CPU binary includes optimized scalar NSOC solvers, specialized
-C3/D3 SOC paths, and a general spinor SOC framework. Enable symmetry in the
-ordinary OpenMX input file; the program prepares and validates its runtime
-metadata internally.
-
-The currently tested workflow is **fixed geometry, nonmagnetic, Gamma point:
-converge NSOC, then run one SOC step from that same run's checkpoint**. One SOC
-step is not a fully self-consistent SOC calculation. Detection of a point group
-does not establish that a material is accurate or faster with that group.
-
-### 1. Build from source
-
-Prepare a separate Python environment, for example:
-
-```bash
 conda create -n openmx-cpu python=3.12 numpy scipy spglib
 conda activate openmx-cpu
-```
 
-These packages are used by the symmetry preparation helper invoked internally
-by the CPU program. Keep the build-time Python environment available when
-running with symmetry enabled. They do not supply the native compiler or MKL.
-Normal MPI execution does not require the optional SSH/systemd benchmark
-controller. The current CPU build is tested on Linux.
-
-Use Python 3 with the preparation dependencies listed in the
-[CPU guide](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/README.md), and an Intel oneAPI installation matching the
-[CPU build requirements](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/BUILD.zh-CN.md): classic compilers, Intel MPI
-2021.7.1 and MKL 2022.2.1. The current builder expects that installation layout;
-an arbitrary newer oneAPI release is not a tested substitute.
-
-```bash
+# 改为实际的 oneAPI 安装路径；在计算节点上编译。
+OPENMX_ONEAPI=/path/to/oneapi
+source "$OPENMX_ONEAPI/setvars.sh"
 python cpu/build.py --profile unified \
-  --oneapi-prefix /path/to/oneapi \
-  --output /path/to/new-build --jobs 8 --execute
+  --oneapi-prefix "$OPENMX_ONEAPI" \
+  --output "$(pwd)/build/cpu" --jobs 8 --execute
 ```
 
-Run compilation on a compute machine. The output directory must be new; the
-builder compiles repository sources and bundled ELPA rather than reusing
-external OpenMX object files. It writes `openmx-cpu`, compiler logs and a
-`build-manifest.json`. Provide basis sets and pseudopotentials separately
-through each input's `DATA.PATH`.
+`build/cpu` 必须是尚不存在的目录。构建会生成 `openmx-cpu`、配套的 `resources/`、日志和来源清单，OpenMX 与 ELPA 均从仓库源码编译。原子基组和赝势另行提供，在输入中通过 `DATA.PATH` 指定。
 
-### 2. Enable symmetry in the input
+### 2. 开启对称性并运行
 
-Add one line to the normal OpenMX input:
+在现有 OpenMX 输入中加入：
 
 ```text
 scf.Symmetry on
 ```
 
-The default is `off`. The program detects and validates a supported symmetry
-subgroup, builds the required representation, and selects its solver path.
-The log reports the selected group and the checks actually performed. A
-failed mapping or operator check stops the run instead of silently ignoring
-the request. Input basis sets, cutoff, temperature and SCF stopping criteria
-remain the user's ordinary OpenMX settings.
+默认关闭，也可显式写 `scf.Symmetry off`。开启后，程序自动识别并验证可用子群、准备对称基并选择求解路径，无需用户生成 JSON 或单独运行准备工具。日志报告实际采用的群；映射或算子检查失败时明确停止。
 
-### 3. Run normally
-
-After loading the matching Intel compiler/MPI/MKL runtime and making the
-Python environment above available, launch the built executable directly:
+在已加载上述 oneAPI 运行库和 Python 环境的计算节点上，照常运行，例如 **64 MPI × 1 线程**：
 
 ```bash
-mpirun -np 64 /path/to/new-build/openmx-cpu input.dat -nt 1
+mpirun -np 64 ./build/cpu/openmx-cpu input.dat -nt 1
 ```
 
-For the tested NSOC plus one-step SOC workflow, prepare the ordinary matching
-NSOC and SOC inputs, run NSOC to convergence, then run SOC from that NSOC
-checkpoint with the same MPI layout. Add `scf.Symmetry on` to both inputs.
-See the [run guide](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/WORKFLOW.zh-CN.md) for restart requirements.
-No separate metadata command or JSON request is needed for this entry point.
-Multi-node host selection and process binding use the site's normal MPI or
-scheduler launch settings.
+多节点仍使用同一个程序，通过站点的 MPI／调度器设置节点、进程数和绑定。移动安装时，须将二进制和旁边的 `resources/` 一起移动，并保留构建时的 Python 环境。
 
-No internal calculation deadline is imposed; scheduler limits still apply.
-The optional benchmark controller records binding, stage times, core-hours
-and node/cluster memory, but is not required for ordinary calculations.
+### 3. NSOC、一步 SOC 与 H/S 输出
 
-### Scope and validation
+目前验证的工作流是**固定结构、非磁性、Gamma 点：NSOC 收敛后，从其自身检查点接一步 SOC**。输入使用 `Cluster` 或 Gamma `Band`，以及 `scf.eigen.lib elpa1` 或 `elpa2`。NSOC 和 SOC 输入均加入 `scf.Symmetry on`，保持结构、基组、物理参数及 MPI 布局一致；SOC 使用原生 C2N 重启。具体输入及重启要求见[运行说明](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/WORKFLOW.zh-CN.md)。一步 SOC 不等于 SOC 自洽收敛。
 
-With `scf.Symmetry on` and the ordinary `HS.fileout on`, exported H/S are
-symmetrized consistently with the selected group. Symmetry projection changes
-a discretized operator and requires a physical-error comparison against an
-unsymmetrized reference. The SOC path also checks consistency between its
-solve and exported operator. Invalid mappings, unsupported settings or failed
-covariance checks stop the run.
+需要 H/S 时另设普通参数 `HS.fileout on`。开启对称性后，受支持路径导出与所选群投影一致的 H/S。OpenMX 基组非正交，后处理必须使用匹配的 S。
 
-D3/C3 retain specialized optimizations; D2/C2 and other supported subgroups use
-general representation machinery. This is not a claim that every point group,
-magnetic state, arbitrary k-point calculation or multi-step SOC run has been
-validated. Multi-node operation is supported, but more nodes do not guarantee
-lower core-hours or constant total memory.
+### 4. 实现与验证范围
 
-Read the [acceptance criteria](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/ACCEPTANCE.zh-CN.md),
-[large-angle benchmarks](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/BENCHMARKS_20261031.md), and
-[input/export integration validation](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/INPUT_SYMMETRY_VALIDATION_20261102.md)
-and [native switch validation](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/NATIVE_SYMMETRY_VALIDATION_20261106.md)
-for measured results and remaining boundaries. The native MoTe2 9.43-degree,
-222-atom NSOC check completed, but its SOC operator failed the default covariance
-gate; that case is not a successful full-workflow validation. The
-[run guide](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/WORKFLOW.zh-CN.md) describes ordinary MPI execution and
-restart requirements.
+- D3/C3 包含专用优化；D2/C2 等受支持子群使用通用表示分块，实际路径由日志确认。
+- 对称投影可能改变离散算子和 SCF 轨迹，需独立核对能量、力等物理误差。识别成功不保证任意材料都正确或更快。
+- 当前直接开关通过了小体系单节点、双节点和安装目录搬移验证；MoTe₂ 9.43°、222 原子的 NSOC 完成，但通用 SOC 未通过默认协变门限。这例不能列为全流程成功。
+- 历史加速和内存数据属于各自配置，不能当作当前入口的普遍保证。多节点也不保证核时下降或总内存不变。
 
-### Comparison with the CPU reference
+[原生开关验收](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/NATIVE_SYMMETRY_VALIDATION_20261106.md) · [时间与内存基准](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/BENCHMARKS_20261031.md) · [数值验收标准](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/ACCEPTANCE.zh-CN.md)
 
-The saved same-node, 64 MPI × 1 thread comparison for **MoTe2 9.43 degrees,
-222 atoms / 3848 scalar AOs** is:
+## English
 
-| Configuration | NSOC (s) | Own one-step SOC (s) | Total (s) | Workflow memory peak (GiB) |
-|---|---:|---:|---:|---:|
-| CPU 4.0 source-snapshot reference | 86.17 | 69.11 | 155.27 | 70.41 |
-| Optimized D3 + legacy SOC profile | 41.80 | 33.95 | 75.75 | 22.84 |
+This CPU version of [OpenMX](https://www.openmx-square.org/) adds symmetry-based block solvers, density-matrix optimizations and memory improvements. One executable contains both NSOC and SOC paths and uses ordinary OpenMX inputs and MPI launches.
 
-The complete configured workflow was about **2.05× faster**, with about
-**3.08× lower peak memory**, for that case. Both used 150 Ry, 300 K,
-SCF criterion `1e-7`, StartPulay15 and History30. This is a saved profile
-comparison, including symmetry constraints and SCF trajectory differences;
-it is not a claim of identical raw operators or a universal speedup. The
-reference is a frozen installed CPU4.0 snapshot, not an independently
-authenticated pristine upstream distribution, and no matched latest-build
-CPU3.9 comparison is established here.
+**The CPU source is currently on `experiments/cpu-d3-20261019`. Clone that branch explicitly; the default branch does not contain `cpu/`.**
 
-The historical fastest row used a specific legacy D3 solver configuration;
-it is not a timing measurement of the current simple input interface.
-Historical MoTe2 projected-vs-raw NSOC force differences reached about
-12.44 meV/angstrom and did not pass the 1 meV/angstrom physical gate.
-Implementation/layout agreement is separate from raw-reference physical
-accuracy. Full inputs, timing attribution and failed gates are described in
-[the benchmark report](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/BENCHMARKS_20261031.md).
+### 1. Get and build
 
-## GPU实现 / GPU implementation on this branch
+The tested build uses Linux, Intel oneAPI 2022.3 classic compilers, Intel MPI 2021.7.1, MKL 2022.2.1, Python 3.12, NumPy, SciPy and spglib. The builder expects this oneAPI installation layout; see the [build guide](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/BUILD.zh-CN.md) for details.
 
-# openmx4.0_gpu
+```bash
+git clone --branch experiments/cpu-d3-20261019 --single-branch \
+  https://github.com/zhangyan31415/openmx.git openmx-cpu
+cd openmx-cpu
 
-This repository includes both the NVIDIA CUDA and AMD HIP backends. Select one
-per build with CMake; the existing NVIDIA `make -C source` workflow also works.
+conda create -n openmx-cpu python=3.12 numpy scipy spglib
+conda activate openmx-cpu
 
-```sh
-cmake -S . -B build/cuda -DOPENMX_GPU_BACKEND=CUDA
-cmake --build build/cuda
-
-# On a ROCm machine; set the site-specific MPI/AOCL paths as described below.
-cmake -S . -B build/hip -DOPENMX_GPU_BACKEND=HIP -DOPENMX_GPU_ARCH=gfx942 \
-  -DOPENMX_MAKE_OPTIONS="ROCM=/opt/rocm;MPI_HOME=/path/to/mpi;AOCL_HOME=/path/to/aocl;AOCC_LIB=/path/to/aocc/lib"
-cmake --build build/hip
+# Set the actual oneAPI installation path; compile on a compute node.
+OPENMX_ONEAPI=/path/to/oneapi
+source "$OPENMX_ONEAPI/setvars.sh"
+python cpu/build.py --profile unified \
+  --oneapi-prefix "$OPENMX_ONEAPI" \
+  --output "$(pwd)/build/cpu" --jobs 8 --execute
 ```
 
-The executables are `build/cuda/openmx` and `build/hip/openmx`. Objects and
-dependency builds are isolated in each build directory. See
-[GPU backend build instructions](docs/GPU_BACKENDS.md) for requirements,
-configuration, AMD runtime settings and validation limits.
+The output directory must not already exist. It will contain `openmx-cpu`, its companion `resources/`, logs and a build manifest. OpenMX and bundled ELPA are compiled from repository sources. Supply basis sets and pseudopotentials separately through the input's `DATA.PATH`.
 
-## What does this code do?
-This is a GPU-accelerated version of [OpenMX](https://www.openmx-square.org/), a first-principles calculation code based on numerical atomic orbitals (NAO). The dense eigensolvers of the band calculations (collinear and non-collinear) and of the cluster calculations (collinear and non-collinear), the O(N)-type solvers (DC, DC-LNO, Krylov), and the heavy matrix-construction stages around them (Hamiltonian/overlap assembly, charge-density and orbital grids, forces, charge mixing) are GPU-accelerated. Since v2.0, the cluster diagonalization can also be distributed over multiple GPUs and multiple nodes with ELPA (GPU kernels) + COSMA; see below.
+### 2. Enable symmetry and run
 
-## Code author
-Hiroyuki Kawai (Niigata Univ.)</br>
-X account: [@dc1394](https://x.com/dc1394)
-
-## How to enable GPU acceleration
-GPU acceleration is enabled by default: "scf.eigen.lib" defaults to "gpusolver", so no extra input line is required. Writing it explicitly is of course still fine:
-
-```ini
-scf.XcType                  GGA-PBE    # LDA|LSDA-CA|LSDA-PW|GGA-PBE
-scf.SpinPolarization        off        # On|Off|NC
-scf.ElectronicTemperature  300.0       # default=300 (K)
-scf.energycutoff           150.0       # default=150 (Ry)
-scf.maxIter                 40         # default=40
-scf.EigenvalueSolver       band        # DC|GDC|Cluster|Band
-scf.Kgrid                  9 9 9       # means n1 x n2 x n3
-scf.Mixing.Type           rmm-diisk    # Simple|Rmm-Diis|Gr-Pulay|Kerker|Rmm-Diisk
-scf.Init.Mixing.Weight     0.300       # default=0.30
-scf.Min.Mixing.Weight      0.001       # default=0.001 
-scf.Max.Mixing.Weight      0.700       # default=0.40 
-scf.Mixing.History          7          # default=5
-scf.Mixing.StartPulay       5          # default=6
-scf.criterion             1.0e-10      # default=1.0e-6 (Hartree) 
-scf.eigen.lib             gpusolver     # default=gpusolver
-```
-
-To run the conventional CPU paths instead, specify "elpa2" or "elpa1":
-
-```ini
-scf.eigen.lib             elpa2         # CPU (ELPA2) paths
-```
-
-A run that finds no usable GPU demotes itself to ELPA2 automatically, so the default is also safe on machines without a GPU supported by the selected backend. The environment variable `OPENMX_GPU=0` forces the same demotion on a machine with a GPU, which is convenient for CPU-vs-GPU comparisons with unmodified input files.
-
-The GPU paths follow OpenMX's `level.of.stdout` keyword. At the default (1) they print only errors, a GPU that cannot be used, and a GPU eigensolver given up for lack of device memory; `level.of.stdout 2` adds the device plans, the precision switches and the CPU fallbacks of single stages, and 3 adds the per-step, per-k-point and per-rank details of the refined FP32 eigensolver. Note that OpenMX itself prints per-atom debugging output from level 2 on.
-
-## New in v2.0: distributed multi-GPU cluster diagonalization (ELPA GPU + COSMA)
-The distributed ELPA/COSMA backend supports cluster diagonalization across MPI ranks and nodes. For single-node memory recovery and forced MAGMA, see the following section. Selecting
-
-```ini
-scf.EigenvalueSolver       cluster
-scf.eigen.lib              gpusolver2    # ELPA (GPU kernels) + COSMA
-```
-
-replaces the cluster diagonalization (collinear and non-collinear) with [ELPA](https://elpa.mpcdf.mpg.de/) 2026.02 (NVIDIA GPU kernels) and [COSMA](https://github.com/eth-cscs/COSMA) (communication-optimal distributed matrix multiplication, GPU backend), engaging every MPI rank and every GPU. This is the option for machines where the diagonalization must not be confined to one GPU, e.g. one GPU per node × many nodes. Notes:
-
-- "gpusolver2" supports only `scf.EigenvalueSolver cluster`; any other solver stops with an input error. It retains the existing per-rank GPU paths outside cluster diagonalization, and a machine without a usable GPU demotes itself to ELPA2 as usual.
-- When the GPU memory cannot hold a solve, that solve automatically falls back to the ELPA CPU kernels / ScaLAPACK instead of aborting the run.
-- The required libraries (ELPA, COSMA, COSTA, Tiled-MM) are bundled as source archives under `source/third_party/dist/` and are built automatically by the first `make` — no network access is needed (autoconf, automake, libtool, m4 and python3 must be installed). The CPU "elpa1"/"elpa2" paths and "gpusolver2" share the same ELPA 2026.02.002 library. The CPU keywords select its one-stage and two-stage solvers with GPU execution disabled; the old embedded ELPA has been removed.
-
-## Single-node multi-GPU Cluster and Band
-
-The default `scf.eigen.lib gpusolver` uses cuSOLVER while the dense GPU
-buffers fit. If they do not fit, it automatically uses multi-GPU MAGMA
-for ordinary collinear and noncollinear Cluster and Band on one node.
-`gpusolver3` forces that MAGMA path from the beginning; `gpusolver2`
-remains the distributed ELPA/COSMA solver.
-
-```ini
-scf.eigen.lib              gpusolver
-scf.Gpu.Num                4
-```
-
-`scf.Gpu.Num` is a strict upper bound. CUDA visibility and
-`OPENMX_MGPU_NUM_GPUS` can reduce it further. If the permitted GPU group
-cannot hold MAGMA's per-device scratch, or MAGMA/cooperation is unavailable,
-the memory fallback of a single-node run reports the reason and uses CPU
-eigensolvers and matrix products. It never enlarges the GPU pool.
-`scf.mgpu.enable off` and `OPENMX_MGPU=0` explicitly disable cooperation.
-
-In a **multi-node** Cluster run (collinear or noncollinear) the default
-`gpusolver` continues the same ladder across nodes. When the dense solve does
-not fit on one GPU, it first tries MAGMA on the GPUs of rank 0's node (two or
-more GPUs, order up to 32766, enough host memory there). If that is not
-possible, it switches to the distributed gpusolver2 path (ELPA GPU kernels +
-COSMA) on all ranks of the run; a spin-polarized run solves its two spins in
-turn there. ELPA and COSMA use the GPU of each rank, so run at least one rank
-per GPU. In a two-node job with one GPU per node the solve then moves to two
-GPUs. With two GPUs per node, MAGMA on two GPUs comes first, then four GPUs.
-If even the distributed GPU solve does not fit, it uses CPU kernels.
-Its transforms use COSMA only while the host memory COSMA keeps
-leaves a quarter of each node free (`OPENMX_GS2_HOST_RESERVE_MB`), and
-ScaLAPACK otherwise. `OPENMX_CLUSTER_GS2_FALLBACK=off|on|force`
-disables this step, allows it on one node, or skips MAGMA. Details:
-[Cluster details](doc/cluster_mgpu.txt), "Multi-node capacity fallback".
-
-The MAGMA capacity path keeps dense matrices on the host, distributes the
-eigensolve across the group, and streams bounded tiles for matrix products.
-It allocates neither the full cuSOLVER workspace nor a full dense matrix
-on the owner GPU. Sufficient host RAM is still required. It uses FP64;
-the ordinary single-GPU GeForce arithmetic policies remain available.
-
-For Band, each of the **K actually computed k-points** receives
-`floor(G/K)` GPUs from the permitted pool G. At least two GPUs per k-point
-are required. Three k-points with four GPUs cannot cooperate; with eight
-GPUs they use six, in groups `[0,1]`, `[2,3]`, `[4,5]`.
-
-Matrix products follow the eigensolver: a product whose operands are on a
-GPU stays on that GPU, and several GPUs are used only on the capacity rungs
-(the host-backed MAGMA products on the owner's node, then the distributed
-gpusolver2 transforms over all nodes). Spreading such a product over the
-GPUs for speed is experimental: `OPENMX_MGPU_GEMM=on` (or `auto`).
-
-GPU work outside the generalized eigenproblem now uses capacity recovery
-by default: the rank's GPU, permitted GPUs on its node, GPUs on other nodes,
-then CPU. This covers orbital/grid kernels, Hamiltonian construction,
-density matrices and density grids, XC, GPU force/energy terms and RMM-DIISH
-history. Every tier respects the configured GPU cap; k-dependent dense work
-also respects its exact GPU group. Allocation failures release private
-buffers before retrying, so a failed attempt cannot partially add results.
-`OPENMX_GPU_WORKERS=1` optionally distributes work for speed even when one
-GPU fits; `0` disables borrowing and retains CPU recovery. Host memory is
-still required for CPU work and communication buffers.
-See [GPU worker ownership and controls](doc/gpu_workers.txt).
-The new policy's numerical and allocation-failure checks are recorded in
-[capacity recovery validation](doc/gpu_capacity_validation.txt).
-Earlier performance-splitting measurements remain in
-[GPU worker validation](doc/gpu_workers_validation.txt).
-
-Build MAGMA with `make -f Makefile.kugui openmx WITH_MAGMA=1` in `source/`.
-The experimental paper implementation has been removed. See
-[Cluster details](doc/cluster_mgpu.txt), [Band details](doc/band_mgpu.txt),
-[matrix products](doc/mgpu_gemm.txt), and
-[capacity-path validation](doc/mgpu_capacity_validation.txt).
-
-## GEMMul8: FP64 matrix multiplication on integer tensor cores
-The large dense matrix multiplications of the GPU eigensolver path use a device-aware bridge to [GEMMul8](https://github.com/RIKEN-RCCS/GEMMul8) or native cuBLAS FP64. GEMMul8 emulates FP64 GEMM on INT8 tensor cores using the Ozaki scheme II and remains the default on consumer GPUs (GeForce) with limited native FP64 throughput. General GEMMs on A100 and H100 instead default to native FP64, including the FP64 Tensor Core kernels selected by cuBLAS, avoiding integer decomposition and its workspace. The choice uses the device's FP32:FP64 throughput ratio: a known positive ratio below 8 selects native FP64. A100 has a separate size-dependent exception for the collinear cluster forward transform, described below.
-
-Omitting `scf.gemmul8.enable` selects this device default. Explicit settings override it:
-
-```ini
-scf.gemmul8.enable         off           # force native cuBLAS FP64
-# scf.gemmul8.enable       on            # enable GEMMul8, including on A100
-```
-
-`OPENMX_GEMMUL8_DISABLE=1` disables GEMMul8, while an explicit `=0` enables
-it under the automatic input setting. The `_D` and `_Z` variants select real
-and complex products separately. An input-file `off` always takes precedence;
-an input-file `on` still honors environment disables.
-
-The input keyword `scf.fp32.enable` defaults to `on`, preserving the existing
-precision policies. To force FP64 arithmetic while retaining GEMMul8:
+Add to your OpenMX input:
 
 ```text
-scf.fp32.enable     off
-scf.gemmul8.enable  on
+scf.Symmetry on
 ```
 
-`off` disables FP32 eigenvector refinement, FP32 and double-float grid
-integrals, and double-float orbital evaluation. It also promotes the
-legacy float products in VNA matrix, force and stress contractions to FP64.
-It overrides `OPENMX_EIGEN_REFINE`, `OPENMX_GRID_FP32`,
-`OPENMX_GRID_PRECISION` and `OPENMX_ORBS_EVAL_PRECISION` requests for FP32/DF.
-GEMMul8 and cuSOLVER's FP64 fixed-point emulation remain governed by their
-own settings. The existing float storage of orbital and VNA projector
-tables is unchanged; this keyword controls arithmetic precision.
+Symmetry is off by default; `scf.Symmetry off` disables it explicitly. When enabled, the program detects and validates a supported subgroup, prepares its symmetry basis and selects the solver path internally. No separate preparation command or user-written JSON is needed. Logs report the selected group; failed mapping or operator checks stop the run.
 
-### A100 execution policy
+With the matching oneAPI runtime and Python environment available on the compute node, launch normally, for example **64 MPI ranks × 1 thread**:
 
-On A100, on-the-fly orbital evaluation and grid quadrature use native FP64
-arithmetic by default. GeForce retains the compensated double-float paths.
-Native density quadrature now also uses a CUDA kernel that tiles overlap
-points and stages the density matrix in shared memory. Its OpenACC fallback
-remains available for unsupported sizes and resource limits. Orbital tile
-storage retains its existing format; changing the arithmetic does not change
-that storage contract.
-
-On full A100-class `sm_80` devices (at least 100 SMs), real square cluster
-forward products at dimension 6144 or above automatically use full-workspace
-GEMMul8 when memory permits. Smaller transforms keep native FP64; a full
-workspace that cannot fit also selects native FP64. Explicit input, environment
-and forward-stage selections take precedence. This exception is controlled by
-`OPENMX_GEMMUL8_A100_FORWARD_MIN_N` (`0` disables it) and does not change
-GeForce's existing selection.
-
-`OPENMX_ORBS_EVAL_PRECISION=fp64|df` and `OPENMX_GRID_PRECISION=fp64|df`
-select orbital and grid arithmetic explicitly. `OPENMX_SETDEN_FP64_CUDA=0`
-selects the existing OpenACC implementation for native density quadrature.
-Native CUDA density splits work by spin for orbital counts above 32 and more
-than one spin; `OPENMX_SETDEN_FP64_SPLIT_SPIN=0|1` overrides that scheduling.
-The lossy `OPENMX_GRID_FP32` experiment stays off unless requested.
-FP32 eigenvector refinement already selects native FP64 on A100;
-`OPENMX_EIGEN_REFINE` still provides an explicit override. On toolkits that
-support cuSOLVER FP64 emulation, the default now follows the same hardware
-boundary, avoiding emulation's full-matrix retry backup on A100.
-
-Build instructions, control precedence, regression commands and the new
-validation record are in [the A100 optimization report](doc/a100_optimization.txt).
-
-### Forward transform of the collinear cluster solver
-The two products of the orthogonalization transform, `B = H X` and `X^T B`, have entry points of their own (`openmx_gemmul8DgemmFixed`), because `X` stays fixed during the SCF.
-
-- **Workspace.** When these products select GEMMul8, they take its full workspace whenever the device has room; every other GEMMul8 GEMM keeps the capped, blocked workspace (`OPENMX_GEMMUL8_MAX_WORKSPACE_MB`, 256 MiB). Under the cap each block rescales its operands. The workspace is returned right after the transform, so the eigensolver finds the memory it found before. For an explicit GEMMul8 selection or the GeForce default, a workspace that does not fit falls back to the capped path at the same precision, and `OPENMX_GEMMUL8_FORWARD_UNBLOCKED=0` restores that capped path. Under the A100 automatic policy, both conditions select native FP64 instead. As before, `OPENMX_GEMMUL8_FORWARD_REUSE=1` implies unblocked execution and takes precedence over `OPENMX_GEMMUL8_FORWARD_UNBLOCKED=0`. Below the cap the retained GEMMul8 results are bit-identical to the previous ones.
-- **Precision stage**, for measurements: `OPENMX_GEMMUL8_FORWARD=fp64|gemmul8` selects plain cuBLAS FP64 or GEMMul8 with `OPENMX_GEMMUL8_FORWARD_NUM_MOD` moduli and `OPENMX_GEMMUL8_FORWARD_FASTMODE`; `OPENMX_GEMMUL8_FORWARD_REUSE=1` retains the prepared `X` across SCF steps (exact with fast scaling only); `OPENMX_GEMMUL8_FORWARD_TIMING=1` reports calls, preparations, reuses and wall time, and `OPENMX_CLUSTER_PROFILE=1` the phases of each dense solve.
-- **Tools.** `tools/measure_gemm_probe.sh` (matrix-level times, phases and errors against a double-double reference), `tools/run_forward_variants.sh` (the same input under several settings, with a comparison table), and the checks `tests/run_gemmul8_forward_smoke.sh`. `OPENMX_GEMMUL8_TIMING=1` counts and times products through the general GEMM entry points and reports the totals per rank at the end of each SCF. Successful full-workspace fixed transforms, including large automatic A100 transforms, use the separate `OPENMX_GEMMUL8_FORWARD_TIMING=1` counters.
-
-## Multi-GPU parallelization
-With the default `gpusolver`, each dense eigenproblem normally uses one
-GPU. If its buffers cannot fit, single-node Cluster and ordinary Band can
-automatically use MAGMA on the permitted GPU group described above; a
-multi-node Cluster run then tries MAGMA on rank 0's node and otherwise the
-distributed gpusolver2 path on every node.
-`gpusolver3` forces MAGMA; `gpusolver2` selects distributed ELPA/COSMA.
-More GPUs do not guarantee a speedup when the problem already fits on one
-GPU: MAGMA's transfers and CPU work can outweigh the parallel GPU work.
-
-## MPI vs. hybrid (MPI/OpenMP) parallelization
-Use flat MPI while every core you want to use can hold an MPI rank: the device phases (the eigensolvers, the grid integrals, the force batches) are shared by all the ranks of a node and gain nothing from threads. When device memory limits the number of ranks below the core count, give each rank several cores and as many OpenMP threads (`-nt`). Since 2026-10-13 the host-side phases of the GPU build run threaded: the Bessel-table cache of Set_OLP_Kin is kept per thread, the received-atom products of Set_Nonlocal and the CPU fallback of the cluster density matrix are threaded over the atoms, and the OpenMP regions of the original code (truncation, Set_ProExpn_VNA, Set_Orbitals_Grid, Force, Total_Energy, the CPU fallbacks) work as they do in the CPU build. Two changes of the same date pay at any thread count: every rank of the collinear cluster solver now accumulates its slice of the density matrix on the device (before, only the rank that owns the dense solve did, and the others spent longer on one core than the owner spent in the solve), and the final density of an MD step takes the GPU tables instead of the one-rank service.
-
-```sh
-# 6 ranks x 3 threads on an 18-core node: every rank bound to 3 cores, its threads inside them
-mpirun --map-by ppr:6:node:PE=3 --bind-to core -np 6 \
-       -x OMP_NUM_THREADS=3 -x OMP_PROC_BIND=close -x OMP_PLACES=cores \
-       ./openmx input.dat -nt 3
+```bash
+mpirun -np 64 ./build/cpu/openmx-cpu input.dat -nt 1
 ```
 
-Runs with threads are not bitwise reproducible from one run to the next,
-because OpenMP reductions can change their summation order.
-`OPENMX_BAND_PROFILE=1` prints, per rank, the section times of Set_Nonlocal
-(`SETNLPROF`), the cluster density matrix (`CLUSTERDMPROF`), truncation and
-Total_Energy beside the existing lines.
+Multi-node runs use the same executable with the site's MPI or scheduler settings for hosts, processes and binding. Keep the executable and adjacent `resources/` together when moving an installation, and retain the build-time Python environment.
 
-## NVIDIA MPS: recommended whenever several ranks share a GPU
-With flat MPI, all the MPI ranks of a node normally share one GPU — so run the
-[NVIDIA CUDA Multi-Process Service (MPS)](https://docs.nvidia.com/deploy/mps/).
-Without MPS the kernels of the different ranks are serialized by context
-switching on the device; under MPS they execute concurrently.
-Start the control daemon once per node before `mpirun`, and stop it afterwards:
+### 3. NSOC, one-step SOC and H/S export
 
-```sh
-nvidia-cuda-mps-control -d             # start the MPS control daemon
-mpirun -np 48 ./openmx input.dat -nt 1
-echo quit | nvidia-cuda-mps-control    # stop it
-```
+The tested workflow is **fixed geometry, nonmagnetic, Gamma point: converge NSOC, then run one SOC step from that run's own checkpoint**. Use `Cluster` or Gamma `Band`, with `scf.eigen.lib elpa1` or `elpa2`. Add `scf.Symmetry on` to both inputs. Keep geometry, basis, physical settings and MPI layout consistent, and use native C2N restart for SOC. See the [run guide](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/WORKFLOW.zh-CN.md) for input and restart requirements. One SOC step is not a self-consistent SOC calculation.
 
-On a multi-node batch job, start one daemon on every node (`/tmp` is usually
-node-local, so per-node `CUDA_MPS_PIPE_DIRECTORY`/`CUDA_MPS_LOG_DIRECTORY`
-paths work well). MPS requires native Linux; it is not available under WSL2.
-An MPS server also accepts at most 48 client processes per GPU. With more
-ranks than that on one GPU the extra ranks find no device, and OpenMX then
-demotes the whole run to the CPU paths (the log reports `GPU initialization
-failed on 16 of 64 MPI ranks; using ELPA2`), so keep at most 48 ranks per GPU
-under MPS; a larger rank count can use the GPU only without MPS.
+Request H/S files with the ordinary `HS.fileout on` setting. Supported symmetry paths export H/S consistent with the selected group projection. OpenMX orbitals are nonorthogonal; post-processing requires the matching S.
 
-## WSL2 and other WDDM platforms
+### 4. Implementation and validation scope
 
-Under WSL2 the CUDA runtime's `cudaMemGetInfo` reports a per-process view of
-the device memory: the allocations of other processes — the other ranks'
-CUDA contexts and arrays — are not subtracted, and an allocation beyond the
-physical VRAM does not fail but is paged through system memory at a small
-fraction of the speed. Every device-memory budget of this code divides the
-free memory among the ranks of the node, so with the CUDA figure 12 ranks on
-a 12 GB GeForce each believed the whole card was theirs, oversubscribed it
-and stalled for minutes. The budgets therefore use the physically free
-memory reported by NVML (`nvidia-smi`'s library) whenever it is lower than
-the CUDA figure; on native Linux the two agree. A one-time line
-`<GPU> device memory: the CUDA runtime reports ... but ... is physically
-free (NVML)` on stdout (`level.of.stdout 2` and above) says that the cap is
-active;
-`OPENMX_GPU_MEMINFO_NVML=0` restores the plain CUDA figure.
+- D3/C3 include specialized optimizations; other supported subgroups, including D2/C2, use general representation blocks. Check the log for the actual path.
+- Symmetry projection can change the discretized operator and SCF trajectory. Energy, forces and other physical errors need separate validation; detection alone does not establish accuracy or speedup.
+- The direct switch passed small-system single-node, two-node and installation-relocation checks. MoTe₂ at 9.43°, 222 atoms, completed NSOC but its general SOC path failed the default covariance gate; this is not a successful full-workflow case.
+- Historical timing and memory results apply to their recorded configurations. More nodes do not guarantee lower core-hours or constant total memory.
 
-A kernel whose stack frame exceeds the driver's default limit of 1 KiB
-per thread makes its first launch grow the context's local-memory pool,
-sized for every thread the device can hold (about 26 MiB per rank on an
-RTX 5080 for a 1224-byte frame), at launch time. The Force3 trace kernel
-had such a frame, and since the force batches size their device arenas to
-fill the card down to a node-wide reserve, with 18 ranks on 16 GB its late
-launches raced the other ranks' arenas for the last MiB and sometimes lost
-(`cuLaunchKernel` out of memory in `Force3_GpuTrace`, C1000). Its private
-spherical-harmonic tables are now stored flat, which brings the frame to
-936 bytes, so no launch grows the pool any more; as a guard for future
-kernels, the device initialization raises the stack limit to the largest
-frame of OpenMX's own kernels, which the Makefile reads from the linked
-binary with `cuobjdump` and relinks once with (idle at present, every
-frame being below 1 KiB; `OPENMX_GPU_STACK_BYTES` overrides the value, 0
-disables the step). The node-wide reserve of the force-phase budgets also
-grows by 16 MiB per rank sharing the device. In the same situation the cluster
-dense diagonalization used to fall back to ELPA because its reservation
-probe demanded room for the basis of the refined FP32 eigensolver (n²
-doubles, 1289 MiB at n=13000) next to the 1024 MiB reserve; when the dense
-buffers and the reserve fit but the basis does not, the GPU path is now
-kept with the FP64 eigensolver for that SCF cycle.
+[Native switch validation](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/NATIVE_SYMMETRY_VALIDATION_20261106.md) · [Timing and memory benchmarks](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/BENCHMARKS_20261031.md) · [Acceptance criteria](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/ACCEPTANCE.zh-CN.md) (detailed reports are currently in Chinese).
 
-## Build and install
-Building and installing is more difficult than with standard OpenMX. The build requires the [NVIDIA HPC SDK](https://developer.nvidia.com/hpc-sdk) and OpenMPI. The Makefile contains build examples for several supercomputer systems, and ready-made site makefiles are included for the Pegasus supercomputer at the University of Tsukuba (`Makefile.pegasus`) and for System C "Kugui" at ISSP, Univ. of Tokyo (`Makefile.kugui`, which builds with the NVHPC 24.7 / CUDA 12.5 that Kugui offers; its header lists the two nvc 24.x code-generation problems it works around, one of them reproduced by `tests/nvc_diag_vectorizer_bug.c`); please refer to them. Since v2.0 the first `make` also builds the bundled ELPA/COSMA stack for "gpusolver2" automatically, which adds some time to the first build. A detailed implementation document (English and Japanese, including the list of GPU-related environment variables) is available under [doc/](doc/). If you're unsure about the build and installation process, feel free to ask in English via GitHub issues or [my X account](https://x.com/dc1394) (Japanese is also acceptable on my X account). I'll assist you as much as I can.
+## 代码目录与来源 / Source layout and credits
 
-For the Kugui A100 environment used for the current validation:
+| Directory | 内容 / Contents |
+|---|---|
+| `cpu/vendor/` | OpenMX、ELPA 源码及许可 / OpenMX and ELPA sources and licenses |
+| `cpu/overrides/` | 优化求解器与内存内核 / Optimized solvers and memory kernels |
+| `cpu/geometry/` | 对称性识别与表示构造 / Symmetry detection and representation construction |
+| `cpu/tools/` | 运行、对照与基准工具 / Workflow, comparison and benchmark tools |
+| `cpu/tests/`, `cpu/docs/` | 测试与详细文档 / Tests and detailed documentation |
 
-```sh
-cd source
-# First build only: the site's CMake 3.20.2 is below COSMA's 3.24 minimum.
-python3.9 -m pip install --target build/cmake-python 'cmake==3.31.10'
-make -f Makefile.kugui -j3 GPUSOLVER2_JOBS=3 \
-  GPUSOLVER2_CMAKE="$PWD/build/cmake-python/cmake/data/bin/cmake"
-```
+[CPU 文档入口 / CPU documentation](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/README.md)。OpenMX 和 ELPA 的原作者版权与许可保留在源码及 `cpu/vendor/` 中；来源记录见 `cpu/vendor/ORIGINS.json`。 / Original OpenMX and ELPA copyright notices and licenses are retained in the sources and `cpu/vendor/`; provenance is recorded in `cpu/vendor/ORIGINS.json`.
 
-This selects NVHPC 24.7, CUDA 12.5, the site MPI and `sm_80`; the login node
-does not need a visible GPU. The local CMake 3.31.10 path reproduces the
-tested build; without a suitable override or system CMake, the stack builder
-bootstraps its bundled CMake instead. Use one build at a time: `-j8` hit the
-login environment's 500-thread quota during this validation. On another installation, select its SDK/MPI paths and
-pass `GEMMUL8_GPU_ARCH=80` to the normal Makefile. GPU tests run in an
-allocated GPU job.
-
-### HPC SDK 26.9 / CUDA 13.4 update
-
-The default `source/Makefile` now uses HPC SDK 26.9 and CUDA 13.4. The
-SDK's bundled toolkit and the separately installed toolkit can differ: on
-the reference workstation SDK 26.9 bundles CUDA 13.3, while CUDA 13.4.2 is installed at
-`/usr/local/cuda-13.4`. The build selects one consistent set of CUDA headers,
-runtime and math libraries, and obtains the MPI library path from the SDK's
-MPI wrapper. Compiler/toolkit changes invalidate cached build products.
-
-```sh
-cd source
-make -j18 GEMMUL8_GPU_ARCH=120             # RTX 5080; 80 for A100, 90 for H100
-# An older installation remains selectable:
-make -j18 NVHPC_ROOT=/opt/nvidia/hpc_sdk/Linux_x86_64/26.5 \
-  NVHPC_CUDA_VERSION=13.2 \
-  NVHPC_CUDA_HOME=/opt/nvidia/hpc_sdk/Linux_x86_64/26.5/cuda/13.2 \
-  GEMMUL8_GPU_ARCH=120
-```
-
-GEMMul8 is pinned to upstream **v3.5.2**
-(`603b52363715796a0af5e4aa1ed8d386349b4251`). Initialize/update submodules
-with `git submodule update --init --recursive` after updating the repository.
-The OpenMX adapter includes v3.5.2's memory-saving configuration and K-block
-modular-reduction implementation. The adapter also enables memory-saving
-blocking with a 256 MiB default target (`OPENMX_GEMMUL8_MAX_WORKSPACE_MB`),
-and divides the available-memory budget between ranks sharing each GPU.
-
-On GPUs with weak native FP64, cuSOLVER handles enable FP64 fixed-point
-emulation with the performant strategy and dynamic mantissa selection when
-the toolkit supports it. A100-class devices default to native FP64;
-`OPENMX_CUSOLVER_EMULATION=0|1` overrides the hardware choice. With CUDA 13.4 Update 1 or later
-(cuSOLVER 12.3.4+), complete-spectrum real and complex dense solves use
-`CUSOLVER_ALG_0`: cuSOLVER automatically chooses the one-stage or two-stage
-reduction from the matrix dimension, GPU architecture and math mode. No
-fixed starting dimension or startup calibration is required. Partial-spectrum
-requests retain SYEVDX, avoiding an unnecessary full eigendecomposition.
-Explicit `two-stage` mode also supports leading partial spectra by computing
-the full spectrum and returning the requested eigenpairs. The library chooses Ozaki-II when
-beneficial; there is no public API to force Ozaki-II for every internal GEMM.
-See [NVIDIA's cuSOLVER documentation](https://docs.nvidia.com/cuda/cusolver/)
-and [CUDA release notes](https://docs.nvidia.com/cuda/cuda-toolkit-release-notes/).
-Older cuSOLVER headers/libraries retain the existing SYEVD/SYEVDX path, and unsupported
-algorithm selection or emulation modes fall back to the compatible implementation.
-The cuSOLVER layer also compiles against CUDA 12.3. The bundled GEMMul8
-translation unit supplies compatibility declarations for newer cuBLASLt
-attributes referenced by upstream headers; OpenMX's instantiated
-`cublasHandle_t` path does not execute that newer Lt setup. CUDA 12.5 is
-supported by `Makefile.kugui`; CUDA 13.2 and 13.4 builds were verified earlier.
-CUDA 12.5 uses cuSOLVER 11.6.3 and does not expose the newer FP64-emulation
-or two-stage-selection APIs.
-
-For controlled comparisons:
-
-```sh
-OPENMX_CUSOLVER_VERBOSE=1 mpirun -np 18 ./openmx input.dat -nt 1
-OPENMX_CUSOLVER_ALGORITHM=legacy OPENMX_CUSOLVER_EMULATION=0 \
-  mpirun -np 18 ./openmx input.dat -nt 1
-```
-
-`OPENMX_CUSOLVER_ALGORITHM` accepts `auto` (default), `one-stage`,
-`two-stage` and `legacy`. For a manual crossover,
-`OPENMX_CUSOLVER_TWO_STAGE_MIN_N` alone selects two-stage dispatch at or
-above that dimension; smaller full spectra use one-stage and smaller partial
-spectra use SYEVDX. Explicit `auto` takes precedence over this manual minimum.
-The automatic crossover belongs to cuSOLVER and can change with its version
-and the GPU. `OPENMX_CUSOLVER_CACHE_MB` caps retained generic-solver
-scratch per rank (default 64 MiB; 0 releases scratch after every solve).
-`OPENMX_CUSOLVER_EMULATION=0` disables cuSOLVER emulation and `=1` requests it
-where supported;
-`scf.gemmul8.enable` independently controls OpenMX's GEMMul8 products.
-
-The AMD version's run-boundary cache cleanup has been ported to the CUDA
-band, cluster, DC, DC-LNO and Krylov paths. Small density-grid tables are
-retained across SCF iterations; the defaults cap the global and local caches
-at 64 MiB and 32 MiB, with a further free-memory allowance per sharing rank.
-Set `OPENMX_DENSITY_GRID_GPU_CACHE_MB=0` and
-`OPENMX_DENSITY_GRID_GPU_LOCAL_CACHE_MB=0` to disable this retention for an
-A/B comparison. Nonlocal spin-orbit force assembly also avoids redundant
-pointer traversal and clears only the active orbital block.
-
-Collinear and noncollinear multi-k band calculations also retain transformed
-overlap matrices across SCF iterations and reuse eigenvectors between the
-eigenvalue and density-matrix passes. Host memory is bounded by the per-rank
-limits below and the available node memory divided among local ranks. Uncached k points use
-the existing solve path; eigenvector panels expire after each SCF call, and
-overlap entries expire when the geometry or input changes.
-
-| Setting | Default per-rank cap |
-|---|---:|
-| `OPENMX_BAND_COL_OVERLAP_CACHE_MB` | 512 MiB |
-| `OPENMX_BAND_COL_KCACHE_MB` | 1024 MiB |
-| `OPENMX_BAND_NONCOL_OVERLAP_CACHE_MB` | 512 MiB |
-| `OPENMX_BAND_NONCOL_KCACHE_MB` | 1024 MiB |
-| `OPENMX_BAND_NONCOL_PACK_CACHE_MB` | 128 MiB |
-
-Set a cap to `0` to disable that cache. Each collinear cache and the
-noncollinear overlap cache is further capped at 1/64 of available node RAM
-divided by the number of local MPI ranks; the noncollinear eigenvector cache
-uses 1/32. Overlap caches reset at the first SCF iteration and system cleanup;
-noncollinear entries also require matching matrix dimensions and k points.
-The noncollinear packed-matrix cache gathers the eight real-space matrices
-once per SCF and reuses them across k-point groups and both passes. It is
-also limited to 1/64 of available node RAM divided by local ranks. All owners
-must fit; otherwise the existing per-group gathers remain in use. Its storage
-is released at the end of each SCF call.
-Noncollinear k-point groups interleave their owner ranks to use the admitted
-GPU concurrency while preserving each rank's original k-point accumulation
-order. `OPENMX_BAND_NONCOL_INTERLEAVE_K=0` restores consecutive k-point groups
-for timing comparisons.
-`OPENMX_BAND_CACHE_TRACE=1` and
-`OPENMX_BAND_NONCOL_CACHE_TRACE=1` report reuse counts. Solver and GEMMul8
-scratch is released before force evaluation. Band runs release shared orbital
-and density caches after Force3; `OPENMX_FORCE_RELEASE_SCF_CACHES=0` disables
-this latter release for comparisons.
-
-When no complete Hamiltonian rank fits on its GPU, or only one rank would
-use the GPU while its peers fall back to the CPU, matrix construction
-automatically streams bounded pair batches through the CUDA kernel.
-For the one-rank case, explicit serial waves and a one-rank GPU limit keep
-their existing schedule. If no complete rank fits, streaming is still tried.
-`OPENMX_SETHAM_STREAM_MB` caps the workspace per rank (default 256 MiB;
-values must be at least 8 MiB), with a further limit from each rank's share
-of free GPU memory after reserving space for the potential and runtime.
-Oversized pairs or recoverable CUDA failures use the CPU for those pairs.
-`OPENMX_SETHAM_STREAMING=0` disables this fallback; it also requires the
-CUDA matrix kernel to be enabled (`OPENMX_SETHAM_CUDA_KERNEL`, default 1).
-
-VNA projector construction reduces its pair batch to fit each rank's GPU
-memory budget. The HVNA contraction also admits ranks in turns when their
-combined buffers do not fit. This keeps the existing kernel and accumulation
-order; only the scheduling and archive placement change. Turn execution
-uses host archives with a node-wide budget of half of available RAM,
-and falls back to the CPU if one rank cannot fit. Set
-`OPENMX_SETPRO_HVNA_TURNS=0` to disable rank turns, or use the existing
-`OPENMX_SETPRO_GPU=0` to disable the VNA GPU stages.
-
-For VNA forces, `OPENMX_FORCE4B_CASE2_STREAM=auto` (also the unset default)
-streams case-2 projector traces one centre at a time when the full GPU batch
-does not fit. Set it to `0` to disable streaming or `1` to request streaming
-even when the full batch fits. Memory admission still applies, with CPU
-fallback if a rank's largest centre does not fit; `OPENMX_FORCE4B_GPU=0`
-disables both the full-batch and streamed GPU paths.
-For case 1, `OPENMX_FORCE4B_CASE1_TURNS=auto` (the unset default) can
-retain received projector rows in host memory and run bounded groups of ranks
-on each physical GPU when concurrent full archives do not fit. Group size
-uses the free memory measured after earlier buffers are released, the largest
-rank arena, a reserve of 256 MiB plus 16 MiB per node rank and a 64 MiB
-allowance per active rank.
-`OPENMX_FORCE4B_CASE1_TURN_MAX_RANKS=1` restores one rank at a time for comparisons.
-Each rank
-uploads its local rows and halo once, using the existing kernel. The added
-host allocations must fit both three quarters of available node RAM and
-the amount remaining after reserving 32 GiB. Device allocation failure uses
-the cached halo in the CPU contraction. Set this mode to `0` to disable it
-or `1` to force it; `OPENMX_FORCE4B_CASE1_STREAM=1` takes precedence.
-`OPENMX_FORCE4B_CASE1_STREAM=auto` similarly streams case-1 traces when the
-full archive and rank turns are unavailable. It packs only the projector rows needed for each
-received source, then accumulates results in the original atom/pair order.
-`OPENMX_FORCE4B_CASE1_STREAM_MB` caps its per-rank arena at 1024 MiB by default;
-`0` prevents streaming. The case-1 mode also accepts `0` (disabled) and `1`
-(forced), independently of the case-2 mode. Both respect the parent GPU switch
-and fall back to the CPU if their workspace cannot fit.
-
-Large collinear cluster solves release disposable matrices, eigenvector panels
-and solver workspace after forming the density matrix when less than half of
-the GPU memory is free. The transformed overlap stays cached. Memory admission
-is checked again before the next solve, including serialized spin execution.
-`OPENMX_CLUSTER_GPU_RETAIN_SCRATCH=1` keeps the previous retention policy for
-comparisons; `0` releases scratch at every SCF boundary, and leaving it unset
-uses the automatic policy. `OPENMX_CUSOLVER_VERBOSE=1` reports released scratch.
-
-`OPENMX_DCLNO_PROFILE=1` reports collinear DC-LNO CPU/GPU task counts,
-matrix-dimension ranges and histograms, and SCF phase times aggregated as
-MPI-rank maxima and means. Profiling is off by default. The existing
-`OPENMX_DCLNO_GPU_THRESHOLD` overrides the collinear local-matrix GPU
-crossover (default dimension 800) for controlled comparisons.
-Collinear DC-LNO keeps LAPACK eigenvectors in their packed layout and stores
-each atom/spin residue window in one contiguous allocation, preserving the
-existing row layout and accumulation order.
-If a local cuSOLVER solve returns positive INFO (numerical nonconvergence),
-it retries that generalized eigenproblem on the CPU using the original host
-matrices and existing workspace. The optional proxy path returns the retry
-to the originating rank. Invalid arguments, API errors and inconsistent
-eigenpair counts remain fatal. Profiling counts the initially selected backend;
-its solve time includes any CPU retry, which is also reported in the log.
-
-### Reproducible GPU regression runs
-
-`tools/run_gpu_suites.py` and `tools/compare_gpu_suites.py` adapt the AMD
-version's isolated suite runner and force-component comparison. They cover
-all four built-in suites (`S`, `L`, `L2`, `L3`), preserve input/reference files,
-and record binary hashes, launch settings, elapsed time, memory usage and
-interruptions. Each input is a separate MPI job invoking its original
-`-runtest*` option; this mode does not measure cache reuse between inputs.
-Add `--together` to execute all selected inputs in one native suite call and
-check cache cleanup between systems; the comparator supports both layouts.
-
-```sh
-python3 tools/run_gpu_suites.py --binary source/openmx --suite S --ranks 18 \
-  --mpirun /opt/nvidia/hpc_sdk/Linux_x86_64/26.9/comm_libs/mpi/bin/mpirun \
-  --output work/bench_after_S
-python3 tools/compare_gpu_suites.py work/bench_after_S --reference
-# After recording an equivalent before run:
-python3 tools/compare_gpu_suites.py work/bench_before_S work/bench_after_S
-```
-
-Use identical MPI ranks, MPS settings and input data for timing comparisons.
-The comparator checks every force component, since the built-in scalar
-`diff Force` can hide cancellation. Large tests stop individually if the
-memory reserve or per-input timeout is reached; interrupted cases are
-reported as incomplete, never as passes.
-
-Standalone GPU accuracy checks are also included:
-
-```sh
-tests/run_cusolver_smoke.sh 257
-tests/run_gemmul8_smoke.sh
-# Check bounded Hamiltonian batches, buffer reuse and recoverable overflow:
-tests/run_set_hamiltonian_stream_smoke.sh
-# Add CUDA device memory checking:
-SETHAMILTONIAN_SANITIZE=1 tests/run_set_hamiltonian_stream_smoke.sh
-# Exercise a GPU first SCF step followed by a memory-admission CPU fallback:
-tests/run_cluster_fallback_smoke.sh
-```
-
-The scripts support `CUDA_HOME`, `CUDA_MATH_ROOT` and `NVHPC_ROOT` for
-cross-version checks. They isolate the selected CUDA runtime from unrelated
-`LD_LIBRARY_PATH` entries. GEMMul8's template translation unit takes several
-minutes to compile. The cluster fallback injection check requires CUDA 13.4
-Update 1 or later and a built OpenMX executable.
-
-CPU checks for the new packing, allocation and scheduling paths use functions
-extracted from the production sources:
-
-```sh
-python3 tests/run_force4b_stream_cpu.py
-python3 tests/run_force4b_case1_cpu.py
-python3 tests/run_force4b_case1_turns_cpu.py
-python3 tests/run_dclno_residue_pool_smoke.py --sanitize
-python3 tests/run_dclno_solver_retry.py --sanitize
-python3 tests/run_band_noncol_k_order_cpu.py
-# Architecture selection and explicit override regression checks:
-python3 tests/run_cusolver_policy_cpu.py
-python3 tests/run_gemmul8_policy_cpu.py
-python3 tests/run_orbs_precision_policy_cpu.py
-```
-
-These check arithmetic against independent CPU contractions, buffer boundaries,
-allocation failure, empty ranks and preservation of each owner's k-point order.
-The solver retry check injects CUDA failures through host stubs and checks the
-recovery against independent LAPACK generalized eigenpairs; it needs LP64
-LAPACK/BLAS libraries (`LAPACK_LIBS` can override `-llapack -lblas`).
-They complement the GPU/MPI suite runs. `tools/bench_dclno_solver.py --build`
-also prepares a CPU/GPU crossover benchmark using the production DC-LNO solver
-functions and existing libraries. It prints the separate MPI launch command;
-synthetic-matrix timings guide experiments and do not change the default
-threshold. Use the same thread, MPI binding and MPS settings as the suite runs.
-The timing harness rejects GPU nonconvergence instead of reporting CPU retry
-time as a GPU measurement.
-
-Measured results, accuracy checks, version coverage and remaining limitations
-are recorded in [the CUDA 13.4 validation report](doc/cuda_13_4_validation.txt)
-and [the subsequent GPU tuning measurements](doc/gpu_tuning_20261001.txt).
-
-## Docker image
-I have released the OpenMX 4.0 GPU Docker image.
-You can easily try OpenMX 4.0 GPU on computers equipped with NVIDIA GPUs.
-The steps are as follows:
-1. Install [Docker](https://docs.docker.com/get-started/get-docker/).
-2. Install the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html).
-3. Run: `docker run --gpus all --shm-size=4gb --rm -it -v /path/to/inputs:/work dc1394/openmx4.0-gpu-ubuntu24.04:1.1.1`. Ensure `/path/to/inputs` is created beforehand.
-4. Run tests with `cd openmx_work` and `mpirun -np 4 ./openmx -runtest`.
-
-The test suite writes elapsed times and differences from the bundled reference
-results to `runtest.result`. Inspect the output files and compare every force
-component with `tools/compare_gpu_suites.py` as described above.
-
-## Benchmarks
-Published benchmarks of GPU-accelerated OpenMX are available in
-[the JPSJ paper](https://journals.jps.jp/doi/10.7566/JPSJ.94.124003).
-For measurements of the current version on your hardware, use the commands in
-[Reproducible GPU regression runs](#reproducible-gpu-regression-runs).
-
-## Important notes
-Performance depends on the system, solver, hardware and MPI/OpenMP layout.
-Use the same binary and inputs when comparing CPU and GPU execution;
-`OPENMX_GPU=0` selects the CPU paths for that comparison. Check numerical
-agreement alongside execution time.
-
-## About bug reports
-I would appreciate it if you could actively report any bugs. Please report them via GitHub issues or send them to [my X account](https://x.com/dc1394). Bug reports sent to my X account can be in English.
-
-## License
-
-This project is a derivative work of **OpenMX** and is licensed under the
-**GNU General Public License v3.0 or later (GPL-3.0-or-later)**, consistent
-with the upstream OpenMX license. See the [LICENSE](LICENSE) file for the
-full license text.
-
-```
-SPDX-License-Identifier: GPL-3.0-or-later
-```
-
-### Upstream Project
-
-This project is based on:
-
-- **OpenMX** (Open source package for Material eXplorer)
-- **Version**: 4.0
-- **Upstream**: <https://www.openmx-square.org/>
-- **Copyright**: Copyright (c) Taisuke Ozaki and OpenMX contributors
-- **License**: GNU General Public License v3.0 or later
-
-The original OpenMX source code retains its original copyright notices and
-license headers. Modifications made in this project (GPU acceleration for
-NVIDIA CUDA and AMD HIP backends) are also licensed under GPL-3.0-or-later.
-
-### Third-Party Components
-
-This project incorporates source code from the following third-party projects.
-Each component retains its original license; their original license files are
-preserved in the corresponding `source/third_party/` submodules.
-
-#### FFTW3
-
-- **Source**: <https://www.fftw.org/>
-- **Copyright**:
-  - Copyright (c) 2003, 2007-14 Matteo Frigo
-  - Copyright (c) 2003, 2007-14 Massachusetts Institute of Technology
-- **License**: GNU General Public License v2.0 or later (`GPL-2.0-or-later`)
-- **Used here under**: GPL v3 (selected via the "or any later version" clause)
-- **Original license file**: `COPYING` in the [FFTW3 submodule](source/third_party/fftw3)
-
-#### GEMMul8
-
-- **Source**: <https://github.com/RIKEN-RCCS/GEMMul8>
-- **Copyright**: Copyright (c) 2025- RIKEN R-CCS
-- **Responsible developer**: Yuki Uchino (RIKEN Center for Computational Science)
-- **License**: MIT License (`MIT`)
-- **Original license file**: `LICENSE` in the [GEMMul8 submodule](source/third_party/GEMMul8)
-
-GEMMul8 (GEMMulate) is a library for emulating high-precision matrix
-multiplication (SGEMM, DGEMM, CGEMM, ZGEMM) using INT8/FP8 matrix engines
-based on the Ozaki Scheme II. 
-
-If you use this project in academic work, please also cite the GEMMul8
-upstream references (see the GEMMul8 repository).
-
-#### ELPA / COSMA (the "gpusolver2" stack, since v2.0)
-
-The distributed multi-GPU cluster diagonalization (`scf.eigen.lib gpusolver2`)
-links four additional libraries, bundled as source archives under
-`source/third_party/dist/` and built automatically by the first `make`; each
-archive carries its original license file:
-
-- **ELPA** 2026.02 — <https://elpa.mpcdf.mpg.de/> — Copyright (c) the ELPA
-  consortium — **GNU Lesser General Public License v3.0 (`LGPL-3.0`)**
-  (`COPYING/` inside the archive). The "elpa1"/"elpa2" CPU paths and the
-  distributed GPU path share this single version.
-- **COSMA** 2.8.4 — <https://github.com/eth-cscs/COSMA> — Copyright (c) ETH
-  Zürich (parts: Advanced Micro Devices, Inc.) — **BSD 3-Clause License
-  (`BSD-3-Clause`)**
-- **COSTA** and **Tiled-MM** (COSMA dependencies) —
-  <https://github.com/eth-cscs/COSTA>,
-  <https://github.com/eth-cscs/Tiled-MM> — Copyright (c) ETH Zürich —
-  **BSD 3-Clause License (`BSD-3-Clause`)**
-
-### License Compatibility Summary
-
-| Component | Original License | Compatible with GPL v3 |
-|-----------|------------------|------------------------|
-| OpenMX (upstream) | GPL-3.0-or-later | — (same license) |
-| GPU modifications (this project) | GPL-3.0-or-later | — (same license) |
-| FFTW3 | GPL-2.0-or-later | Yes (via "or later" clause) |
-| GEMMul8 | MIT | Yes (permissive → strong copyleft) |
-| ELPA (2018.05 embedded; 2026.02 for "gpusolver2") | LGPL-3.0 | Yes (LGPL v3 code may be conveyed under GPL v3) |
-| COSMA (with COSTA, Tiled-MM) | BSD-3-Clause | Yes (permissive → strong copyleft) |
-
-The combined work is distributed under the terms of GPL v3 or later.
+GPU 部分源自他人的 [dc1394/openmx4.0_gpu](https://github.com/dc1394/openmx4.0_gpu)，相关说明请参阅原项目。 / The GPU implementation comes from [dc1394/openmx4.0_gpu](https://github.com/dc1394/openmx4.0_gpu); please refer to that project.
