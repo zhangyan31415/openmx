@@ -13,6 +13,32 @@ The CPU and GPU targets have different compiler, library and validation
 requirements. A GPU build's CPU fallback is not the standalone optimized CPU
 target. Choose a target before following its build instructions.
 
+The GitHub default branch is `main`, which currently contains the GPU target.
+The standalone CPU package is published on **`experiments/cpu-d3-20261019`**.
+Clone that branch explicitly to obtain the `cpu/` directory:
+
+```bash
+git clone --branch experiments/cpu-d3-20261019 --single-branch \
+  https://github.com/zhangyan31415/openmx.git openmx-cpu
+cd openmx-cpu
+```
+
+### Directory layout
+
+| Directory | Contents |
+|---|---|
+| `cpu/vendor/` | OpenMX CPU and bundled ELPA source snapshots, with licenses |
+| `cpu/overrides/` | Optimized scalar/spinor solvers and memory kernels |
+| `cpu/geometry/` | Geometry detection, subgroup validation and basis/map preparation |
+| `cpu/tools/` | Single/multi-node workflow, templates and output comparison |
+| `cpu/tests/`, `cpu/docs/` | Regression tests, installation instructions and measured limits |
+| `source/`, `doc/`, `docs/` | Existing CUDA/HIP implementation and GPU documentation |
+
+CPU builds and runtime preparation are self-contained under `cpu/`; no personal
+experiment tree, historical result directory or external OpenMX object file is
+required. Basis/pseudopotential data and the compiler/MPI/MKL installation are
+external inputs.
+
 ## CPU quick start
 
 The unified CPU binary includes optimized scalar NSOC solvers, specialized
@@ -26,6 +52,19 @@ step is not a fully self-consistent SOC calculation. Detection of a point group
 does not establish that a material is accurate or faster with that group.
 
 ### 1. Build from source
+
+Prepare a separate Python environment, for example:
+
+```bash
+conda create -n openmx-cpu python=3.12 numpy scipy spglib
+conda activate openmx-cpu
+```
+
+These packages prepare metadata; they do not supply the native compiler or MKL.
+The checked workflow also needs Linux, SSH access to the selected compute
+hosts, an available user systemd manager and cgroup v2 memory accounting.
+Native OpenMX can be built separately; the current workflow wrapper is not a
+portable scheduler or a Windows/macOS launcher.
 
 Use Python 3 with the preparation dependencies listed in the
 [CPU guide](cpu/README.md), and an Intel oneAPI installation matching the
@@ -111,6 +150,34 @@ Read the [acceptance criteria](cpu/docs/ACCEPTANCE.zh-CN.md),
 for measured results and remaining boundaries. The
 [full workflow guide](cpu/docs/WORKFLOW.zh-CN.md) documents advanced explicit
 profiles and recovery.
+
+### Comparison with the CPU reference
+
+The saved same-node, 64 MPI × 1 thread comparison for **MoTe2 9.43 degrees,
+222 atoms / 3848 scalar AOs** is:
+
+| Configuration | NSOC (s) | Own one-step SOC (s) | Total (s) | Workflow memory peak (GiB) |
+|---|---:|---:|---:|---:|
+| CPU 4.0 source-snapshot reference | 86.17 | 69.11 | 155.27 | 70.41 |
+| Optimized D3 + legacy SOC profile | 41.80 | 33.95 | 75.75 | 22.84 |
+
+The complete configured workflow was about **2.05× faster**, with about
+**3.08× lower peak memory**, for that case. Both used 150 Ry, 300 K,
+SCF criterion `1e-7`, StartPulay15 and History30. This is a saved profile
+comparison, including symmetry constraints and SCF trajectory differences;
+it is not a claim of identical raw operators or a universal speedup. The
+reference is a frozen installed CPU4.0 snapshot, not an independently
+authenticated pristine upstream distribution, and no matched latest-build
+CPU3.9 comparison is established here.
+
+The input-driven `configure` command currently selects general SOC profiles;
+it does **not** automatically select the legacy D3 profile used for the
+fastest row. Use the explicit validated profiles when reproducing that row.
+Historical MoTe2 projected-vs-raw NSOC force differences reached about
+12.44 meV/angstrom and did not pass the 1 meV/angstrom physical gate.
+Implementation/layout agreement is separate from raw-reference physical
+accuracy. Full inputs, timing attribution and failed gates are described in
+[the benchmark report](cpu/docs/BENCHMARKS_20261031.md).
 
 ## GPU builds: NVIDIA CUDA and AMD HIP
 
@@ -759,7 +826,7 @@ NVIDIA CUDA and AMD HIP backends) are also licensed under GPL-3.0-or-later.
 
 This project incorporates source code from the following third-party projects.
 Each component retains its original license; their original license files are
-preserved under `third_party/<component>/`.
+preserved in the corresponding `source/third_party/` submodules.
 
 #### FFTW3
 
@@ -769,7 +836,7 @@ preserved under `third_party/<component>/`.
   - Copyright (c) 2003, 2007-14 Massachusetts Institute of Technology
 - **License**: GNU General Public License v2.0 or later (`GPL-2.0-or-later`)
 - **Used here under**: GPL v3 (selected via the "or any later version" clause)
-- **Original license file**: [`third_party/fftw3/COPYING`](third_party/fftw3/COPYING)
+- **Original license file**: `COPYING` in the [FFTW3 submodule](source/third_party/fftw3)
 
 #### GEMMul8
 
@@ -777,7 +844,7 @@ preserved under `third_party/<component>/`.
 - **Copyright**: Copyright (c) 2025- RIKEN R-CCS
 - **Responsible developer**: Yuki Uchino (RIKEN Center for Computational Science)
 - **License**: MIT License (`MIT`)
-- **Original license file**: [`third_party/gemmul8/LICENSE`](third_party/gemmul8/LICENSE)
+- **Original license file**: `LICENSE` in the [GEMMul8 submodule](source/third_party/GEMMul8)
 
 GEMMul8 (GEMMulate) is a library for emulating high-precision matrix
 multiplication (SGEMM, DGEMM, CGEMM, ZGEMM) using INT8/FP8 matrix engines

@@ -6,6 +6,21 @@
 
 ## 从这里开始
 
+完整CPU代码目前位于 `experiments/cpu-d3-20261019` 分支，默认 `main`
+仍保留GPU实现。新用户先取得正确分支：
+
+```bash
+git clone --branch experiments/cpu-d3-20261019 --single-branch \
+  https://github.com/zhangyan31415/openmx.git openmx-cpu
+cd openmx-cpu
+conda create -n openmx-cpu python=3.12 numpy scipy spglib
+conda activate openmx-cpu
+```
+
+Python环境用于元数据准备，不能替代外部Intel oneAPI classic编译器、MPI和MKL。
+现有工作流还依赖Linux、可用的用户systemd服务、cgroup v2和SSH；不是跨平台
+一键安装器。原生CPU源码构建和运行控制器的依赖分别见下面文档。
+
 输入驱动的新用法见 [Auto/User 与统一 H/S 导出](docs/INPUT_SYMMETRY.zh-CN.md)：
 `configure request.json --output /ABS/new-config` 自动准备匹配元数据和完整
 profile，然后 `run /ABS/new-config/workflow.json --wait`。无需手动合并开关。
@@ -18,17 +33,23 @@ profile，然后 `run /ABS/new-config/workflow.json --wait`。无需手动合并
 
 ```bash
 python /ABS/REPO/cpu/build.py \
-  --profile unified --output /ABS/new-build --execute
+  --profile unified --oneapi-prefix /path/to/oneapi \
+  --output /ABS/new-build --execute
 
-python /ABS/REPO/cpu/geometry/prepare.py \
-  --nsoc-input /ABS/nsoc.dat --soc-input /ABS/soc.dat \
-  --output /ABS/new-metadata --group D3
+cp cpu/tools/examples/input_request.json /ABS/request.json
+# 按输入驱动说明填写两个输入、build-manifest、主机、CPU和运行库路径。
+python /ABS/REPO/cpu/tools/workflow.py configure /ABS/request.json \
+  --output /ABS/new-config
 
-python /ABS/REPO/cpu/tools/workflow.py plan /ABS/config.json
-python /ABS/REPO/cpu/tools/workflow.py run /ABS/config.json --wait
+python /ABS/REPO/cpu/tools/workflow.py plan /ABS/new-config/workflow.json
+python /ABS/REPO/cpu/tools/workflow.py run /ABS/new-config/workflow.json --wait
 ```
 
 `prepare` 只生成元数据和环境增量，不会自行启用所有优化或启动计算。完整配置示例在 [`tools/examples/workflow.json`](tools/examples/workflow.json)；四条路径的配置模板及合并方法在 [PROFILE_TEMPLATES.md](tools/examples/PROFILE_TEMPLATES.md)。输入的基组、截断、电子温度、SCF 精度和混合历史不会被入口改写；`DATA.PATH` 必须明确给出。
+
+低层 `geometry/prepare.py` 和显式profile留给高级复现。新用户优先使用上面的
+`configure`，它自动生成完整配置。当前自动入口选择通用GSOC，不自动切换成
+最快历史D3 legacy配置；不能把历史最快计时当成自动入口的测量值。
 
 ## 共用入口，按表示选择求解路径
 
