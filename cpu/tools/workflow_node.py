@@ -109,7 +109,7 @@ def monitor(args):
 
 def run_scope_command(command):
     # Hydra passes a live PMI_FD; closing descriptors here breaks MPI_Init.
-    return subprocess.run(command, stdin=subprocess.DEVNULL, close_fds=False).returncode
+    return subprocess.run(command, stdin=subprocess.DEVNULL, close_fds=False, timeout=None).returncode
 
 
 def rank(args):
@@ -117,6 +117,7 @@ def rank(args):
     token=hashlib.sha256(plan['output'].encode()).hexdigest()[:16]+args.stage
     command=['systemd-run','--user','--scope','--quiet','--unit=omxwf'+token+'rank'+str(rankno),
              '--slice=omxwf'+token+'.slice','--property=MemoryAccounting=yes','--property=TasksMax=infinity',
+             '--property=RuntimeMaxSec=infinity','--property=TimeoutStopSec=infinity',
              plan['environment_python'],str(Path(__file__).resolve()),'exec','--plan',str(args.plan),'--stage',args.stage]
     # scope mode inherits the original PMI environment and descriptors; service
     # mode would detach from Hydra and is deliberately not used for MPI ranks.

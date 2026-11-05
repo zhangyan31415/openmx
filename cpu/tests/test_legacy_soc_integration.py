@@ -50,9 +50,20 @@ class CommonSOCPreparation(unittest.TestCase):
             self.assertEqual(r['env_additions']['OPENMX_CPU_SOC_REAL'],'0')
             self.assertEqual(r['env_additions']['OPENMX_CPU_D3'],'0')
 
+    def test_explicit_generic_symmetrize_writes_native_map(self):
+        with tempfile.TemporaryDirectory()as d:
+            d=Path(d);inp,selected=fixture.MetadataContract().case(d)
+            spinor=common.module('generic_prepare_positive',ROOT.parent/'local-records/cpu_d3/generic_soc/tools/prepare_soc_basis.py')
+            r=common.prepare_soc_artifacts(inp,selected,d,'D3',spinor,{},export_policy='symmetrize')
+            self.assertEqual(r['export_HS'],'symmetrized')
+            self.assertTrue(r['files']['soc_native_map'].is_file())
+            self.assertEqual(r['env_additions']['OPENMX_CPU_GSOC_EXPORT_SYMMETRIZE'],'1')
+            self.assertEqual(r['env_additions']['OPENMX_CPU_GSOC_PROJECT'],'1')
+            self.assertNotIn('OPENMX_CPU_SOC_NATIVE_GROUP',r['env_additions'])
+
     def test_unsupported_routes_groups_or_generic_projection_rejected(self):
         for group,route,policy in [('D2','legacy','raw'),('C2','legacy','symmetrize'),
-                                  ('D3','generic','symmetrize'),('D3','unknown','raw'),
+                                  ('D3','unknown','raw'),
                                   ('D3','legacy','unknown')]:
             with self.subTest(group=group,route=route,policy=policy):
                 with self.assertRaises(ValueError):

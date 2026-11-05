@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import importlib.util
 import json
 import math
 import os
@@ -27,6 +28,13 @@ REPO = HERE.parents[1]
 THREAD_KEYS = ('OMP_NUM_THREADS','MKL_NUM_THREADS','OPENBLAS_NUM_THREADS','NUMEXPR_NUM_THREADS','BLIS_NUM_THREADS','VECLIB_MAXIMUM_THREADS')
 SAFE_NAME = re.compile(r'[A-Za-z0-9_.-]+\Z')
 HOST_NAME = re.compile(r'[A-Za-z0-9][A-Za-z0-9_.-]*\Z')
+
+
+def symmetry_api():
+    spec = importlib.util.spec_from_file_location('cpu_input_symmetry', HERE/'input_symmetry.py')
+    api = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(api)
+    return api
 
 
 def loads_unique(text):
@@ -77,6 +85,14 @@ def positive_int(value, label):
     if isinstance(value, bool) or not isinstance(value, int) or value < 1:
         raise ValueError(label+' must be a positive integer')
     return value
+
+
+def unlimited_runtime(config):
+    """Reject old finite budgets instead of silently imposing or ignoring one."""
+    value = config.get('timeout_seconds')
+    if value is not None and value != 'infinity':
+        raise ValueError('timeout_seconds: finite runtime limits are disabled; remove this field or use null / "infinity"')
+    return None
 
 
 def input_values(text):
@@ -138,8 +154,7 @@ def validate_inputs(nsoc_text, soc_text):
             raise ValueError('simple explicit System.Name required')
         if v.get('system.currrentdirectory','./') not in ('.','./'):
             raise ValueError('System.CurrrentDirectory must be ./ for isolated staging')
-        if v.get('scf.symmetry.mode','off').lower() != 'off':
-            raise ValueError('input parser Symmetry Auto/User is not wired: use explicit prepared profiles')
+        symmetry_api().request(v)
         if v.get('scf.eigenvaluesolver','').lower() not in ('cluster','band') or v.get('scf.kgrid','1 1 1').split()!=['1','1','1']:
             raise ValueError('only fixed nonmagnetic Gamma Cluster/Band inputs supported')
         if v.get('scf.eigen.lib','').lower() not in ('elpa1','elpa2'):
@@ -222,11 +237,13 @@ def validate_profile(stage, profile, symmetry):
             if native_selector is not None and (native_selector=='0' or native_group!='D3'):
                 raise ValueError('legacy native group and SOC_NATIVE_D3 selectors conflict')
         native_active=native_group is not None or native_selector=='1'
-        if generic and policy!='raw':
-            raise ValueError('generic GSOC currently supports raw H/S export only')
+        if generic and (enabled(env,'OPENMX_CPU_GSOC_EXPORT_SYMMETRIZE') != (policy=='symmetrize')):
+            raise ValueError('generic SOC export flag must agree with explicit soc_export_policy')
+        if generic and policy=='symmetrize' and (not enabled(env,'OPENMX_CPU_GSOC_PROJECT') or not env.get('OPENMX_CPU_SOC_NATIVE_MAP')):
+            raise ValueError('generic symmetrized export requires projected solve and native operation map')
         if native_active and policy!='symmetrize':
             raise ValueError('legacy native export projects H/S: explicit soc_export_policy=symmetrize required')
-        if policy=='symmetrize' and not native_active:
+        if policy=='symmetrize' and not native_active and not generic:
             raise ValueError('symmetrized export requires explicit legacy native-map activation')
         if native_active:
             group=native_group or 'D3'
@@ -251,6 +268,7 @@ def validate_profile(stage, profile, symmetry):
 def plan_config(config):
     if config.get('schema') != 1:
         raise ValueError('workflow schema must be 1')
+    unlimited_runtime(config)
     binary = absolute(config['binary'],'binary',file=True)
     if not os.access(binary,os.X_OK):
         raise ValueError('binary is not executable')
@@ -298,6 +316,18 @@ def plan_config(config):
             if field in symmetry and (key not in soc_env or float(soc_env[key])!=symmetry[field]):
                 raise ValueError('explicit symmetry.'+field+' must match SOC environment '+key)
     profiles = {stage:{'name':config['profiles'][stage]['name'],'environment':validate_profile(stage,config['profiles'][stage],symmetry)} for stage in ('nsoc','soc')}
+    requests = {stage:symmetry_api().request(values) for stage,values in [('nsoc',n),('soc',s)]}
+    if requests['nsoc'] != requests['soc']:
+        raise ValueError('NSOC/SOC symmetry input settings must match')
+    for stage in profiles:
+        symmetry_api().validate_runtime_request(requests[stage], profiles[stage]['environment'], stage)
+    if requests['nsoc']['mode'] != 'off' and not config.get('build_manifest'):
+        raise ValueError('Auto/User requires an input-symmetry-capable build_manifest')
+    if requests['nsoc']['mode']!='off':
+        if config.get('symmetry_inputs_sha256')!={stage:sha256(path) for stage,path in sources.items()}:
+            raise ValueError('input changed since symmetry configuration; run configure again')
+        if not config.get('symmetry_artifacts_sha256'):
+            raise ValueError('Auto/User requires configure-frozen symmetry artifacts')
     if threads>1:
         for stage,profile in profiles.items():
             if enabled(profile['environment'],'OPENMX_CPU_VNA_SHARED'):
@@ -325,6 +355,12 @@ def plan_config(config):
     if elpa_threads=='1' and (not enabled(scalar_env,'OPENMX_CPU_NSOC_SECTOR_PARALLEL') or len(hosts)*per_host!=64 or threads!=4):
         raise ValueError('NSOC ELPA_OMP_THREADS=1 requires enabled sector parallel with64MPIx4')
     dependencies = {str(binary):sha256(binary), str(mpiexec):sha256(mpiexec), **{str(p):sha256(p) for p in sources.values()}}
+    dependencies.update(symmetry_api().artifact_dependencies(config))
+    for path,digest in config.get('symmetry_operations_sha256',{}).items():
+        path=absolute(path,'OperationsFile',file=True)
+        if sha256(path)!=digest:
+            raise ValueError('OperationsFile changed since configure')
+        dependencies[str(path)]=digest
     # Every explicitly referenced native basis/map is frozen; no relative metadata.
     for stage in profiles:
         for key,value in profiles[stage]['environment'].items():
@@ -351,12 +387,14 @@ def plan_config(config):
             if enabled(env,'OPENMX_CPU_GSOC'): required.append('generic_soc')
             if stage=='soc' and any(enabled(env,k) for k in ('OPENMX_CPU_C3','OPENMX_CPU_D3','OPENMX_CPU_SOC_COMPACT')): required.append('legacy_soc')
             if enabled(env,'OPENMX_CPU_GSOC_COMPACT'): required.append('compact_soc')
+            if requests[stage]['mode']!='off': required.append('input_symmetry')
+            if enabled(env,'OPENMX_CPU_GSOC_EXPORT_SYMMETRIZE'): required.append('generic_soc_export')
             if len(hosts)>1: required.append('multinode')
             for cap in required:
                 if not caps.get(cap):
                     raise ValueError('source build lacks capability '+cap)
         dependencies[str(manifest_path)] = sha256(manifest_path)
-    for tool in (Path(__file__).resolve(), HERE/'workflow_node.py'):
+    for tool in (Path(__file__).resolve(), HERE/'workflow_node.py', HERE/'input_symmetry.py'):
         dependencies[str(tool)] = sha256(tool)
     interval = float(config.get('monitor_interval_seconds',0.25))
     if not 0.05<=interval<=5:
@@ -367,8 +405,9 @@ def plan_config(config):
         'output':str(output),'scratch_root':str(Path('/data/work/tmp')/os.environ.get('USER','zy')/'codex/openmx-unified'/hashlib.sha256(str(output).encode()).hexdigest()[:20]),'layout':layout,'hosts':hosts,'ranks_per_host':per_host,'ranks':len(hosts)*per_host,'threads':threads,
         'total_cores':len(hosts)*per_host*threads,'runtime':{**runtime,'mpiexec':str(mpiexec),'runtime_prefix':str(prefix),'environment_prefix':str(python_prefix),'transport':transport},
         'profiles':profiles,'symmetry':{**symmetry,'soc_export_policy':symmetry.get('soc_export_policy','raw')},'soc_export_policy':symmetry.get('soc_export_policy','raw'),'dependencies_sha256':dependencies,'system_names':{'nsoc':n['system.name'],'soc':s['system.name']},
-        'monitor_interval_seconds':interval,'memory_limit_bytes_per_host':positive_int(config['memory_limit_bytes_per_host'],'memory_limit_bytes_per_host') if config.get('memory_limit_bytes_per_host') is not None else None,'timeout_seconds':positive_int(config.get('timeout_seconds',86400),'timeout_seconds'),
-        'environment_python':str(python),'physics_input_modified':False,'input_parser_auto_enabled':False,
+        'monitor_interval_seconds':interval,'memory_limit_bytes_per_host':positive_int(config['memory_limit_bytes_per_host'],'memory_limit_bytes_per_host') if config.get('memory_limit_bytes_per_host') is not None else None,'timeout_seconds':None,
+        'environment_python':str(python),'physics_input_modified':False,'input_parser_auto_enabled':requests['nsoc']['mode']!='off',
+        'input_symmetry_requests':requests,
         'nsoc_density_projection_explicit':False,
         'deprecated_fields':{'nsoc_density_projection_explicit':'Deprecated misnomer: REALSPACE_D3 projects H/S; AfterDensity checks DM/EDM without writing them. This field is always false.'},
         'nsoc_realspace_HS_projection_explicit':realspace_mode in ('export','scf','1'),
@@ -405,7 +444,9 @@ def check_checkpoint(directory, prefix, ranks):
     return directory
 
 
-def ssh(host, command, *, check=True, timeout=35):
+def ssh(host, command, *, check=True, timeout=None):
+    if timeout is not None:
+        raise ValueError('finite SSH command runtime limits are disabled; connection and keepalive failures remain detected')
     return subprocess.run(['ssh','-o','BatchMode=yes','-o','ConnectTimeout=8','-o','ServerAliveInterval=5','-o','ServerAliveCountMax=3',host,shlex.join([str(x) for x in command])],stdin=subprocess.DEVNULL,capture_output=True,text=True,check=check,timeout=timeout)
 
 
@@ -443,7 +484,7 @@ def start_monitors(plan, stage, directory):
     logs=directory/'monitor_logs'; logs.mkdir()
     for host in plan['hosts']:
         command = ['systemd-run','--user','--unit='+unit,'--slice='+slice_name,'--property=MemoryAccounting=yes',
-                   '--property=RuntimeMaxSec='+str(plan['timeout_seconds']+120),'--property=TasksMax=infinity','--property=StandardOutput=file:'+str(logs/(host+'.stdout.log')),
+                   '--property=RuntimeMaxSec=infinity','--property=TimeoutStartSec=infinity','--property=TimeoutStopSec=infinity','--property=TasksMax=infinity','--property=StandardOutput=file:'+str(logs/(host+'.stdout.log')),
                    '--property=StandardError=file:'+str(logs/(host+'.stderr.log')),
                    plan['environment_python'],str(HERE/'workflow_node.py'),'monitor','--directory',str(directory),
                    '--host',host,'--interval',str(plan['monitor_interval_seconds'])]
@@ -454,18 +495,28 @@ def start_monitors(plan, stage, directory):
         write_json(directory/'monitor_units.json',units)
         if plan.get('memory_limit_bytes_per_host'):
             ssh(host,['systemctl','--user','set-property','--runtime',slice_name,'MemoryMax='+str(plan['memory_limit_bytes_per_host']),'MemorySwapMax=0'])
-    deadline = time.monotonic()+30
-    while time.monotonic()<deadline:
+    while True:
         if all((directory/'nodes'/host/'ready.json').exists() for host in plan['hosts']):
             return units
+        for host, info in units.items():
+            if (directory/'nodes'/host/'ready.json').exists():
+                continue
+            q=ssh(host,['systemctl','--user','show',info['unit'],'-p','ActiveState','-p','SubState'],check=False)
+            if q.returncode or 'ActiveState=failed' in q.stdout or 'ActiveState=inactive' in q.stdout:
+                raise RuntimeError('physical-memory monitor failed or ended before readiness on '+host)
         time.sleep(.1)
-    raise RuntimeError('per-host physical-memory monitor did not become ready')
 
 
 def stop_monitors(plan,stage,directory,units):
     (directory/'MONITOR_STOP').touch()
-    deadline = time.monotonic()+15
-    while time.monotonic()<deadline and not all((directory/'nodes'/h/'final.json').exists() for h in units):
+    failed=set()
+    while not all(h in failed or (directory/'nodes'/h/'final.json').exists() for h in units):
+        for host,u in units.items():
+            if host in failed or (directory/'nodes'/host/'final.json').exists():
+                continue
+            q=ssh(host,['systemctl','--user','show',u['unit'],'-p','ActiveState','-p','SubState'],check=False)
+            if (q.returncode or 'ActiveState=failed' in q.stdout or 'ActiveState=inactive' in q.stdout) and not (directory/'nodes'/host/'final.json').exists():
+                failed.add(host)
         time.sleep(.1)
     for host,u in units.items():
         q=ssh(host,['systemctl','--user','show',u['unit'],'-p','ActiveState','-p','SubState','-p','Result','-p','ExecMainStatus'],check=False)
@@ -477,6 +528,8 @@ def stop_monitors(plan,stage,directory,units):
         final=ssh(host,['systemctl','--user','show',u['slice'],'-p','ActiveState','-p','SubState'],check=False)
         u['final_slice_state']=final.stdout
     write_json(directory/'monitor_units.json',units)
+    if failed:
+        raise RuntimeError('physical-memory monitor failed or ended before final accounting on '+', '.join(sorted(failed)))
 
 
 def memory_summary(directory,hosts,interval):
@@ -538,13 +591,11 @@ def start_anchors(plan):
             q=subprocess.Popen(['ssh','-o','BatchMode=yes','-o','ConnectTimeout=8','-o','ServerAliveInterval=5','-o','ServerAliveCountMax=3',host,shlex.join(command)],
                                stdin=subprocess.PIPE,stdout=subprocess.DEVNULL,stderr=log)
             anchors[host]=(q,log)
-        deadline=time.monotonic()+20
-        while time.monotonic()<deadline:
+        while True:
             if all((directory/(host+'.ready.json')).exists() for host in anchors): return anchors
             if any(q.poll() is not None for q,log in anchors.values()):
                 raise RuntimeError('persistent SSH login anchor failed; inspect anchors/*.stderr.log')
             time.sleep(.1)
-        raise RuntimeError('persistent SSH login anchors did not become ready')
     except BaseException:
         stop_anchors(plan,anchors)
         raise
@@ -555,15 +606,12 @@ def stop_anchors(plan,anchors):
     (directory/'STOP').touch()
     for host,(q,log) in anchors.items():
         if q.stdin: q.stdin.close()
-        try: q.wait(timeout=15)
-        except subprocess.TimeoutExpired:
-            q.terminate()
-            try:q.wait(timeout=5)
-            except subprocess.TimeoutExpired:q.kill();q.wait()
+        q.wait(timeout=None)
         log.close()
 
 
 def run_stage(plan,stage):
+    unlimited_runtime(plan)
     verify_dependencies(plan)
     directory=Path(plan['output'])/stage
     directory.mkdir(); (directory/'ranks').mkdir(); (directory/'nodes').mkdir()
@@ -609,7 +657,7 @@ def run_stage(plan,stage):
             raise ValueError('staged input changed before MPI launch')
         start=time.monotonic()
         with (directory/'stdout.log').open('wb') as out,(directory/'stderr.log').open('wb') as err:
-            q=subprocess.run(cmd,cwd=directory,env=env,stdin=subprocess.DEVNULL,stdout=out,stderr=err,timeout=plan['timeout_seconds'])
+            q=subprocess.run(cmd,cwd=directory,env=env,stdin=subprocess.DEVNULL,stdout=out,stderr=err,timeout=None)
         meta['launch_wall_seconds']=time.monotonic()-start
         combined_log=(directory/'stdout.log').read_text(errors='replace')+'\n'+(directory/'stderr.log').read_text(errors='replace')
         providers=re.findall(r'libfabric provider:\s*(\S+)',combined_log)
@@ -634,7 +682,7 @@ def run_stage(plan,stage):
             units=load(directory/'monitor_units.json')
         if units:
             try:
-                # Stop only this task's rank scopes if a timeout/native failure left
+                # Stop only this task's rank scopes if a native/controller failure left
                 # children. This never scans or targets unrelated OpenMX processes.
                 if meta['state']=='failed':
                     slice_name,_=_units(plan,stage)
@@ -662,6 +710,7 @@ def run_stage(plan,stage):
 
 def controller(plan_path):
     plan_path=Path(plan_path); plan=load(plan_path); output=Path(plan['output'])
+    unlimited_runtime(plan)
     if socket.gethostname().split('.')[0]!=plan['hosts'][0].split('.')[0]:
         raise ValueError('controller must run on first configured authorized compute host')
     verify_dependencies(plan)
@@ -705,14 +754,14 @@ def submit(config, *, wait=False):
     directory=Path(plan['output']); directory.mkdir(parents=True,exist_ok=False)
     write_json(directory/'config.json',config); write_json(directory/'plan.json',plan)
     unit='omxwfcontroller'+hashlib.sha256(str(directory).encode()).hexdigest()[:16]+'.service'
-    command=['systemd-run','--user','--wait','--unit='+unit,'--property=MemoryAccounting=yes','--property=TimeoutStopSec=120','--property=RuntimeMaxSec='+str(2*plan['timeout_seconds']+600),
+    command=['systemd-run','--user','--wait','--unit='+unit,'--property=MemoryAccounting=yes','--property=TimeoutStartSec=infinity','--property=TimeoutStopSec=infinity','--property=RuntimeMaxSec=infinity',
              '--property=StandardOutput=file:'+str(directory/'controller.stdout.log'),'--property=StandardError=file:'+str(directory/'controller.stderr.log'),
              '--working-directory='+str(directory),plan['environment_python'],str(Path(__file__).resolve()),'_controller',str(directory/'plan.json')]
     submission={'job_id':None,'scheduler_submission':False,'authorization':'user explicit direct SSH to named hosts','host':plan['hosts'][0],
                 'unit':unit,'command':command,'environment_prefix':plan['runtime']['environment_prefix'],'ranks':plan['ranks'],'threads':plan['threads'],
                 'logs':[str(directory/'controller.stdout.log'),str(directory/'controller.stderr.log')],'result_path':str(directory),'submitted_unix':time.time()}
     write_json(directory/'SUBMISSION.json',submission)
-    q=ssh(plan['hosts'][0],command,check=False,timeout=2*plan['timeout_seconds']+900)
+    q=ssh(plan['hosts'][0],command,check=False,timeout=None)
     submission.update(submission_stdout=q.stdout,submission_stderr=q.stderr,foreground_ssh_exit_code=q.returncode); write_json(directory/'SUBMISSION.json',submission)
     if q.returncode!=0:
         final=load(directory/'workflow.json') if (directory/'workflow.json').exists() else {}
@@ -776,6 +825,8 @@ def main(argv=None):
         p=sub.add_parser(action); p.add_argument('config',type=Path)
         if action=='run': p.add_argument('--wait',action='store_true')
     p=sub.add_parser('inspect'); p.add_argument('output',type=Path)
+    p=sub.add_parser('configure',help='read input Auto/User and generate complete profiles without launching MPI')
+    p.add_argument('config',type=Path); p.add_argument('--output',required=True,type=Path)
     p=sub.add_parser('_controller',help=argparse.SUPPRESS); p.add_argument('plan',type=Path)
     p=sub.add_parser('prepare'); p.add_argument('--nsoc-input',required=True,type=Path); p.add_argument('--soc-input',required=True,type=Path)
     p.add_argument('--output',required=True,type=Path); p.add_argument('--group','--point-group',dest='group',default='auto',choices=['auto','C2','D2','C3','D3','C4','D4','C6','D6','Ci','Cs'])
@@ -787,6 +838,7 @@ def main(argv=None):
         if args.action=='plan': result=plan_config(load(args.config))
         elif args.action=='run': result=submit(load(args.config),wait=args.wait)
         elif args.action=='inspect': result=inspect(args.output)
+        elif args.action=='configure': result=symmetry_api().configure(load(args.config),args.output,sys.modules[__name__])
         else: result=prepare(args)
         print(json.dumps(result,indent=2,ensure_ascii=False,allow_nan=False))
         return 1 if result.get('state')=='failed' else 0

@@ -6,4 +6,5 @@ int CpuGSOC_Enabled(void);
 void CpuGSOC_RestartState(int ok);
 void CpuGSOC_Solve(int step,int maxn,double*ko,double*****nh,double*****im,double****overlap,int*is2,int*ie2,dcomplex*sf,dcomplex*h,dcomplex*q,dcomplex*ev);
 void CpuGSOC_Release(void);
+void CpuGSOC_ValidateExport(void);
 #endif

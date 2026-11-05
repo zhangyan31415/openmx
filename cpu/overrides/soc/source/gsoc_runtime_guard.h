@@ -17,9 +17,9 @@ typedef struct {
 } GsocRuntimeInput;
 typedef struct {
  GsocRuntimeInput input;
- int enabled,compact,tile,probes,project,allow_fresh,block_buckets;
+ int enabled,compact,tile,probes,project,allow_fresh,block_buckets,export_symmetrize;
  double covariance_tol,geometry_tol;
- uint64_t environment_digest[2],basis_digest[2],basis_bytes;
+ uint64_t environment_digest[2],basis_digest[2],basis_bytes,map_digest[2],map_bytes;
  int32_t header[6],sector_size[48],sector_type[48],sector_partner[48];
  int64_t basis_nnz;
 } GsocRuntimeConfig;

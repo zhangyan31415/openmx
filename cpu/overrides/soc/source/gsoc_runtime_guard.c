@@ -39,6 +39,7 @@ static void digest_environment(uint64_t h[2]){
   "OPENMX_CPU_GSOC_TILE","OPENMX_CPU_GSOC_PROBES","OPENMX_CPU_GSOC_PROJECT",
   "OPENMX_CPU_GSOC_ALLOW_FRESH","OPENMX_CPU_GSOC_BLOCK_BUCKETS",
   "OPENMX_CPU_GSOC_COV_TOL","OPENMX_CPU_GSOC_GEOMETRY_TOL_ANG",
+  "OPENMX_CPU_GSOC_EXPORT_SYMMETRIZE","OPENMX_CPU_SOC_NATIVE_GROUP","OPENMX_CPU_SOC_NATIVE_D3",
   "OPENMX_CPU_C3","OPENMX_CPU_D3","OPENMX_CPU_SOC_COMPACT",
   "OPENMX_CPU_SOC_TR","OPENMX_CPU_SOC_REAL","OPENMX_CPU_SOC_RELEASE_DENSE",
   "OPENMX_CPU_DM_BLAS3","OPENMX_CPU_DM_SORT","OPENMX_CPU_DM_TRIM",
@@ -83,10 +84,29 @@ static int read_basis(GsocRuntimeConfig *c,const char *path,char *error,size_t s
  read_failed:error_text(error,size,"failed to hash complete GSOC basis");
  done:fclose(f);return status;
 }
+/* Capture complete export map bytes before any rank-dependent projector call. */
+static int read_export_map(GsocRuntimeConfig*c,char*error,size_t size){
+ const char*path=getenv("OPENMX_CPU_SOC_NATIVE_MAP");
+ if(!path||path[0]!='/')return error_text(error,size,"generic export requires absolute SOC_NATIVE_MAP");
+ FILE*f=fopen(path,"rb");if(!f)return error_text(error,size,"cannot read generic SOC export map");
+ int32_t h[8],norb;int status=-1;uint64_t nd=0;
+ if(fread(h,4,8,f)!=8||h[0]!=0x52534433||h[1]!=3||h[2]!=c->header[2]||h[3]!=c->header[3]||h[4]!=c->header[5]||h[5]<1||h[5]>1024||h[6]||h[7])goto failed;
+ if(fseek(f,72+28*(long)h[2],SEEK_CUR))goto failed;
+ for(int k=0;k<h[5];k++){if(fread(&norb,4,1,f)!=1||norb<1||norb>128)goto failed;nd+=(uint64_t)norb*norb;}
+ if(fseek(f,0,SEEK_SET))goto failed;
+ unsigned char buf[65536];size_t n;digest_init(c->map_digest);
+ while((n=fread(buf,1,sizeof(buf),f))>0){if(c->map_bytes>UINT64_MAX-n)goto failed;c->map_bytes+=n;digest_bytes(c->map_digest,buf,n);}
+ if(ferror(f)||c->map_bytes!=32+72+28*(uint64_t)h[2]+4*(uint64_t)h[5]+(uint64_t)h[4]*(36+16*(uint64_t)h[2]+8*nd+64))goto failed;
+ status=0;goto done;
+ failed:error_text(error,size,"invalid or incomplete generic SOC export map");
+ done:fclose(f);return status;
+}
 int gsoc_runtime_capture(GsocRuntimeConfig *c,const GsocRuntimeInput *input,char *error,size_t size){
  memset(c,0,sizeof(*c));if(size)*error=0;
  if(int_option("OPENMX_CPU_GSOC",0,0,1,&c->enabled,error,size)
-  ||int_option("OPENMX_CPU_GSOC_COMPACT",0,0,1,&c->compact,error,size))return -1;
+  ||int_option("OPENMX_CPU_GSOC_COMPACT",0,0,1,&c->compact,error,size)
+  ||int_option("OPENMX_CPU_GSOC_EXPORT_SYMMETRIZE",0,0,1,&c->export_symmetrize,error,size))return -1;
+ if(c->export_symmetrize&&!c->enabled)return error_text(error,size,"GSOC_EXPORT_SYMMETRIZE requires GSOC=1");
  if(c->compact&&!c->enabled)return error_text(error,size,"GSOC_COMPACT requires GSOC=1; disabled raw path needs full EVec");
  /* Off must not require a basis or impose GSOC restrictions on ordinary runs. */
  if(!c->enabled)return 0;
@@ -104,6 +124,8 @@ int gsoc_runtime_capture(GsocRuntimeConfig *c,const GsocRuntimeInput *input,char
   ||int_option("OPENMX_CPU_GSOC_BLOCK_BUCKETS",1,0,1,&c->block_buckets,error,size)
   ||real_option("OPENMX_CPU_GSOC_COV_TOL",1e-10,1e-14,1e-3,&c->covariance_tol,error,size)
   ||real_option("OPENMX_CPU_GSOC_GEOMETRY_TOL_ANG",5e-5,1e-12,0.02,&c->geometry_tol,error,size))return -1;
+ if(c->export_symmetrize&&!c->project)return error_text(error,size,"GSOC export requires explicit GSOC_PROJECT=1");
+ if(getenv("OPENMX_CPU_SOC_NATIVE_GROUP"))return error_text(error,size,"GSOC conflicts with legacy native export group");
  if(!c->project&&c->covariance_tol>1e-10)return error_text(error,size,"relaxed covariance requires explicit GSOC_PROJECT=1");
  if(input->solver!=2||input->spin!=3||input->soc!=1||input->md||input->contracted||input->scf_steps!=1)return error_text(error,size,"GSOC requires fixed one-step Gamma cluster SOC and uncontracted basis");
  if(input->hubbard||input->constraint||input->zeeman_spin||input->zeeman_orbital)return error_text(error,size,"GSOC excludes Hubbard, constraint and Zeeman spin extensions");
@@ -125,6 +147,7 @@ int gsoc_runtime_capture(GsocRuntimeConfig *c,const GsocRuntimeInput *input,char
  if(c->compact&&input->mo)return error_text(error,size,"compact GSOC does not provide full MO coefficient export");
  digest_environment(c->environment_digest);
  if(read_basis(c,getenv("OPENMX_CPU_GSOC_BASIS"),error,size))return -1;
+ if(c->export_symmetrize&&read_export_map(c,error,size))return -1;
  if(!input->c2n&&2*c->header[3]>512)return error_text(error,size,"fresh GSOC is restricted to <=512 spinors");
  return 0;
 }

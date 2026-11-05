@@ -35,12 +35,10 @@ def select_subgroup(checked,requested,spinor):
 def _soc_options(group,soc_route,export_policy):
  if soc_route not in ('generic','legacy'):raise ValueError('SOC route must be generic or legacy')
  if export_policy not in ('raw','symmetrize'):raise ValueError('SOC export policy must be raw or symmetrize')
- if soc_route=='generic'and export_policy!='raw':
-  raise ValueError('generic SOC currently exports raw H/S; symmetrized export requires explicit legacy C3/D3')
  if soc_route=='legacy'and group not in ('auto','D3','C3'):
   raise ValueError('legacy SOC route supports only C3 or D3; use generic for '+str(group))
 
-def prepare_soc_artifacts(soc_input,selected_path,out,kind,spinor,neighbor_settings,*,soc_route='generic',export_policy='raw'):
+def prepare_soc_artifacts(soc_input,selected_path,out,kind,spinor,neighbor_settings,*,soc_route='generic',export_policy='raw',realspace_map=None):
  """Prepare exactly one SOC representation and declare native export semantics.
 
  This returns environment additions, not a complete runtime profile. The
@@ -50,10 +48,17 @@ def prepare_soc_artifacts(soc_input,selected_path,out,kind,spinor,neighbor_setti
  out=Path(out)
  if soc_route=='generic':
   sbasis=out/'spinor.gsoc';smeta=out/'spinor.gsoc.json'
-  spinor.build(soc_input,selected_path,sbasis,smeta,kind)
+  spinor_info=spinor.build(soc_input,selected_path,sbasis,smeta,kind)
   files={'soc_basis':sbasis,'soc_metadata':smeta}
   env={'OPENMX_CPU_GSOC':'1','OPENMX_CPU_GSOC_BASIS':str(sbasis),**neighbor_settings}
   export_HS='raw'
+  if export_policy=='symmetrize':
+   helper=module('unified_generic_soc_export',HERE/'generic_soc_export.py')
+   rmap=out/'operations.socrs';rmeta=out/'operations.socrs.json'
+   helper.build(soc_input,spinor_info,rmap,rmeta)
+   files.update(soc_native_map=rmap,soc_native_metadata=rmeta)
+   env.update(OPENMX_CPU_GSOC_EXPORT_SYMMETRIZE='1',OPENMX_CPU_SOC_NATIVE_MAP=str(rmap),OPENMX_CPU_GSOC_PROJECT='1')
+   export_HS='symmetrized'
  else:
   if kind not in ('D3','C3'):raise ValueError('selected subgroup is unsupported by legacy SOC')
   legacy=module('unified_legacy_soc_prepare',HERE/'legacy_soc.py')
@@ -64,7 +69,7 @@ def prepare_soc_artifacts(soc_input,selected_path,out,kind,spinor,neighbor_setti
  return {'route':soc_route,'export_policy':export_policy,'export_HS':export_HS,
          'files':files,'env_additions':env}
 
-def prepare(nsoc_input,soc_input,output,group='auto',tolerances=None,atom_tol=5e-5,project_nsoc=False,*,soc_route='generic',export_policy='raw'):
+def prepare(nsoc_input,soc_input,output,group='auto',tolerances=None,atom_tol=5e-5,project_nsoc=False,*,soc_route='generic',export_policy='raw',detection_mode='auto',operations_file=None):
  _soc_options(group,soc_route,export_policy)
  nsoc_input=Path(nsoc_input).resolve();soc_input=Path(soc_input).resolve();out=Path(output).resolve()
  workflow=module('prepare_workflow_contract',REPO/'cpu/tools/workflow.py')
@@ -76,10 +81,17 @@ def prepare(nsoc_input,soc_input,output,group='auto',tolerances=None,atom_tol=5e
  realspace=module('unified_realspace_prepare',TOOLS/'prepare_realspace_d3.py')
  ladder=tolerances or [1e-6,3e-6,1e-5,2e-5,3e-5,5e-5,1e-4]
  try:
-  full=detector.run(nsoc_input,out/'detected.json',ladder,5e-6,1.25)
+  if detection_mode not in ('auto','user'):raise ValueError('detection mode must be auto or user')
+  ladder=[t for t in ladder if t<=atom_tol]
+  if len(ladder)<2:ladder=[atom_tol/3,atom_tol]
+  full=detector.run(nsoc_input,out/'detected.json',ladder,5e-6,1.25,
+    mode=detection_mode,requested_symprec=atom_tol if detection_mode=='user'else None,
+    operations_file=Path(operations_file)if operations_file else None)
   checked=full.get('selected',{})
   if not checked.get('valid'):raise ValueError('no valid detected operation set')
   kind,operations=select_subgroup(checked,group,spinor)
+  if operations_file and len(operations)!=checked['operation_count']:
+   raise ValueError('OperationsFile must be exactly the requested supported subgroup; refusing silent subgroup reduction')
   structure=detector.parse_openmx(nsoc_input)
   symprec=float(checked['symprec_Ang'])
   selected=detector._build_operation_set(structure,[g['W']for g in operations],[g['t']for g in operations],
@@ -108,8 +120,6 @@ def prepare(nsoc_input,soc_input,output,group='auto',tolerances=None,atom_tol=5e
   neighbor=support.prepare(nsoc_input,rmeta,neighbor_path,max_padding=.01,runtime_cwd=nsoc_input.parent)
   soc=prepare_soc_artifacts(soc_input,selected_path,out,kind,spinor,neighbor['settings'],
                             soc_route=soc_route,export_policy=export_policy)
-  if project_nsoc and kind not in ('D3','C3'):
-   raise ValueError('generic real-space H/S projection is not production-validated; explicit D3/C3 only')
   adds={'OPENMX_CPU_NSOC_SYM':'1','OPENMX_CPU_NSOC_FULL_PROJECT':'1','OPENMX_CPU_NSOC_BASIS':str(nsbasis),
    'OPENMX_CPU_NSOC_GENERIC_COV_STRICT':'1','OPENMX_CPU_REALSPACE_D3':'scf'if project_nsoc else'off',
    'OPENMX_CPU_REALSPACE_MAP':str(rmap),'OPENMX_CPU_REALSPACE_CHECK':'0'}

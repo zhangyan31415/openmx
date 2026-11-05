@@ -11,6 +11,8 @@
 #include "mpi.h"
 #include "openmx_common.h"
 #include "cpu_gsoc.h"
+#include "cpu_soc_native.h"
+#include "gsoc_export_audit.h"
 #include "cpu_gsoc_compact.h"
 #include "gsoc_index.h"
 #include "gsoc_schema.h"
@@ -51,6 +53,55 @@ static int ginverse(void*ctx,const GsocAuditComplex*xx,GsocAuditComplex*yy){cons
 static int gapply(void*ctx,const GsocAuditComplex*xx,GsocAuditComplex*hh,GsocAuditComplex*ss){const dcomplex*x=(const dcomplex*)xx;dcomplex*h=(dcomplex*)hh,*s=(dcomplex*)ss;memset(h,0,(size_t)G.ns*sizeof(dcomplex));memset(s,0,(size_t)G.ns*sizeof(dcomplex));
  for(int a=1;a<=Matomnum;a++){int ga0=M2G[a],na=Spe_Total_CNO[WhatSpecies[ga0]];for(int b=0;b<=FNAN[ga0];b++){int gb=natn[ga0][b],nb=Spe_Total_CNO[WhatSpecies[gb]];for(int i=0;i<na;i++)for(int j=0;j<nb;j++){int I=G.mp[ga0]+i,J=G.mp[gb]+j;double ov=G.olp[a][b][i][j];dcomplex uu=gz(G.nh[0][a][b][i][j],G.im[0][a][b][i][j]),dd=gz(G.nh[1][a][b][i][j],G.im[1][a][b][i][j]),ud=gz(G.nh[2][a][b][i][j],G.nh[3][a][b][i][j]+G.im[2][a][b][i][j]);h[I]=ga(h[I],gm(uu,x[J]));h[I+G.n]=ga(h[I+G.n],gm(dd,x[J+G.n]));h[I]=ga(h[I],gm(ud,x[J+G.n]));h[J+G.n]=ga(h[J+G.n],gm(gc(ud),x[I]));s[I]=ga(s[I],gz(ov*x[J].r,ov*x[J].i));s[I+G.n]=ga(s[I+G.n],gz(ov*x[J+G.n].r,ov*x[J+G.n].i));}}}
  MPI_Allreduce(MPI_IN_PLACE,h,2*G.ns,MPI_DOUBLE,MPI_SUM,mpi_comm_level1);MPI_Allreduce(MPI_IN_PLACE,s,2*G.ns,MPI_DOUBLE,MPI_SUM,mpi_comm_level1);return 0;}
+/* Exact Hermitian assembly action used by gentry, independent of sector code.
+ * Directed UD is already paired with its conjugate reverse in native storage. */
+static int gapply_hermitian(void*ctx,const GsocAuditComplex*xx,GsocAuditComplex*hh,GsocAuditComplex*ss){
+ const dcomplex*x=(const dcomplex*)xx;dcomplex*h=(dcomplex*)hh,*s=(dcomplex*)ss;
+ memset(h,0,(size_t)G.ns*sizeof(*h));memset(s,0,(size_t)G.ns*sizeof(*s));
+ for(int a=1;a<=Matomnum;a++){int ga0=M2G[a],na=Spe_Total_CNO[WhatSpecies[ga0]];
+  for(int b=0;b<=FNAN[ga0];b++){int gb=natn[ga0][b],nb=Spe_Total_CNO[WhatSpecies[gb]];
+   for(int i=0;i<na;i++)for(int j=0;j<nb;j++){
+    int I=G.mp[ga0]+i,J=G.mp[gb]+j;double ov=.5*G.olp[a][b][i][j];
+    dcomplex uu=gz(.5*G.nh[0][a][b][i][j],.5*G.im[0][a][b][i][j]),dd=gz(.5*G.nh[1][a][b][i][j],.5*G.im[1][a][b][i][j]);
+    dcomplex ud=gz(G.nh[2][a][b][i][j],G.nh[3][a][b][i][j]+G.im[2][a][b][i][j]);
+    h[I]=ga(h[I],gm(uu,x[J]));h[J]=ga(h[J],gm(gc(uu),x[I]));
+    h[I+G.n]=ga(h[I+G.n],gm(dd,x[J+G.n]));h[J+G.n]=ga(h[J+G.n],gm(gc(dd),x[I+G.n]));
+    h[I]=ga(h[I],gm(ud,x[J+G.n]));h[J+G.n]=ga(h[J+G.n],gm(gc(ud),x[I]));
+    for(int spin=0;spin<2;spin++){int ii=I+spin*G.n,jj=J+spin*G.n;
+     s[ii]=ga(s[ii],gz(ov*x[jj].r,ov*x[jj].i));s[jj]=ga(s[jj],gz(ov*x[ii].r,ov*x[ii].i));}
+   }
+  }
+ }
+ MPI_Allreduce(MPI_IN_PLACE,h,2*G.ns,MPI_DOUBLE,MPI_SUM,mpi_comm_level1);
+ MPI_Allreduce(MPI_IN_PLACE,s,2*G.ns,MPI_DOUBLE,MPI_SUM,mpi_comm_level1);return 0;
+}
+static GsocAuditComplex *gexport_probe=NULL;static int gexport_count=0;
+static int gexport_enabled(void){const char*s=getenv("OPENMX_CPU_GSOC_EXPORT_SYMMETRIZE");return s&&!strcmp(s,"1");}
+static void gexport_reference(void){
+ if(!gexport_enabled())return;
+ int partners[48];for(int k=0;k<G.nsec;k++)partners[k]=G.sec[k].partner;
+ GsocAuditOperator op={G.ns,G.nsec,G.offset,G.dtype,NULL,gapply_hermitian,gforward,ginverse};
+ gexport_count=2;gexport_probe=gmem((size_t)gexport_count*3*G.ns,sizeof(*gexport_probe));
+ uint64_t seed=UINT64_C(20261102);double scale=1./sqrt(2.*G.ns);
+ for(int p=0;p<gexport_count;p++){
+  GsocAuditComplex*x=gexport_probe+(size_t)p*3*G.ns,*h=x+G.ns,*s=h+G.ns;
+  for(int i=0;i<G.ns;i++)x[i]=gsoc_audit_c((gsoc_audit_rng(&seed)&1)?scale:-scale,(gsoc_audit_rng(&seed)&1)?scale:-scale);
+  if(gsoc_export_projected_apply(&op,partners,x,h,s))gdie("cannot construct solved-operator export reference");
+ }
+}
+void CpuGSOC_ValidateExport(void){
+ if(!gexport_enabled()||!gexport_probe||!G.mp||gexport_count!=2)gdie("missing completed GSOC export reference");
+ GsocAuditComplex*v=gmem((size_t)G.ns*2,sizeof(*v));double absolute[2]={0},relative[2]={0};int bad=0;
+ for(int p=0;p<gexport_count;p++){
+  GsocAuditComplex*x=gexport_probe+(size_t)p*3*G.ns;
+  gapply(NULL,x,v,v+G.ns);
+  gsoc_audit_metric(v,x+G.ns,G.ns,&absolute[0],&relative[0],&bad);
+  gsoc_audit_metric(v+G.ns,x+2*G.ns,G.ns,&absolute[1],&relative[1],&bad);
+ }
+ if(!G.rank){printf("CPU_GSOC_EXPORT_OPERATOR_AUDIT probes=%d entrywise_proof=0 H_abs=%.12e H_rel=%.12e S_abs=%.12e S_rel=%.12e tolerance=1e-10 spatial_Reynolds_vs_solved_sector_TR_real=1\n",gexport_count,absolute[0],relative[0],absolute[1],relative[1]);fflush(stdout);}
+ free(v);free(gexport_probe);gexport_probe=NULL;free(G.mp);G.mp=NULL;
+ if(bad||relative[0]>1e-10||relative[1]>1e-10)gdie("spatial Reynolds export differs from actual solved sector/TR/real operator; unsupported projection");
+}
 static void gbasis_validate(void){
  int*stamp=gmem(G.ns,sizeof(int)),*touched=gmem(G.ns,sizeof(int));dcomplex*sum=gmem(G.ns,sizeof(dcomplex));double defect=0;
  for(int j=0;j<G.ns;j++){int used=0,tag=j+1;for(int64_t a=G.cp[j];a<G.cp[j+1];a++){int row=G.ri[a];for(int b=G.rp[row];b<G.rp[row+1];b++){int k=G.ci[b];if(stamp[k]!=tag){stamp[k]=tag;sum[k]=gz(0,0);touched[used++]=k;}sum[k]=ga(sum[k],gm(gc(G.cv[a]),G.rv[b]));}}for(int q=0;q<used;q++){int k=touched[q];dcomplex z=sum[k];if(k==j)z.r-=1;double er=hypot(z.r,z.i);if(er>defect)defect=er;}}
@@ -147,10 +198,10 @@ static void gcompact_return(double*eval,int maxn){
  if(!G.rank){printf("CPU_GSOC_NATIVE_RETURN states_total=%d states_requested=%d all_required_states_retained=1 native_band_major_EVec=0 compact_independent_Q=1 sparse_basis_backtransform=on_demand global_dense_transpose=0\n",G.ns,maxn);fflush(stdout);}
 }
 static int ggetvec(void*ctx,int band,GsocAuditComplex*out,double*e){if(band<1||band>G.ns)return-1;if(CpuGSOC_CompactEnabled()){*e=G.ko[band];return CpuGSOC_CompactGetPhysical(band,(dcomplex*)out);}int dest=gfinalowner(band-1);if(G.rank==dest)memcpy(out,G.ev+(size_t)(band-G.is2[G.rank])*G.ns,(size_t)G.ns*sizeof(dcomplex));MPI_Bcast(out,2*G.ns,MPI_DOUBLE,dest,mpi_comm_level1);*e=G.ko[band];return 0;}
-void CpuGSOC_Release(void){for(int k=0;k<G.nsec;k++){free(G.sec[k].Q);G.sec[k].Q=NULL;}free(G.blocks);G.blocks=NULL;free(G.offset);free(G.dtype);free(G.mp);free(G.cp);free(G.ri);free(G.cv);free(G.rp);free(G.ci);free(G.rv);G.offset=G.dtype=G.mp=G.rp=G.ci=G.ri=NULL;G.cp=NULL;G.cv=G.rv=NULL;}
+void CpuGSOC_Release(void){for(int k=0;k<G.nsec;k++){free(G.sec[k].Q);G.sec[k].Q=NULL;}free(G.blocks);G.blocks=NULL;free(G.offset);free(G.dtype);if(!gexport_enabled())free(G.mp);free(G.cp);free(G.ri);free(G.cv);free(G.rp);free(G.ci);free(G.rv);G.offset=G.dtype=G.rp=G.ci=G.ri=NULL;if(!gexport_enabled())G.mp=NULL;G.cp=NULL;G.cv=G.rv=NULL;}
 void CpuGSOC_Solve(int step,int maxn,double*ko,double*****nh,double*****im,double****overlap,int*is2,int*ie2,dcomplex*sf,dcomplex*h,dcomplex*q,dcomplex*ev){
  (void)sf;(void)h;(void)q;if(!CpuGSOC_Enabled())gdie("disabled GSOC called");if(step!=1||DFTSCF_loop!=1||Solver!=2||SpinP_switch!=3||SO_switch!=1||MD_switch!=0||Cnt_switch)gdie("GSOC requires fixed one-step Gamma cluster SOC and uncontracted basis");if(Hub_U_switch||Constraint_NCS_switch||Zeeman_NCS_switch||Zeeman_NCO_switch)gdie("GSOC v1 excludes Hubbard/constraint/Zeeman spin symmetry extensions");if(Use_of_Collinear_Restart&&(Scf_RestartFromFile!=1||SpinP_switch_RestartFiles!=0||gsoc_restart_read!=1))gdie("GSOC c2n requires actual successful restart reading and a nonmagnetic scalar checkpoint");if(!Use_of_Collinear_Restart&&!genv("OPENMX_CPU_GSOC_ALLOW_FRESH",0,0,1))gdie("GSOC requires collinear c2n checkpoint or explicit reduced fresh-smoke flag");if(!nh||!im||!overlap||!ev||!ko||!is2||!ie2)gdie("missing native SOC arguments");double start=MPI_Wtime();gload();if(!Use_of_Collinear_Restart&&G.ns>512)gdie("fresh GSOC is restricted to <=512 spinors; production requires a validated c2n checkpoint");if(maxn<1||maxn>G.ns)gdie("native MaxN out of full spinor range");G.nh=nh;G.im=im;G.olp=overlap;gblocks_init();G.ko=ko;G.ev=ev;G.is2=is2;G.ie2=ie2;G.projected=genv("OPENMX_CPU_GSOC_PROJECT",0,0,1);G.tolerance=grealenv("OPENMX_CPU_GSOC_COV_TOL",1e-10,1e-14,1e-3);if(!G.projected&&G.tolerance>1e-10)gdie("relaxed covariance requires explicit GSOC_PROJECT=1");
  GsocAuditOperator op={G.ns,G.nsec,G.offset,G.dtype,NULL,gapply,gforward,ginverse};GsocAuditGateResult gate;int probes=genv("OPENMX_CPU_GSOC_PROBES",4,1,16);if(gsoc_audit_operator_gate(&op,probes,UINT64_C(20261028),&gate)||gate.nonfinite)gdie("raw covariance operator measurement failed");if(!G.rank){printf("CPU_GSOC_RAW_GATE sampled_probes=%d entrywise_proof=0 projected=%d tolerance=%.12e H_comm_abs=%.12e H_comm_rel=%.12e S_comm_abs=%.12e S_comm_rel=%.12e H_TR_abs=%.12e H_TR_rel=%.12e S_TR_abs=%.12e S_TR_rel=%.12e H_real_abs=%.12e H_real_rel=%.12e S_real_abs=%.12e S_real_rel=%.12e\n",probes,G.projected,G.tolerance,gate.comm_abs[0],gate.comm_rel[0],gate.comm_abs[1],gate.comm_rel[1],gate.tr_abs[0],gate.tr_rel[0],gate.tr_abs[1],gate.tr_rel[1],gate.real_abs[0],gate.real_rel[0],gate.real_abs[1],gate.real_rel[1]);fflush(stdout);}for(int field=0;field<2;field++)if(gate.comm_rel[field]>G.tolerance||gate.tr_rel[field]>G.tolerance||gate.real_rel[field]>G.tolerance)gdie("raw H/S covariance exceeds declared threshold");GsocAuditHermitianResult herm;if(gsoc_audit_hermiticity(&op,probes,UINT64_C(20261029),&herm)||herm.nonfinite)gdie("raw Hermiticity operator measurement failed");if(!G.rank){printf("CPU_GSOC_RAW_HERMITICITY sampled_probes=%d H_abs=%.12e H_rel=%.12e S_abs=%.12e S_rel=%.12e\n",probes,herm.absolute[0],herm.relative[0],herm.absolute[1],herm.relative[1]);fflush(stdout);}for(int field=0;field<2;field++)if(herm.relative[field]>G.tolerance)gdie("raw H/S Hermiticity exceeds declared threshold");
  MPI_Comm rowscomm,colscomm;MPI_Comm_split(mpi_comm_level1,my_pcol2,my_prow2,&rowscomm);MPI_Comm_split(mpi_comm_level1,my_prow2,my_pcol2,&colscomm);int rows=MPI_Comm_c2f(rowscomm),cols=MPI_Comm_c2f(colscomm),world=MPI_Comm_c2f(mpi_comm_level1);double*eval=gmem(G.ns,sizeof(double));for(int k=0;k<G.nsec;k++)if(G.sec[k].partner<0)gsolve_sector(G.sec+k,eval,rows,cols,world);if(CpuGSOC_CompactEnabled())gcompact_return(eval,maxn);else greturn(eval,maxn);free(eval);MPI_Comm_free(&rowscomm);MPI_Comm_free(&colscomm);
- double electrons=-system_charge;for(int atom=1;atom<=atomnum;atom++)electrons+=Spe_Core_Charge[WhatSpecies[atom]];if(!isfinite(electrons)||electrons<0||electrons>G.ns)gdie("invalid physical electron count for eigenpair sampling");int homo=(int)ceil(electrons);int samples[8],count=0,initial[8]={1,2,(maxn+1)/2,(maxn+1)/2+1,maxn-1,maxn,homo,homo+1};for(int i=0;i<8;i++){int band=initial[i],duplicate=0;if(band<1||band>maxn)continue;for(int j=0;j<count;j++)if(samples[j]==band)duplicate=1;if(!duplicate)samples[count++]=band;}GsocAuditEigenResult result;if(gsoc_audit_eigenpairs(&op,ggetvec,samples,count,&result)||result.nonfinite)gdie("native physical eigenpair audit failed");if(!G.rank){printf("CPU_GSOC_NATIVE_AUDIT sampled_bands=%d homo_sample=%d lumo_sample=%d electrons=%.9f raw_residual_max=%.12e raw_residual_relative=%.12e raw_S_orth=%.12e full_state_drop=0 true_SOC_energy_forces_native=1 seconds=%.9f\n",count,homo,homo+1,electrons,result.raw_abs,result.raw_relative,result.Sorth,MPI_Wtime()-start);fflush(stdout);}double allowance=G.projected?fmax(1e-8,20*G.tolerance):1e-8;if(result.raw_relative>allowance||result.Sorth>allowance)gdie("native spinor residual/Sorth exceeds declared projection allowance");CpuGSOC_Release();
+ double electrons=-system_charge;for(int atom=1;atom<=atomnum;atom++)electrons+=Spe_Core_Charge[WhatSpecies[atom]];if(!isfinite(electrons)||electrons<0||electrons>G.ns)gdie("invalid physical electron count for eigenpair sampling");int homo=(int)ceil(electrons);int samples[8],count=0,initial[8]={1,2,(maxn+1)/2,(maxn+1)/2+1,maxn-1,maxn,homo,homo+1};for(int i=0;i<8;i++){int band=initial[i],duplicate=0;if(band<1||band>maxn)continue;for(int j=0;j<count;j++)if(samples[j]==band)duplicate=1;if(!duplicate)samples[count++]=band;}GsocAuditEigenResult result;if(gsoc_audit_eigenpairs(&op,ggetvec,samples,count,&result)||result.nonfinite)gdie("native physical eigenpair audit failed");if(!G.rank){printf("CPU_GSOC_NATIVE_AUDIT sampled_bands=%d homo_sample=%d lumo_sample=%d electrons=%.9f raw_residual_max=%.12e raw_residual_relative=%.12e raw_S_orth=%.12e full_state_drop=0 true_SOC_energy_forces_native=1 seconds=%.9f\n",count,homo,homo+1,electrons,result.raw_abs,result.raw_relative,result.Sorth,MPI_Wtime()-start);fflush(stdout);}double allowance=G.projected?fmax(1e-8,20*G.tolerance):1e-8;if(result.raw_relative>allowance||result.Sorth>allowance)gdie("native spinor residual/Sorth exceeds declared projection allowance");gexport_reference();CpuSOCNative_MarkSolved(step);CpuGSOC_Release();
 }

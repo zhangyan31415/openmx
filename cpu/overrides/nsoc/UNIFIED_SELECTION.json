@@ -17,7 +17,8 @@
     "Set_XC_Grid.o": "cpu/overrides/nsoc/source/Set_XC_Grid.workspace.c",
     "cpu_grid_fields_shared.o": "cpu/overrides/nsoc/source/cpu_grid_fields_shared.unified.c",
     "Force.batch.o": "cpu/overrides/nsoc/source/Force.unified.c",
-    "Set_Density_Grid.fields.o": "cpu/overrides/nsoc/source/Set_Density_Grid.unified.c"
+    "Set_Density_Grid.fields.o": "cpu/overrides/nsoc/source/Set_Density_Grid.unified.c",
+    "Input_std.o": "cpu/overrides/nsoc/source/Input_std.symmetry.c"
   },
   "extra_units": [
     {
@@ -82,7 +83,9 @@
   "capabilities": {
     "nsoc_symmetry": true,
     "nsoc_positive_history": true,
-    "nsoc_xc_workspace": true
+    "nsoc_xc_workspace": true,
+    "input_symmetry": true,
+    "generic_soc_export": true
   },
   "provenance": [
     {

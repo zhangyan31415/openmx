@@ -11,6 +11,7 @@
 #include <mkl.h>
 #include "openmx_common.h"
 #include "cpu_soc_native.h"
+#include "cpu_gsoc.h"
 #include "cpu_c3.h"
 #include "soc_spin.h"
 #include "cpu_soc_tr_guard.h"
@@ -20,19 +21,22 @@ typedef struct {
   int *sc,*sd,*rc,*rd,*order,*target,*recv_target,*recv_offset;
   int *bc,*bd,*brc,*brd;
 } RSRoute;
+#define RS_MAX_OPS 192
+#define RS_REVERSE RS_MAX_OPS
+static int rs_generic=0;
 static int rs_ng=-1;
 static int rs_mode=-1,rs_ready=0,rs_s_done=0,rs_rank,rs_np,rs_nat,rs_n,rs_ns,rs_nb,rs_nlocal,rs_maxorb;
 static int *rs_type,*rs_norb,*rs_local_id,*rs_g2l,*rs_offset,*rs_hash,rs_hashsize;
-static int *rs_perm[6],*rs_img[6],rs_w[6][9];
-static double rs_cell[9],*rs_xyz,*rs_d[6],rs_group_error;
+static int *rs_perm[RS_MAX_OPS],*rs_img[RS_MAX_OPS],rs_w[RS_MAX_OPS][9];
+static double rs_cell[9],*rs_xyz,*rs_d[RS_MAX_OPS],rs_group_error;
 static size_t rs_v,rs_bytes=0;
 static uint64_t rs_topology,rs_map_fnv=UINT64_C(1469598103934665603);
 static RSBlock *rs_block;
-static RSRoute rs_route[7];
+static RSRoute rs_route[RS_MAX_OPS+1];
 static double *rs_orig,*rs_sum,*rs_send,*rs_recv,*rs_tmp,*rs_mat;
 static double ****rs_overlap;
 static int rs_last_step=-1,rs_solved=0,rs_exported=0,rs_restart_ok=0;
-static double rs_spin[6][8],rs_spin_t[6][64];
+static double rs_spin[RS_MAX_OPS][8],rs_spin_t[RS_MAX_OPS][64];
 static double *****rs_hptr,*****rs_iptr;
 static uint64_t rs_solve_hash;
 static double *rs_soc_raw[8],*rs_soc_projected[8];
@@ -76,6 +80,18 @@ int CpuSOCNative_Enabled(void) {
  const char *legacy=getenv("OPENMX_CPU_SOC_NATIVE_D3");
  const char *d3=getenv("OPENMX_CPU_D3");
  int ng;
+ const char *generic=getenv("OPENMX_CPU_GSOC_EXPORT_SYMMETRIZE");
+ if(generic&&strcmp(generic,"0")&&strcmp(generic,"1"))rs_die("GSOC_EXPORT_SYMMETRIZE must be 0 or 1");
+ if(generic&&!strcmp(generic,"1")){
+  const char*project=getenv("OPENMX_CPU_GSOC_PROJECT");
+  if(!CpuGSOC_Enabled()||!project||strcmp(project,"1"))rs_die("generic symmetrized export requires explicit GSOC_PROJECT=1");
+  if(group||(legacy&&strcmp(legacy,"0"))||(d3&&strcmp(d3,"0")))rs_die("generic export conflicts with legacy solver selectors");
+  const char*name=getenv("OPENMX_CPU_SOC_NATIVE_MAP");int32_t hd[8];
+  if(!name||name[0]!='/')rs_die("generic export requires an absolute native map");
+  FILE*f=fopen(name,"rb");if(!f||fread(hd,4,8,f)!=8)rs_die("generic export map header unavailable");fclose(f);
+  if(hd[0]!=0x52534433||hd[1]!=3||hd[4]<1||hd[4]>RS_MAX_OPS)rs_die("generic export requires version3 bounded SU2 map");
+  ng=hd[4];rs_generic=1;
+ }else{
  if(legacy&&strcmp(legacy,"0")&&strcmp(legacy,"1"))rs_die("OPENMX_CPU_SOC_NATIVE_D3 must be 0 or 1");
  if(group){
   if(!strcmp(group,"C3"))ng=3;
@@ -88,13 +104,14 @@ int CpuSOCNative_Enabled(void) {
  }
  if(d3&&strcmp(d3,"0")&&strcmp(d3,"1"))rs_die("OPENMX_CPU_D3 must be 0 or 1 for native export");
  if((ng==6)!=!!(d3&&!strcmp(d3,"1")))rs_die("native group and solver D3 selector disagree");
+ }
  if(rs_ng!=-1&&rs_ng!=ng)rs_die("native group changed after activation");
  rs_ng=ng;
  if(SpinP_switch!=3||SO_switch!=1||Cnt_switch||Hub_U_switch||Solver!=2||MD_switch!=0||SCF_Control_Temp||DFTSCF_loop!=1)rs_die("requires uncontracted fixed-geometry Cluster SOC, Hubbard off, exactly one step");
  if(Band_disp_switch||MO_fileout||Dos_fileout||unfold_electronic_band||Wannier_Func_Calc||Wannier90_fileout||CWF_fileout_flag||pop_anal_aow_flag)rs_die("auxiliary raw-matrix postprocessing must be disabled; use native scfout H/S");
  if(Constraint_NCS_switch||Zeeman_NCS_switch||Zeeman_NCO_switch)rs_die("magnetic constraints/fields not supported");
- if(CpuC3_Mode()!=3||!HS_fileout)rs_die("native-export requires C3/D3 projected-block solver mode3 and HS.fileout on");
- rs_mode=1;return 1;
+ if((rs_generic?CpuC3_Mode()!=0:CpuC3_Mode()!=3)||!HS_fileout)rs_die("native-export requires C3/D3 projected-block solver mode3 and HS.fileout on");
+ rs_mode=rs_generic?2:1;return 1;
 }
 static void rs_geometry_guard(void) {
   int a,j;double error=0;
@@ -122,12 +139,12 @@ static void rs_make_route(int g) {
   t->order=rs_alloc(rs_nlocal,sizeof(int));t->target=rs_alloc(rs_nlocal,sizeof(int));t->recv_target=rs_alloc(rs_nlocal,sizeof(int));t->recv_offset=rs_alloc(rs_nlocal,sizeof(int));
   for(q=0;q<rs_nlocal;q++){
     RSBlock *b=&rs_block[rs_local_id[q]];int a,bb,r[3];
-    if(g==6){a=b->b;bb=b->a;for(i=0;i<3;i++)r[i]=-b->r[i];}
+    if(g==RS_REVERSE){a=b->b;bb=b->a;for(i=0;i<3;i++)r[i]=-b->r[i];}
     else{a=rs_perm[g][b->a-1]+1;bb=rs_perm[g][b->b-1]+1;
       for(i=0;i<3;i++){r[i]=rs_img[g][3*(b->b-1)+i]-rs_img[g][3*(b->a-1)+i];for(j=0;j<3;j++)r[i]+=rs_w[g][3*i+j]*b->r[j];}}
     id=rs_find(a,bb,r);
-    if(id<0){char msg[300];snprintf(msg,sizeof(msg),"missing %s closure g=%d source=(%d,%d,%d,%d,%d) target=(%d,%d,%d,%d,%d)",g==6?"Hermitian reverse":"group neighbor",g,b->a,b->b,b->r[0],b->r[1],b->r[2],a,bb,r[0],r[1],r[2]);rs_die(msg);}
-    if((g<rs_ng&&(rs_block[id].na!=b->na||rs_block[id].nb!=b->nb))||(g==6&&(rs_block[id].na!=b->nb||rs_block[id].nb!=b->na)))rs_die("orbital shape not preserved by map");
+    if(id<0){char msg[300];snprintf(msg,sizeof(msg),"missing %s closure g=%d source=(%d,%d,%d,%d,%d) target=(%d,%d,%d,%d,%d)",g==RS_REVERSE?"Hermitian reverse":"group neighbor",g,b->a,b->b,b->r[0],b->r[1],b->r[2],a,bb,r[0],r[1],r[2]);rs_die(msg);}
+    if((g<rs_ng&&(rs_block[id].na!=b->na||rs_block[id].nb!=b->nb))||(g==RS_REVERSE&&(rs_block[id].na!=b->nb||rs_block[id].nb!=b->na)))rs_die("orbital shape not preserved by map");
     t->target[q]=id;d=rs_block[id].owner;t->bc[d]++;t->sc[d]+=b->na*b->nb;
   }
   for(i=1;i<rs_np;i++){t->sd[i]=t->sd[i-1]+t->sc[i-1];t->bd[i]=t->bd[i-1]+t->bc[i-1];}
@@ -175,7 +192,7 @@ static void rs_setup(void) {
   MPI_Comm_rank(mpi_comm_level1,&rs_rank);MPI_Comm_size(mpi_comm_level1,&rs_np);
   name=getenv("OPENMX_CPU_SOC_NATIVE_MAP");if(!name||name[0]!='/')rs_die("absolute OPENMX_CPU_SOC_NATIVE_MAP required");
   f=fopen(name,"rb");if(!f)rs_die("cannot open metadata");rs_read(f,h,4,8);
-  if(h[0]!=0x52534433||h[1]!=2||h[2]!=atomnum||h[4]!=rs_ng||h[5]<1||h[5]>SpeciesNum||h[6]!=0||h[7]!=0)rs_die("metadata header invalid");
+  if(h[0]!=0x52534433||(h[1]!=2&&h[1]!=3)||h[2]!=atomnum||h[4]!=rs_ng||h[5]<1||h[5]>SpeciesNum||h[6]!=0||h[7]!=0)rs_die("metadata header invalid");
   rs_nat=h[2];rs_n=h[3];rs_ns=h[5];rs_read(f,rs_cell,8,9);
   rs_xyz=rs_alloc(3*rs_nat,sizeof(double));rs_type=rs_alloc(rs_nat,sizeof(int));rs_norb=rs_alloc(rs_ns,sizeof(int));
   rs_read(f,rs_xyz,8,3*rs_nat);rs_read(f,rs_type,4,rs_nat);rs_read(f,rs_norb,4,rs_ns);
@@ -192,7 +209,7 @@ static void rs_setup(void) {
   for(g=0;g<rs_ng;g++)if(SocSpin_Transform(rs_spin[g],rs_spin_t[g]))rs_die("nonunitary SU2 metadata");
   for(a=0;a<8;a++)for(j=0;j<8;j++)if(fabs(rs_spin_t[0][8*a+j]-(a==j))>1e-12)rs_die("spin operation0 not identity");
   if(fgetc(f)!=EOF)rs_die("metadata has trailing bytes");fclose(f);
-  if(orth>1e-11)rs_die("orbital metadata is not exact orthogonal C3/D3; regenerate nominal-generator map");
+  if(orth>1e-11)rs_die("orbital metadata is not exact orthogonal group; regenerate nominal-generator map");
   rs_validate_metadata();
   b=0;for(a=1;a<=rs_nat;a++){if(rs_type[a-1]<0||rs_type[a-1]>=rs_ns||Spe_Total_CNO[WhatSpecies[a]]!=rs_norb[rs_type[a-1]])rs_die("native basis differs from metadata");b+=Spe_Total_CNO[WhatSpecies[a]];rs_nb+=FNAN[a]+1;}
   if(b!=rs_n)rs_die("native basis dimension mismatch");
@@ -206,11 +223,11 @@ static void rs_setup(void) {
   rs_local_id=rs_alloc(rs_nlocal,sizeof(int));rs_offset=rs_alloc(rs_nlocal+1,sizeof(int));q=0;
   for(mc=1;mc<=Matomnum;mc++){a=M2G[mc];for(j=0;j<=FNAN[a];j++){int rr[3];for(k=0;k<3;k++)rr[k]=atv_ijk[ncn[a][j]][k+1];id=rs_find(a,natn[a][j],rr);if(id<0)rs_die("owned neighbor not found in global hash");rs_local_id[q]=id;rs_g2l[id]=q;rs_offset[q]=(int)rs_v;rs_v+=(size_t)rs_block[id].na*rs_block[id].nb;if(rs_v>INT_MAX)rs_die("local MPI count overflow");q++;}}
   rs_offset[rs_nlocal]=(int)rs_v;
-  for(g=0;g<rs_ng;g++)rs_make_route(g);rs_make_route(6);
+  for(g=0;g<rs_ng;g++)rs_make_route(g);rs_make_route(RS_REVERSE);
   rs_orig=rs_alloc(rs_v,sizeof(double));rs_sum=rs_alloc(rs_v,sizeof(double));rs_send=rs_alloc(rs_v,sizeof(double));rs_recv=rs_alloc(rs_v,sizeof(double));
   rs_tmp=rs_alloc((size_t)rs_maxorb*rs_maxorb,sizeof(double));rs_mat=rs_alloc((size_t)rs_maxorb*rs_maxorb,sizeof(double));
   rs_topology=rs_current_topology();rs_ready=1;rs_geometry_guard();
-  if(rs_rank==Host_ID){printf("CPU_SOC_RS_SETUP mode=%s group=%s operations=%d natoms=%d N=%d global_blocks=%d local_blocks_host=%d map=%s map_fnv64=%016llx orbital_orth_error=%.3e orbital_group_error=%.3e storage=4local_fields_plus_maps ghost_policy=owned_primary_H_S HubU=off contraction=off\n",rs_mode==1?"export":"scf",rs_ng==6?"D3":"C3",rs_ng,rs_nat,rs_n,rs_nb,rs_nlocal,name,(unsigned long long)rs_map_fnv,orth,rs_group_error);fflush(stdout);}
+  if(rs_rank==Host_ID){printf("CPU_SOC_RS_SETUP mode=%s group=%s operations=%d natoms=%d N=%d global_blocks=%d local_blocks_host=%d map=%s map_fnv64=%016llx orbital_orth_error=%.3e orbital_group_error=%.3e storage=4local_fields_plus_maps ghost_policy=owned_primary_H_S HubU=off contraction=off\n",rs_generic?"generic_export":"export",rs_generic?"GSOC":(rs_ng==6?"D3":"C3"),rs_ng,rs_nat,rs_n,rs_nb,rs_nlocal,name,(unsigned long long)rs_map_fnv,orth,rs_group_error);fflush(stdout);}
   rs_phase(0,"setup",MPI_Wtime()-start);
 }
 static void rs_pack(double ****x,double *packed,int write) {
@@ -220,7 +237,7 @@ static void rs_exchange(const double *source,int g,double *destination,double sc
   RSRoute *t=&rs_route[g];int order,q,id,i,j,pos=0;
   for(order=0;order<rs_nlocal;order++){
     q=t->order[order];RSBlock *b=&rs_block[rs_local_id[q]];const double *x=source+rs_offset[q];
-    if(g==6){for(i=0;i<b->nb;i++)for(j=0;j<b->na;j++)rs_send[pos++]=x[j*b->nb+i];}
+    if(g==RS_REVERSE){for(i=0;i<b->nb;i++)for(j=0;j<b->na;j++)rs_send[pos++]=x[j*b->nb+i];}
     else{
       double *left=rs_rotation(g,rs_type[b->a-1]),*right=rs_rotation(g,rs_type[b->b-1]);
       cblas_dgemm(CblasRowMajor,CblasNoTrans,CblasNoTrans,b->na,b->nb,b->na,1.,left,b->na,x,b->nb,0.,rs_tmp,b->nb);
@@ -237,7 +254,7 @@ static void rs_project(double ****x,int step,const char *channel,int write) {
   for(g=1;g<rs_ng;g++)rs_exchange(rs_orig,g,rs_sum,1./(double)rs_ng);
   for(i=0;i<rs_v;i++)rs_sum[i]*=.5;
   /* Reverse Hermitization commutes with the exact selected group average. */
-  rs_exchange(rs_sum,6,rs_sum,1.); /* reads the half-average, accumulates its transpose */
+  rs_exchange(rs_sum,RS_REVERSE,rs_sum,1.); /* reads the half-average, accumulates its transpose */
   if(write)rs_pack(x,rs_sum,1);
   rs_phase(step,channel,MPI_Wtime()-start);
 }
@@ -255,7 +272,7 @@ static uint64_t rs_field_hash(double *****h,double *****im,double ****olp){
  }return hash;
 }
 /* Actual raw finite-range H/S check for T=L K, L=[[0,I],[-I,0]].
- * Uses the existing owner buffers and exact Hermitian reverse route6. No
+ * Uses the existing owner buffers and exact Hermitian reverse route RS_REVERSE. No
  * spatial C2 map and no dense matrix are needed. Arrays remain unchanged. */
 static int rs_tr_passed=0;
 int CpuSOCNative_TRRequested(void){
@@ -309,15 +326,15 @@ static int rs_tr_measure_raw(int step,double*****h,double*****im,double****olp,i
  int bad=0,global_bad=0,pass=1;
  rs_pack(h[0],rs_orig,0);rs_pack(h[1],rs_sum,0);rs_tr_metric(0,-1.,local_sum,local_max,&bad);
  rs_pack(im[0],rs_orig,0);rs_pack(im[1],rs_sum,0);rs_tr_metric(1,1.,local_sum,local_max,&bad);
- rs_pack(h[2],rs_orig,0);memset(rs_sum,0,rs_v*sizeof(double));rs_exchange(rs_orig,6,rs_sum,1.);rs_tr_metric(2,1.,local_sum,local_max,&bad);
+ rs_pack(h[2],rs_orig,0);memset(rs_sum,0,rs_v*sizeof(double));rs_exchange(rs_orig,RS_REVERSE,rs_sum,1.);rs_tr_metric(2,1.,local_sum,local_max,&bad);
  rs_pack(h[3],rs_orig,0);rs_pack(im[2],rs_sum,0);for(size_t i=0;i<rs_v;i++)rs_orig[i]+=rs_sum[i];
- memset(rs_sum,0,rs_v*sizeof(double));rs_exchange(rs_orig,6,rs_sum,1.);rs_tr_metric(3,1.,local_sum,local_max,&bad);
- rs_pack(olp,rs_orig,0);memset(rs_sum,0,rs_v*sizeof(double));rs_exchange(rs_orig,6,rs_sum,1.);rs_tr_metric(4,-1.,local_sum,local_max,&bad);
+ memset(rs_sum,0,rs_v*sizeof(double));rs_exchange(rs_orig,RS_REVERSE,rs_sum,1.);rs_tr_metric(3,1.,local_sum,local_max,&bad);
+ rs_pack(olp,rs_orig,0);memset(rs_sum,0,rs_v*sizeof(double));rs_exchange(rs_orig,RS_REVERSE,rs_sum,1.);rs_tr_metric(4,-1.,local_sum,local_max,&bad);
  /* TR alone does not imply Hermiticity of a same-spin diagonal block.
   * Check Huu explicitly; TR consistency transfers that condition to Hdd.
   * The off-diagonal spin partner is the native conjugate reverse by design. */
- rs_pack(h[0],rs_orig,0);memset(rs_sum,0,rs_v*sizeof(double));rs_exchange(rs_orig,6,rs_sum,1.);rs_tr_metric(5,-1.,local_sum,local_max,&bad);
- rs_pack(im[0],rs_orig,0);memset(rs_sum,0,rs_v*sizeof(double));rs_exchange(rs_orig,6,rs_sum,1.);rs_tr_metric(6,1.,local_sum,local_max,&bad);
+ rs_pack(h[0],rs_orig,0);memset(rs_sum,0,rs_v*sizeof(double));rs_exchange(rs_orig,RS_REVERSE,rs_sum,1.);rs_tr_metric(5,-1.,local_sum,local_max,&bad);
+ rs_pack(im[0],rs_orig,0);memset(rs_sum,0,rs_v*sizeof(double));rs_exchange(rs_orig,RS_REVERSE,rs_sum,1.);rs_tr_metric(6,1.,local_sum,local_max,&bad);
  MPI_Allreduce(&bad,&global_bad,1,MPI_INT,MPI_MAX,mpi_comm_level1);
  MPI_Allreduce(&local_count,&count,1,MPI_UNSIGNED_LONG_LONG,MPI_SUM,mpi_comm_level1);
  MPI_Allreduce(local_sum,global_sum,14,MPI_DOUBLE,MPI_SUM,mpi_comm_level1);
@@ -334,7 +351,7 @@ static int rs_tr_measure_raw(int step,double*****h,double*****im,double****olp,i
   if(!accepted)pass=0;
   if(emit&&rs_rank==Host_ID)printf("CPU_SOC_TR_RAW step=%d check=%s scalar_elements=%llu rms=%.17g relative_rms=%.17g max_abs=%.17g rms_scale=%.17g max_scale=%.17g atol=%.3e rtol=%.3e nonfinite=%d accepted=%d\n",step,names[k],count,rms,relative,global_max[2*k],scale,global_max[2*k+1],absolute_tolerance,relative_tolerance,global_bad,accepted);
  }
- if(emit&&rs_rank==Host_ID){printf("CPU_SOC_TR_RAW_RESULT step=%d passed=%d storage=owner_neighbor_blocks reverse_route=6 overlap_imaginary=absent_real_storage extra_payload_arrays=0\n",step,pass);fflush(stdout);}
+ if(emit&&rs_rank==Host_ID){printf("CPU_SOC_TR_RAW_RESULT step=%d passed=%d storage=owner_neighbor_blocks reverse_route=dedicated overlap_imaginary=absent_real_storage extra_payload_arrays=0\n",step,pass);fflush(stdout);}
  return pass;
 }
 static void rs_tr_guard_raw(int step,double*****h,double*****im,double****olp){
@@ -351,7 +368,7 @@ void CpuSOCNative_MarkSolve(int step,double *****h,double *****im,double ****olp
  if(step!=1||rs_last_step!=-1||h!=H||im!=iHNL||olp!=OLP[0])rs_die("requires unique step1 solve on global uncontracted H/iHNL/OLP0");
  rs_setup();rs_geometry_guard();rs_hptr=h;rs_iptr=im;rs_overlap=olp;rs_solve_hash=rs_field_hash(h,im,olp);rs_last_step=step;
  rs_tr_passed=0;if(CpuSOCNative_TRRequested()==1)rs_tr_guard_raw(step,h,im,olp);
- if(rs_rank==Host_ID){printf("CPU_SOC_RS_SOLVE step=1 operator=PROJECTED_%s_GAMMA operations=%d raw_fields_preserved=1\n",rs_ng==6?"D3":"C3",rs_ng);fflush(stdout);}
+ if(rs_rank==Host_ID){printf("CPU_SOC_RS_SOLVE step=1 operator=PROJECTED_%s_GAMMA operations=%d raw_fields_preserved=1\n",rs_generic?"GSOC":(rs_ng==6?"D3":"C3"),rs_ng);fflush(stdout);}
 }
 void CpuSOCNative_MarkSolved(int step){
  if(!CpuSOCNative_Enabled())return;
@@ -364,7 +381,7 @@ static void rs_spin_project(void){
  rs_pack(H[3],rs_soc_raw[5],0);rs_pack(iHNL[2],rs_orig,0);for(i=0;i<rs_v;i++)rs_soc_raw[5][i]+=rs_orig[i];
  /* A directed (a,b,R) block is general complex. Its DU comes from the
   * other owned block (b,a,-R), never from UD(a,b,R)^dagger. */
- rs_exchange(rs_soc_raw[4],6,rs_soc_raw[6],1.);rs_exchange(rs_soc_raw[5],6,rs_soc_raw[7],-1.);
+ rs_exchange(rs_soc_raw[4],RS_REVERSE,rs_soc_raw[6],1.);rs_exchange(rs_soc_raw[5],RS_REVERSE,rs_soc_raw[7],-1.);
  for(f=0;f<8;f++)for(i=0;i<rs_v;i++)rs_soc_projected[f][i]=rs_soc_raw[f][i]/(double)rs_ng;
  for(g=1;g<rs_ng;g++)for(f=0;f<8;f++){
   memset(rs_sum,0,rs_v*sizeof(double));rs_exchange(rs_soc_raw[f],g,rs_sum,1.);
@@ -373,9 +390,9 @@ static void rs_spin_project(void){
  /* P and full spinor reverse Hermitization commute. Handle each offdiagonal
   * pair jointly so no updated channel is averaged against stale data. */
  for(f=0;f<6;f++){
-  int from;double sign;SocSpin_Reverse(f,&from,&sign);memset(rs_sum,0,rs_v*sizeof(double));rs_exchange(rs_soc_projected[from],6,rs_sum,sign);
+  int from;double sign;SocSpin_Reverse(f,&from,&sign);memset(rs_sum,0,rs_v*sizeof(double));rs_exchange(rs_soc_projected[from],RS_REVERSE,rs_sum,sign);
   for(i=0;i<rs_v;i++)rs_soc_projected[f][i]=.5*(rs_soc_projected[f][i]+rs_sum[i]);
-  if(f>=4){memset(rs_sum,0,rs_v*sizeof(double));rs_exchange(rs_soc_projected[f],6,rs_sum,sign);memcpy(rs_soc_projected[from],rs_sum,rs_v*sizeof(double));}
+  if(f>=4){memset(rs_sum,0,rs_v*sizeof(double));rs_exchange(rs_soc_projected[f],RS_REVERSE,rs_sum,sign);memcpy(rs_soc_projected[from],rs_sum,rs_v*sizeof(double));}
  }
  rs_pack(H[0],rs_soc_projected[0],1);rs_pack(iHNL[0],rs_soc_projected[1],1);rs_pack(H[1],rs_soc_projected[2],1);rs_pack(iHNL[1],rs_soc_projected[3],1);rs_pack(H[2],rs_soc_projected[4],1);rs_pack(H[3],rs_soc_projected[5],1);
  memset(rs_sum,0,rs_v*sizeof(double));rs_pack(iHNL[2],rs_sum,1);
@@ -387,6 +404,6 @@ void CpuSOCNative_BeforeExport(void){
  if(!CpuSOCNative_Enabled())return;
  if(rs_last_step!=1||!rs_solved||rs_exported||H!=rs_hptr||iHNL!=rs_iptr||OLP[0]!=rs_overlap)rs_die("export is not the unique completed projected solve");
  rs_geometry_guard();if(rs_field_hash(H,iHNL,OLP[0])!=rs_solve_hash)rs_die("raw H/iHNL/S changed between projected solve and native export");
- rs_project(OLP[0],1,"scalar_S_export",1);rs_spin_project();rs_exported=1;
- if(rs_rank==Host_ID){printf("CPU_SOC_RS_EXPORT step=1 representation=PROJECTED_REALSPACE_SPINOR_H_S spin_representation=SU2 operations=%d solver=%s_projected_blocks raw_checksum_unchanged=1 postprocess_external=0 canonical_UD_imag=H3 imNL2=0 derivatives_untouched_until_after_force=1\n",rs_ng,rs_ng==6?"D3":"C3");fflush(stdout);}
+ rs_project(OLP[0],1,"scalar_S_export",1);rs_spin_project();if(rs_generic)CpuGSOC_ValidateExport();rs_exported=1;
+ if(rs_rank==Host_ID){printf("CPU_SOC_RS_EXPORT step=1 representation=PROJECTED_REALSPACE_SPINOR_H_S spin_representation=SU2 operations=%d solver=%s_projected_blocks raw_checksum_unchanged=1 postprocess_external=0 canonical_UD_imag=H3 imNL2=0 derivatives_untouched_until_after_force=1\n",rs_ng,rs_generic?"GSOC":(rs_ng==6?"D3":"C3"));fflush(stdout);}
 }

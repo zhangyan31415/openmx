@@ -25,6 +25,23 @@ Atoms.SpeciesAndCoordinates.Unit Ang
 Atoms.SpeciesAndCoordinates>
 '''
 class TestPreparation(unittest.TestCase):
+ def test_d3_map_accepts_both_hexagonal_c2_axis_families(self):
+  d=module('symmetry_detect');r=module('prepare_realspace_d3')
+  with tempfile.TemporaryDirectory()as tmp:
+   p=Path(tmp)/'input.dat'
+   cell=np.array([[12.,0,0],[-6,6*np.sqrt(3),0],[0,0,20.]])
+   p.write_text(INPUT.replace('12 0 0\n0 12 0\n0 0 12','\n'.join(' '.join(map(str,row))for row in cell)))
+   s=d.parse_openmx(p);theta=2*np.pi/3
+   q3=np.array([[np.cos(theta),-np.sin(theta),0],[np.sin(theta),np.cos(theta),0],[0,0,1]])
+   for index,angle in enumerate([0,np.pi/6]):
+    axis=np.array([np.cos(angle),np.sin(angle),0]);q2=2*np.outer(axis,axis)-np.eye(3)
+    qs=[np.eye(3),q3,q3@q3,q2,q3@q2,q3@q3@q2]
+    ws=[np.rint(np.linalg.inv(cell.T)@q@cell.T).astype(int)for q in qs]
+    g=d._build_operation_set(s,ws,[np.zeros(3)]*6,1e-6,1.25,source='test_rotated_d3')
+    self.assertTrue(g['valid'])
+    out=r.generate(p,Path(tmp)/f'd3_{index}.rsd3',operations_metadata={'selected':g},atom_tol=1e-5)
+    self.assertEqual(out['operation_count'],6)
+
  def test_orbital_provider_is_repository_local(self):
   d=module('symmetry_detect');f=d._load_orbital_rotation_provider()
   self.assertIsNotNone(f)

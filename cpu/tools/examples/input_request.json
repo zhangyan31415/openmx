@@ -1,0 +1,20 @@
+{
+  "schema": 1,
+  "binary": "/ABS/build/openmx-cpu",
+  "build_manifest": "/ABS/build/build-manifest.json",
+  "inputs": {"nsoc": "/ABS/case/nsoc.dat", "soc": "/ABS/case/soc.dat"},
+  "output": "/ABS/results-new",
+  "layout": {
+    "hosts": ["node040"],
+    "ranks_per_host": 4,
+    "threads": 1,
+    "cpu_ids_per_host": {"node040": [0, 1, 2, 3]}
+  },
+  "runtime": {
+    "mpiexec": "/data/home/apps/oneapi2022.3/mpi/2021.7.1/bin/mpirun",
+    "runtime_prefix": "/data/home/apps/oneapi2022.3",
+    "environment_prefix": "snapshots/home/mambaforge",
+    "transport": "shm"
+  },
+  "timeout_seconds": null
+}

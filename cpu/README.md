@@ -6,6 +6,11 @@
 
 ## 从这里开始
 
+输入驱动的新用法见 [Auto/User 与统一 H/S 导出](docs/INPUT_SYMMETRY.zh-CN.md)：
+`configure request.json --output /ABS/new-config` 自动准备匹配元数据和完整
+profile，然后 `run /ABS/new-config/workflow.json --wait`。无需手动合并开关。
+输入适配器限于统一 CPU 构建；裸二进制不会自行调用 Python 几何检测器。
+
 1. [独立构建](docs/BUILD.zh-CN.md)：使用 `--profile unified`，生成二进制和构建清单。
 2. [统一工作流](docs/WORKFLOW.zh-CN.md)：准备两个匹配输入，生成同一闭合子群的元数据，填写明确的运行配置，先 `plan` 再 `run --wait`。
 3. [NSOC 源码与路径](docs/NSOC_INTEGRATION.md)、[旧 C3/D3 SOC 路径](docs/LEGACY_SOC.md)：核对所选路径的适用条件和导出语义。
@@ -32,10 +37,10 @@ snapshots/home/mambaforge/bin/python /ABS/REPO/cpu/tools/workflow.py run /ABS/co
 | D3 NSOC | NSYM v3 | 保留等价表示块复用、可选合并返回和按需回变换 |
 | C3 NSOC | NSYM v4 | 保留复共轭表示配对；不套用 D3 专用开关 |
 | D2、C2 等 NSOC | 通用标量表示分块 | 按选定闭合子群构造表示，运行时仍检查 H/S 协变性 |
-| 通用 SOC | GSOC 自旋表示 | 可显式选择投影和紧凑系数；当前导出原始 H/S |
+| 通用 SOC | GSOC 自旋表示 | 可显式选择投影和紧凑系数；支持 raw 或原生 symmetrize H/S 导出，含求解／导出算子一致性检查 |
 | 旧 C3/D3 SOC | 专用已验证路径 | D3 保留 TR/REAL；C3 禁用 D3 专用 TR/REAL。原生导出投影须显式选择 `symmetrize` |
 
-NSOC 的全程分块求解和实空间 H/S 投影是两个设置。`--project-nsoc` 明确请求在 SCF 中投影实空间 H/S，并导出投影后的 H/S，目前限定 C3/D3。相应 DM/EDM 钩子只检查，不写回投影密度矩阵。SOC 求解前的矩阵投影与最终导出的 H/S 是否投影也分别声明。几何容差不会自动变成电子结构误差许可。
+NSOC 的全程分块求解和实空间 H/S 投影是两个设置。`--project-nsoc` 明确请求在 SCF 中投影实空间 H/S，并导出投影后的 H/S，使用选定闭合操作集合；新群的生产认证仍需单独验收。相应 DM/EDM 钩子只检查，不写回投影密度矩阵。SOC 求解前的矩阵投影与最终导出的 H/S 是否投影也分别声明。几何容差不会自动变成电子结构误差许可。
 
 单节点和多节点使用同一个程序；MPI 数变化后必须重新运行 NSOC，不能直接套用另一布局的重启文件。运行记录包含实际绑定、MPI 提供者、原生耗时、启动耗时、核时、每节点物理内存峰值和同步集群内存峰值。
 

@@ -2,7 +2,7 @@
 
 入口为 `cpu/tools/workflow.py`。它对同一套源码构建的二进制执行完整 NSOC，然后复制这次计算自己的检查点，再运行恰好一步 SOC。两步使用同样的 MPI 数和线程布局；不会复用别的布局留下的重启文件。
 
-当前适用范围为固定几何、非磁性、Gamma 点。几何识别、H/S 协变性、数值结果比较、完整性能是不同的验证；识别出点群不表示已经允许忽略非对角扇区。所有输入物理参数原样保存。`scf.Symmetry.Mode Auto/User` 尚未作为这套入口的开启方式，输入继续写 `Off`，对称路径由显式元数据和配置选择。
+当前适用范围为固定几何、非磁性、Gamma 点。几何识别、H/S 协变性、数值结果比较、完整性能是不同的验证；识别出点群不表示已经允许忽略非对角扇区。所有输入物理参数原样保存。输入驱动模式使用 `configure` 读取 `scf.Symmetry.Mode Auto/User` 并生成完整配置，见 [输入驱动说明](INPUT_SYMMETRY.zh-CN.md)。原有显式 profile 方式仍可使用 `Off`。
 
 ## 使用顺序
 
@@ -36,8 +36,8 @@ snapshots/home/mambaforge/bin/python /ABS/REPO/cpu/tools/workflow.py inspect /AB
 - `runtime.mpiexec`：绝对 Intel MPI 启动器；`runtime_prefix`：oneAPI 安装根；`environment_prefix`：Python 环境根；可给绝对 `library_paths`。
 - `runtime.transport`：单节点可 `shm`，多节点默认 `shm:ofi`。可显式给 `provider`，实际提供者必须从 MPI 启动日志确认，不能仅根据环境变量归因。
 - `symmetry.project/compact`：布尔值，默认 false；必须与显式 generic SOC profile 标志一致。NSOC 全程扇区求解由 `OPENMX_CPU_NSOC_FULL_PROJECT` 单独记录；真正的 NSOC 实空间 H/S 投影由 `OPENMX_CPU_REALSPACE_D3=scf` 表示。二者不能混称。实空间钩子会改写 H/S，但 `AfterDensity` 对 DM/EDM 仅作只读检查，不将投影结果写回。
-- `symmetry.soc_export_policy`：默认 `raw`。旧 C3/D3 原生映射会在导出前投影 H/S，必须显式选择 `symmetrize`；通用 GSOC 当前仅支持 `raw` 导出，不能宣称输出已对称化。旧 D3 的 TR/REAL 优化要求已启用 D3 原生映射；C3 必须关闭这些 D3 专用开关。
-- `monitor_interval_seconds`：默认0.25秒；`timeout_seconds`：每一步最大执行时间，默认86400秒。可选 `memory_limit_bytes_per_host` 为每节点任务 slice 设置硬上限并禁用该 slice 的 swap；默认不设置上限。
+- `symmetry.soc_export_policy`：默认 `raw`。旧 C3/D3 原生映射会在导出前投影 H/S，必须显式选择 `symmetrize`；通用 GSOC 支持 `raw` 或显式 `symmetrize`；后者要求 `GSOC_PROJECT=1`、`GSOC_EXPORT_SYMMETRIZE=1` 和匹配的 native map，并校验导出与求解投影算子一致。旧 D3 的 TR/REAL 优化要求已启用 D3 原生映射；C3 必须关闭这些 D3 专用开关。
+- `monitor_interval_seconds`：默认0.25秒；`timeout_seconds`：默认 null（无内部执行时限），也允许省略或字符串 infinity；旧有限值报错。服务和 MPI 调用均不设置计算倒计时。可选 `memory_limit_bytes_per_host` 为每节点任务 slice 设置硬上限并禁用该 slice 的 swap；默认不设置上限。
 
 `prepare` 输出的 `PREPARED.json` 包含同一闭合子群的 NSOC/SOC 对称基、真实空间操作映射、每个文件 SHA256 和两步环境增量。必须把这些增量合入各自完整 profile；增量本身不是完整生产配置。NSOC 生成器的 `OPENMX_CPU_NSOC_FULL_PROJECT=1` 表示全程使用分块求解路径，与额外实空间 H/S 投影开关分别记录。记录中的 `nsoc_realspace_HS_projection_explicit` 和 `nsoc_export_HS` 分别说明是否投影 H/S 及导出表示；启用 `scf`/`export` 时导出表示为原生标签 `PROJECTED_REALSPACE_H_S`。旧字段 `nsoc_density_projection_explicit` 已弃用并固定为 false，不再宣称显式密度投影。`--group auto` 是此元数据工具的检测选择，不能等同于输入解析器开启。
 
