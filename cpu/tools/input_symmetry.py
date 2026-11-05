@@ -96,12 +96,23 @@ def validate_runtime_request(q, env, stage):
             raise ValueError('prepared NSOC export/output mode disagrees with input HSExport')
         if expected!='off' and not Path(env.get('OPENMX_CPU_REALSPACE_MAP','')).is_file():
             raise ValueError('prepared NSOC export requires a real-space map')
-    covkey = 'OPENMX_CPU_NSOC_GENERIC_COV_TOL' if stage == 'nsoc' else 'OPENMX_CPU_GSOC_COV_TOL'
+    legacy = (stage == 'soc' and env.get('OPENMX_CPU_C3') == '3' and
+              env.get('OPENMX_CPU_GSOC') != '1')
+    if legacy:
+        if (group not in ('C3','D3') or q['export_policy'] != 'symmetrize' or
+                env.get('OPENMX_CPU_SOC_NATIVE_GROUP') != group or
+                env.get('OPENMX_CPU_D3') != ('1' if group == 'D3' else '0') or
+                not Path(env.get('OPENMX_CPU_SOC_NATIVE_MAP', '')).is_file() or
+                (group == 'C3' and any(env.get(k) == '1' for k in
+                    ('OPENMX_CPU_SOC_TR','OPENMX_CPU_SOC_REAL')))):
+            raise ValueError('prepared legacy SOC subgroup/export contract disagrees with input')
+    covkey = ('OPENMX_CPU_INPUT_SYMMETRY_COV_TOL' if legacy else
+              'OPENMX_CPU_NSOC_GENERIC_COV_TOL' if stage == 'nsoc' else 'OPENMX_CPU_GSOC_COV_TOL')
     if float(env.get(covkey, 'nan')) != q['covariance_tolerance']:
         raise ValueError('prepared covariance tolerance disagrees with input')
     key = 'OPENMX_CPU_NSOC_SYM' if stage == 'nsoc' else 'OPENMX_CPU_GSOC'
-    basis = 'OPENMX_CPU_NSOC_BASIS' if stage == 'nsoc' else 'OPENMX_CPU_GSOC_BASIS'
-    if env.get(key) != '1' or not Path(env.get(basis, '')).is_file():
+    basis = 'OPENMX_CPU_C3_BASIS' if legacy else 'OPENMX_CPU_NSOC_BASIS' if stage == 'nsoc' else 'OPENMX_CPU_GSOC_BASIS'
+    if (not legacy and env.get(key) != '1') or not Path(env.get(basis, '')).is_file():
         raise ValueError('prepared profile does not activate requested native '+stage+' symmetry')
 
 

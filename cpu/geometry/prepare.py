@@ -33,10 +33,23 @@ def select_subgroup(checked,requested,spinor):
  return kind,ops
 
 def _soc_options(group,soc_route,export_policy):
- if soc_route not in ('generic','legacy'):raise ValueError('SOC route must be generic or legacy')
+ if soc_route not in ('generic','legacy','auto'):raise ValueError('SOC route must be generic, legacy or auto')
  if export_policy not in ('raw','symmetrize'):raise ValueError('SOC export policy must be raw or symmetrize')
  if soc_route=='legacy'and group not in ('auto','D3','C3'):
   raise ValueError('legacy SOC route supports only C3 or D3; use generic for '+str(group))
+
+def automatic_soc_route(group,structure,tolerance,operations=None):
+ """Use the verified slab solver only in its supported angular convention."""
+ if group not in ('C3','D3'):return 'generic'
+ q=np.array([[-.5,-np.sqrt(3)/2,0],[np.sqrt(3)/2,-.5,0],[0,0,1.]])
+ cell=np.asarray(structure['cell']);bound=float(tolerance)*1.25
+ flat=abs(cell[0,2])+abs(cell[1,2])+abs(cell[2,0])+abs(cell[2,1])
+ if flat>4*bound or np.linalg.norm(q@cell[0]-cell[1])>bound:return 'generic'
+ if operations is not None:
+  rotations=[np.asarray(g['R_cart_orthogonal'])for g in operations]
+  if not any(np.max(abs(r-q))<1e-3 for r in rotations):return 'generic'
+  if group=='D3'and not any(np.linalg.det(r)>.99 and r[2,2]<-.99 for r in rotations):return 'generic'
+ return 'legacy'
 
 def prepare_soc_artifacts(soc_input,selected_path,out,kind,spinor,neighbor_settings,*,soc_route='generic',export_policy='raw',realspace_map=None):
  """Prepare exactly one SOC representation and declare native export semantics.
@@ -118,8 +131,9 @@ def prepare(nsoc_input,soc_input,output,group='auto',tolerances=None,atom_tol=5e
   support=module('unified_neighbor_support',TOOLS/'neighbor_support.py')
   neighbor_path=out/'neighbor_support.json'
   neighbor=support.prepare(nsoc_input,rmeta,neighbor_path,max_padding=.01,runtime_cwd=nsoc_input.parent)
+  chosen_route=automatic_soc_route(kind,structure,symprec,selected['operations'])if soc_route=='auto'else soc_route
   soc=prepare_soc_artifacts(soc_input,selected_path,out,kind,spinor,neighbor['settings'],
-                            soc_route=soc_route,export_policy=export_policy)
+                            soc_route=chosen_route,export_policy=export_policy)
   adds={'OPENMX_CPU_NSOC_SYM':'1','OPENMX_CPU_NSOC_FULL_PROJECT':'1','OPENMX_CPU_NSOC_BASIS':str(nsbasis),
    'OPENMX_CPU_NSOC_GENERIC_COV_STRICT':'1','OPENMX_CPU_REALSPACE_D3':'scf'if project_nsoc else'off',
    'OPENMX_CPU_REALSPACE_MAP':str(rmap),'OPENMX_CPU_REALSPACE_CHECK':'0'}

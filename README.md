@@ -38,7 +38,7 @@ Add to your OpenMX input:
 scf.Symmetry on
 ```
 
-Symmetry is off by default; `scf.Symmetry off` disables it explicitly. When enabled, the program detects and validates a supported subgroup, prepares its symmetry basis and selects the solver path internally. No separate preparation command or user-written JSON is needed. Logs report the selected group; failed mapping or operator checks stop the run.
+Symmetry is off by default; `scf.Symmetry off` disables it explicitly. When enabled, the program detects and validates a supported subgroup, prepares its symmetry basis, and automatically enables the verified solver and memory optimizations compatible with the input, thread count and rank binding. No separate preparation command or user-written JSON is needed. Logs report the selected group; failed mapping or operator checks stop the run.
 
 With the matching oneAPI runtime and Python environment available on the compute node, launch normally, for example **64 MPI ranks × 1 thread**:
 
@@ -58,10 +58,23 @@ Request H/S files with the ordinary `HS.fileout on` setting. Supported symmetry 
 
 - D3/C3 include specialized optimizations; other supported subgroups, including D2/C2, use general representation blocks. Check the log for the actual path.
 - Symmetry projection can change the discretized operator and SCF trajectory. Energy, forces and other physical errors need separate validation; detection alone does not establish accuracy or speedup.
-- The direct switch passed small-system single-node, two-node and installation-relocation checks. MoTe₂ at 9.43°, 222 atoms, completed NSOC but its general SOC path failed the default covariance gate; this is not a successful full-workflow case.
+- The current default profile passed complete NSOC plus own one-step SOC for MoTe₂ at 9.43° (222 atoms) and 7.34° (366 atoms). Standard oriented C3/D3 slabs select the verified specialized SOC path; other supported cases use the general path and its operator checks.
 - Historical timing and memory results apply to their recorded configurations. More nodes do not guarantee lower core-hours or constant total memory.
 
 [Native switch validation](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/NATIVE_SYMMETRY_VALIDATION_20261106.md) · [Timing and memory benchmarks](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/BENCHMARKS_20261031.md) · [Acceptance criteria](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/ACCEPTANCE.zh-CN.md) (detailed reports are currently in Chinese).
+
+## 5. Reference vs latest benchmarks
+
+Fresh same-node measurements: **node040, 64 MPI × 1**, same compiler options and physical inputs. Both versions complete NSOC followed by one SOC step from their own checkpoints. Each version/size was measured once.
+
+![Reference and latest CPU time and physical memory versus atom count](https://raw.githubusercontent.com/zhangyan31415/openmx/experiments/cpu-d3-20261019/cpu/docs/benchmarks/20261106/latest_vs_reference.png)
+
+| MoTe₂ | Reference → latest total time | Reference → latest physical peak |
+|---|---:|---:|
+| 9.43°, 222 atoms | 184.86 → **86.42 s** | 73.59 → **25.22 GiB** |
+| 7.34°, 366 atoms | 552.02 → **147.25 s** | 110.99 → **35.35 GiB** |
+
+The reference is the bundled CPU4.0 source snapshot, built without optimized replacements. Symmetry constraints and SCF trajectories change together with the implementation; this is not a claim of identical raw operators. See the [full report](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/benchmarks/20261106/README.md), [data](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/benchmarks/20261106/measurements.csv) and [physical differences](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/benchmarks/20261106/physical_differences.json), including force errors exceeding the earlier physical gate. The two-point lines are not an extrapolated scaling law.
 
 ## Source layout and credits
 

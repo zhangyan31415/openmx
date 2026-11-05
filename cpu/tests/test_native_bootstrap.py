@@ -30,6 +30,8 @@ STUB = r'''
 #define MPI_MAX 3
 #define MPI_MIN 4
 static int mpi_comm_level1=0;
+static int openmp_threads_num=1;
+static int stress_flag=0,StressConsistency_flag=0;
 static int MPI_Comm_rank(int c,int *r){*r=0;return 0;}
 static int MPI_Allreduce(const void *a,void *b,int n,int t,int op,int c){memcpy(b,a,n*sizeof(int));return 0;}
 static int MPI_Bcast(void *a,int n,int t,int r,int c){return 0;}
@@ -75,7 +77,10 @@ from pathlib import Path
 p=argparse.ArgumentParser()
 for key in ('input','output','stage','environment-file'):
  p.add_argument('--'+key,required=True)
+p.add_argument('--threads',type=int,default=1)
+p.add_argument('--rank-pinned',type=int,choices=(0,1),default=0)
 a=p.parse_args()
+print('PARENT_THREADS='+str(a.threads),flush=True)
 assert Path(a.input).is_absolute()
 values={}
 for line in Path(a.input).read_text().splitlines():
@@ -104,6 +109,10 @@ else:
  output_enabled=values.get('hs.fileout','off').lower() in ('on','true','.true.','yes','ok')
  env.update(GSOC_COV_TOL='1e-5',GSOC='1',GSOC_BASIS=str(basis),
             GSOC_EXPORT_SYMMETRIZE='1' if output_enabled else '0',GSOC_PROJECT='1')
+ if values.get('test.route')=='legacy':
+  env.update(GSOC='0',C3='3',D3='1',INPUT_SYMMETRY_GROUP='D3',
+             INPUT_SYMMETRY_COV_TOL='1e-5',C3_BASIS=str(basis),
+             SOC_NATIVE_MAP=str(basis),SOC_NATIVE_GROUP='D3',SOC_TR='1',SOC_REAL='1')
 Path(a.environment_file).write_text(''.join('OPENMX_CPU_'+key+'='+v+'\n' for key,v in env.items()))
 '''
 
@@ -122,7 +131,7 @@ class NativeBootstrap(unittest.TestCase):
         if adapter.count(original) != 1:
             raise AssertionError('native adapter upstream include is not uniquely identifiable')
         adapter = adapter.replace(original, '#include "stock_stub.h"')
-        adapter += '\nint main(int n,char **v){if(n!=2)return 2;Input_std(v[1]);return 0;}\n'
+        adapter += '\nint main(int n,char **v){if(n!=2)return 2;const char*t=getenv("TEST_THREADS");if(t)openmp_threads_num=atoi(t);if(getenv("TEST_STRESS"))stress_flag=1;Input_std(v[1]);return 0;}\n'
         (cls.build/'adapter.c').write_text(adapter)
         (cls.build/'protocol.c').write_text(PROTOCOL)
         common = [compiler, '-std=gnu99', '-I', str(SOURCE), '-I', str(UPSTREAM)]
@@ -173,6 +182,22 @@ class NativeBootstrap(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('NSOC_SYM=unset GSOC=1', result.stdout)
         self.assertIn('PROJECT=1 EXPORT=1', result.stdout)
+
+    def test_native_threads_reach_serial_preparation_helper(self):
+        result = self.execute('scf.Symmetry on\n', {'TEST_THREADS':'4'})
+        self.assertEqual(result.returncode, 0, result.stderr)
+        log=next(self.work.glob('.openmx-symmetry-*/bootstrap.log')).read_text()
+        self.assertIn('PARENT_THREADS=4',log)
+
+    def test_verified_legacy_soc_profile_is_consumed(self):
+        result=self.execute('scf.Symmetry on\nscf.SpinOrbit.Coupling on\nHS.fileout on\ntest.route legacy\n')
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertIn('GSOC=0',result.stdout)
+
+    def test_stress_diagnostics_rejected_before_automatic_cache_selection(self):
+        result=self.execute('scf.Symmetry on\n',{'TEST_STRESS':'1'})
+        self.assertEqual(result.returncode,95)
+        self.assertIn('stress',result.stderr.lower())
 
     def test_stock_logical_aliases_select_soc_stage_and_hs_export(self):
         for value in ('on','true','.true.','yes','ok','TRUE'):

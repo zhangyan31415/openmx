@@ -12,4 +12,5 @@ Detailed guides are currently in Chinese:
 - [Input settings and H/S export](docs/INPUT_SYMMETRY.zh-CN.md).
 - [Execution, restart and multi-node layouts](docs/WORKFLOW.zh-CN.md).
 - [Native switch validation and SOC limitations](docs/NATIVE_SYMMETRY_VALIDATION_20261106.md).
+- [Fresh reference vs latest benchmark](docs/benchmarks/20261106/README.md), including figures and saved data.
 - [Timing and memory benchmarks](docs/BENCHMARKS_20261031.md), [acceptance criteria](docs/ACCEPTANCE.zh-CN.md).

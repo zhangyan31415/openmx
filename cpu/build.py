@@ -11,6 +11,7 @@ def runtime_resource_files():
  for directory in ('cpu/geometry','cpu/overrides/nsoc/metadata'):
   files.extend(p for p in (REPO/directory).rglob('*')if p.is_file()and p.suffix in ('.py','.json'))
  files.extend(REPO/'cpu/tools'/name for name in ('workflow.py','workflow_node.py','input_symmetry.py'))
+ files.append(REPO/'cpu/tools/examples/profile_templates.json')
  return sorted(set(files))
 
 def copy_runtime_resources(output):

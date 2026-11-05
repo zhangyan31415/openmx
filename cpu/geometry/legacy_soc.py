@@ -38,8 +38,8 @@ def _input_guard(text):
         _require(values.get(key)==val,'legacy SOC requires fixed nonmagnetic Gamma one-step c2n Cluster SOC: '+key)
     _require(values.get('scf.kgrid','1 1 1').split()==['1','1','1'],'legacy SOC requires Gamma')
     _require(values.get('md.type','nomd') in ('nomd','none'),'legacy SOC requires fixed geometry')
-    for key in ('scf.hubbard.u','scf.constraint.nc.spin','scf.zeeman.nc.spin','scf.zeeman.nc.orbital'):
-        _require(values.get(key,'off')=='off','legacy SOC does not support '+key)
+    for key in ('scf.hubbard.u','scf.constraint.nc.spin','scf.nc.zeeman.spin','scf.nc.zeeman.orbital'):
+        _require(values.get(key,'off') in ('off','no','false','.false.','ng'), 'legacy SOC does not support '+key)
 
 def _ordered_operations(raw,selected,group):
     """Revalidate mappings, then retain the historical +120deg-z gauge."""

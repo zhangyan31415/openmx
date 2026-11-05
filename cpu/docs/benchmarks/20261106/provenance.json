@@ -1,0 +1,207 @@
+{
+  "category": "fresh matched reference-vs-latest full NSOC plus own one-step SOC",
+  "archive_id": "openmx_latest_vs_reference_20261106",
+  "host": "node040",
+  "hardware": "Xeon Gold6530, 64 physical cores, SMT off",
+  "processes": "64MPI x1, CPUs0-63, Intel MPI shm",
+  "compiler": "oneAPI2022.3 / Intel MPI2021.7.1 / MKL2022.2.1 / CORE-AVX2, same options for both versions",
+  "reference": "bundled installed CPU4.0 source snapshot, stock profile; not authenticated pristine upstream distribution",
+  "latest": "unified build plus complete compatible automatic memory/solver defaults, scf.Symmetry on; legacy projected D3 SOC",
+  "settings": {
+    "cutoff_Ry": 150,
+    "temperature_K": 300,
+    "SCF_criterion": 1e-07,
+    "StartPulay": 15,
+    "History": 30,
+    "fileout_level": 0
+  },
+  "input_control": "identical per-stage scalar parameters and complete structure/basis blocks; only latest adds scf.Symmetry on",
+  "memory": "whole-stage systemd cgroup memory.peak; shared pages counted once, includes task-charged cache and MPI launcher; workflow peak is max(NSOC,SOC), not their sum",
+  "timing": "complete native Elapsed.Time, excludes MPI launch; launch timing retained privately",
+  "repeats_per_case_and_version": 1,
+  "not_claimed": [
+    "asymptotic scaling law or confidence intervals",
+    "raw H/S operator equality across projected and unprojected runs",
+    "arbitrary material certification"
+  ],
+  "records": [
+    {
+      "configuration": "reference",
+      "angle_deg": 9.43,
+      "atoms": 222,
+      "stages": {
+        "nsoc": {
+          "run_id": "MoTe2_943_reference/nsoc",
+          "input_sha256": "058b69e0e9d5f1178b6725ccec4ae4fa11eafae8db7cb4bfe4b984fb20e40e3d",
+          "native_command": [
+            "mpirun",
+            "-np",
+            "64",
+            "<binary>",
+            "input.dat",
+            "-nt",
+            "1"
+          ],
+          "normal_exit": true,
+          "source_run_metadata_sha256": "39e5506a55ba47ed5f126fa094089ca5563b4f3fd84b4c8e6e6282c01cfb8ad1"
+        },
+        "soc": {
+          "run_id": "MoTe2_943_reference/soc",
+          "input_sha256": "77800fa8b7d5bafb214969d21cc127ef9fa879d757eefb3dd4e6615d893997cd",
+          "native_command": [
+            "mpirun",
+            "-np",
+            "64",
+            "<binary>",
+            "input.dat",
+            "-nt",
+            "1"
+          ],
+          "normal_exit": true,
+          "source_run_metadata_sha256": "fe08407448d56e8359fe0e1a57b4c17255509a0c188b82c870d2128dcc293720"
+        }
+      }
+    },
+    {
+      "configuration": "latest",
+      "angle_deg": 9.43,
+      "atoms": 222,
+      "stages": {
+        "nsoc": {
+          "run_id": "MoTe2_943_release/nsoc",
+          "input_sha256": "b752ae35aa7ae70d3bfd63d559b9d6527df7f77d2ecab8ca55a823b5bb032812",
+          "native_command": [
+            "mpirun",
+            "-np",
+            "64",
+            "<binary>",
+            "input.dat",
+            "-nt",
+            "1"
+          ],
+          "normal_exit": true,
+          "source_run_metadata_sha256": "95aa889bd56b0d7772bd252ce4ae8e31ae5b6fe8c3f229f047f48ae992c25b7f"
+        },
+        "soc": {
+          "run_id": "MoTe2_943_release/soc",
+          "input_sha256": "92ad2d881789f84640b90a39af420e9427cdd138454b64a6210def936a6c5450",
+          "native_command": [
+            "mpirun",
+            "-np",
+            "64",
+            "<binary>",
+            "input.dat",
+            "-nt",
+            "1"
+          ],
+          "normal_exit": true,
+          "source_run_metadata_sha256": "46dac0c751f92b7e4b73d1a60cf70a92168928bec7db19806f22cdd505a0957a"
+        }
+      }
+    },
+    {
+      "configuration": "reference",
+      "angle_deg": 7.34,
+      "atoms": 366,
+      "stages": {
+        "nsoc": {
+          "run_id": "MoTe2_734_reference/nsoc",
+          "input_sha256": "d5003b297bddd03966922eb56bdf84c783741182386dff1a4c3a27382efc0248",
+          "native_command": [
+            "mpirun",
+            "-np",
+            "64",
+            "<binary>",
+            "input.dat",
+            "-nt",
+            "1"
+          ],
+          "normal_exit": true,
+          "source_run_metadata_sha256": "3da2f213bb06acb9b684d60ee050087d493d74cf41cbd561fa18e4034d06f567"
+        },
+        "soc": {
+          "run_id": "MoTe2_734_reference/soc",
+          "input_sha256": "12669162a7b7623f7bc7d9141236fa13d69cd1cf78ea3806198982aabc6b66b1",
+          "native_command": [
+            "mpirun",
+            "-np",
+            "64",
+            "<binary>",
+            "input.dat",
+            "-nt",
+            "1"
+          ],
+          "normal_exit": true,
+          "source_run_metadata_sha256": "e0ed761fb778be405785b5eedf36cb814553636ed979f23ac84602455a465a05"
+        }
+      }
+    },
+    {
+      "configuration": "latest",
+      "angle_deg": 7.34,
+      "atoms": 366,
+      "stages": {
+        "nsoc": {
+          "run_id": "MoTe2_734_release/nsoc",
+          "input_sha256": "04ccc689e544f5cfe6e21f6c165e7f19bb8d1ea708f2a1264490f6741077310e",
+          "native_command": [
+            "mpirun",
+            "-np",
+            "64",
+            "<binary>",
+            "input.dat",
+            "-nt",
+            "1"
+          ],
+          "normal_exit": true,
+          "source_run_metadata_sha256": "a9a961cc5a0006fa6825b7a808484367de9709d03eec1ba7f1b15c87f9b74263"
+        },
+        "soc": {
+          "run_id": "MoTe2_734_release/soc",
+          "input_sha256": "1bdbbe629acbacd45c6f2bfe0800b4f834d761807a305d693ad55a0ee666e4d5",
+          "native_command": [
+            "mpirun",
+            "-np",
+            "64",
+            "<binary>",
+            "input.dat",
+            "-nt",
+            "1"
+          ],
+          "normal_exit": true,
+          "source_run_metadata_sha256": "a7c221392fd6b16f97c1272b6a579d08fbb30283ec8b7446b7502361f5725e73"
+        }
+      }
+    }
+  ],
+  "latest_source_sha256": {
+    "cpu/overrides/nsoc/source/Input_std.symmetry.c": "bf884923e41f48a8fe8327b0f7ea747605460040bfdf64e15624b973478e821e",
+    "cpu/overrides/nsoc/source/cpu_input_bootstrap.h": "dd66de83bbae2849a751f1dae11fed59874c164c0b577ee4bcabcd0931af0148"
+  },
+  "latest_runtime_resources_sha256": {
+    "cpu/geometry/bootstrap.py": "38f6cd538c33a6ec97673a8ad2459129d2cda5b0a968f2566bcd2a193a06d22f",
+    "cpu/geometry/comp2real.json": "b8d6445ce3005d77923936b251a3c59cbe85b29d5fed8a3073867c594fea105d",
+    "cpu/geometry/generic_soc_export.py": "f7ffc58672dedc85922256b99e6217e96e98a58622ab45197472f37b73b82517",
+    "cpu/geometry/legacy_helpers/ORIGINS.json": "c96f5d9c90d4c5906b2e9d8411361945da6741ea6a20e29fbba2dc259b96fcad",
+    "cpu/geometry/legacy_helpers/d3_fast_profile.json": "009e75bf53e22c69b692ad889a5fd52cbd356389cb8f6828468072fae0776bac",
+    "cpu/geometry/legacy_helpers/soc_spinor.py": "88a82c69714d66174a7cd05eca4e1cfdd07da453ad2dcd141e48018a48394847",
+    "cpu/geometry/legacy_soc.py": "91c78115349e9b83fc284c0a0b1c89a85fc43283d8737380271782429c4f6c79",
+    "cpu/geometry/metadata/ORIGINS.json": "ad80dbdc66f486ec50850b188312e7ec45f7b58d11f46312b9c3251acbe52dd2",
+    "cpu/geometry/metadata/neighbor_support.py": "274d3b7756dff38b11a85b33220ab87e81803241c34cf7a1237d599696aaee6d",
+    "cpu/geometry/metadata/prepare_nsoc_auto.py": "72d7f546f72ca93ef1547cbdedaacf32b4c9df12d842b9d3acf5194251810ff2",
+    "cpu/geometry/metadata/prepare_nsoc_d3.py": "919e6bf69ea7f92068f829dca1916db038d7fffbaf4217cb5bdae044f53f95d2",
+    "cpu/geometry/metadata/prepare_realspace_d3.py": "c5962d281fe245ecb6f7a904ffab33138df619e02aefd767d37e76ce8a2d1b68",
+    "cpu/geometry/metadata/symmetry_detect.py": "88111612e42e84fbe10a19fe3461cdfae49ab1ad9ba44ddab7f386c5d275c63a",
+    "cpu/geometry/openmx_orbitals.py": "3682a45effbbd619d0199a7ea557c9a59d93969c194c87d8db2057b9d861c595",
+    "cpu/geometry/prepare.py": "d171b1f15b7d23705bc9abf7594f74f86ace65e538690df7f8814ab28fbe8933",
+    "cpu/geometry/prepare_soc_basis.py": "3eb51304d3a27b0accebb7d51b17f0acb64619b86f6e91c9586c2be5b6036231",
+    "cpu/overrides/nsoc/metadata/ORIGINS.json": "34e070d656cedad5f446519821707a1c3f2aa74800057b6d3734cfe94f3e0036",
+    "cpu/overrides/nsoc/metadata/c3_pair_math.py": "b2408e2deda0d8f28116ac34542392e0491884746921bde9070d871a0a1bdcad",
+    "cpu/overrides/nsoc/metadata/prepare_paired_c3.py": "61fe08c015b5f06b7e77d93c6f7697deee5fb17830f9e97a541f0992feefd9bc",
+    "cpu/overrides/nsoc/metadata/prepare_paired_d3.py": "cd73af88c5d25fc4067c3f490b89be7de3aecfd04f3b69d557f23c987b53d3d8",
+    "cpu/tools/examples/profile_templates.json": "3e31dc9f7f6fa9fe3c54520c7203202dcb1ce5894c87bf4e10a2fdb558c6271d",
+    "cpu/tools/input_symmetry.py": "da3c09d82693c3f788e5ff76ebe2edf074013316ca6b2b3507d05549dd8337ac",
+    "cpu/tools/workflow.py": "d1f2e40ec3d580ca6e472c207837322adbe175367a4b134b0f88e9efddbb899e",
+    "cpu/tools/workflow_node.py": "db57ebc27800f6a476697f3b84da6e75b5558b3f3cee5ae698a2e12b410587e4"
+  }
+}

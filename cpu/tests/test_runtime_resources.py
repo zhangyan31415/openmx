@@ -29,6 +29,7 @@ class RuntimeResources(unittest.TestCase):
             self.assertTrue((root/'cpu/geometry/metadata/symmetry_detect.py').is_file())
             self.assertTrue((root/'cpu/overrides/nsoc/metadata/prepare_paired_d3.py').is_file())
             self.assertTrue((root/'cpu/tools/workflow.py').is_file())
+            self.assertTrue((root/'cpu/tools/examples/profile_templates.json').is_file())
             self.assertFalse((root/'cpu/vendor').exists())
 
 

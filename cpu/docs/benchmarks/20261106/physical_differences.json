@@ -1,0 +1,26 @@
+{
+  "943": {
+    "nsoc": {
+      "energy_delta_Ha": 0.0005416310232249089,
+      "energy_error_meV_atom": 0.06638977917019231,
+      "max_force_vector_difference_meV_A": 12.444587201443415
+    },
+    "soc": {
+      "energy_delta_Ha": 0.0005413284088717774,
+      "energy_error_meV_atom": 0.06635268657538762,
+      "max_force_vector_difference_meV_A": 12.366230043865336
+    }
+  },
+  "734": {
+    "nsoc": {
+      "energy_delta_Ha": 0.0008556283828511368,
+      "energy_error_meV_atom": 0.06361430166336715,
+      "max_force_vector_difference_meV_A": 12.482493142439656
+    },
+    "soc": {
+      "energy_delta_Ha": 0.0008553019288228825,
+      "energy_error_meV_atom": 0.06359003044299998,
+      "max_force_vector_difference_meV_A": 12.403844245207662
+    }
+  }
+}

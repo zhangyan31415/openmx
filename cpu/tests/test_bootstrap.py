@@ -31,6 +31,7 @@ scf.SpinPolarization off
 scf.XcType GGA-PBE
 scf.energycutoff 150
 scf.ElectronicTemperature 300
+scf.Mixing.Type RMM-DIIS
 scf.Mixing.History 30
 scf.Mixing.StartPulay 15
 scf.maxIter 40
@@ -54,6 +55,86 @@ Atoms.SpeciesAndCoordinates>
 
 
 class Bootstrap(unittest.TestCase):
+    def test_simple_mixing_does_not_activate_incompatible_memory_paths(self):
+        m=helper()
+        for text in (INPUT.replace('RMM-DIIS','Simple'), INPUT.replace('scf.Mixing.Type RMM-DIIS\n','')):
+            with tempfile.TemporaryDirectory() as d:
+                path,out=self.fixture(Path(d),text)
+                result=m.bootstrap(path,out,'nsoc',out/'environment.txt',runtime_cwd=Path(d))
+                for key in ('LOCAL_HS','LOCAL_OLP','GRID_FIELDS_SHARED','VNA_SHARED','NSOC_RELEASE_SCF_BUFFERS','NSOC_OWNER_DM'):
+                    self.assertNotEqual(result['environment'].get('OPENMX_CPU_'+key), '1', key)
+
+    def test_symmetry_history_preserves_non30_user_history(self):
+        m=helper();api=m.module('history_api',CPU/'tools/input_symmetry.py');q=api.request({'scf.symmetry':'on'})
+        prepared={'selected_group':'D3','SOC_route':'legacy','NSOC_environment_additions':{'OPENMX_CPU_REALSPACE_D3':'scf'},'SOC_environment_additions':{}}
+        for history in ('15','30','35',None):
+            values={'scf.eigenvaluesolver':'Cluster','scf.mixing.type':'rmm-diis'}
+            if history is not None:values['scf.mixing.history']=history
+            env=m.profiles(prepared,q,api,values=values)['nsoc']
+            self.assertEqual(env.get('OPENMX_CPU_NSOC_SYM_HISTORY','0'),'1' if history=='30' else '0')
+
+    def test_native_zeeman_key_keeps_specialized_soc_disabled(self):
+        m=helper()
+        self.assertEqual(m.preferred_soc_route({'scf.eigenvaluesolver':'cluster','scf.mixing.type':'rmm-diis','scf.nc.zeeman.spin':'on'}),'generic')
+    def test_memory_optimizations_are_automatic_for_scalar_cluster(self):
+        m = helper()
+        with tempfile.TemporaryDirectory() as d:
+            path, out = self.fixture(Path(d))
+            env = m.bootstrap(path, out, 'nsoc', out/'environment.txt', runtime_cwd=Path(d))['environment']
+            for name in ('NSOC_ASSEMBLY_WORKSPACE', 'NSOC_OWNER_DM', 'NSOC_IMAG_COMPACT',
+                         'NSOC_COMPACT_WORK1', 'NSOC_H_HISTORY_COMPACT', 'NSOC_EIGEN_SCRATCH',
+                         'GRID_SHARED', 'GRID_FIELDS_SHARED', 'LOCAL_HS', 'LOCAL_OLP',
+                         'NSOC_RELEASE_SCF_BUFFERS', 'H_GRID_BLAS3'):
+                self.assertEqual(env['OPENMX_CPU_'+name], '1', name)
+            self.assertEqual(env['OPENMX_CPU_NSOC_DIRECT_SECTORS'], '0')
+
+    def test_threaded_profile_preserves_memory_savings_without_single_thread_caches(self):
+        m = helper()
+        with tempfile.TemporaryDirectory() as d:
+            path, out = self.fixture(Path(d))
+            result = m.bootstrap(path, out, 'nsoc', out/'environment.txt', runtime_cwd=Path(d), threads=4)
+            env = result['environment']
+            self.assertEqual(env['OPENMX_CPU_GRID_SHARED'], '1')
+            self.assertEqual(env['OPENMX_CPU_NSOC_OWNER_DM'], '1')
+            self.assertEqual(env['OPENMX_CPU_GRID_NUMA'], '0')
+            self.assertEqual(env['OPENMX_CPU_VNA_SHARED'], '0')
+            self.assertEqual(result['parent_threads'], 4)
+
+    def test_numa_replica_cache_requires_uniform_single_cpu_rank_binding(self):
+        m=helper()
+        for pinned in (False, True):
+            with self.subTest(pinned=pinned), tempfile.TemporaryDirectory() as d:
+                path,out=self.fixture(Path(d))
+                result=m.bootstrap(path,out,'nsoc',out/'environment.txt',runtime_cwd=Path(d),ranks_single_cpu_pinned=pinned)
+                self.assertEqual(result['environment']['OPENMX_CPU_GRID_NUMA'], '1' if pinned else '0')
+
+    def test_auto_soc_route_selects_verified_hexagonal_path_only(self):
+        m = helper()
+        import numpy as np
+        values = {'scf.eigenvaluesolver': 'Cluster', 'scf.mixing.type':'rmm-diis'}
+        cell = np.array([[12., 0, 0], [-6, 6*np.sqrt(3), 0], [0, 0, 20.]])
+        self.assertEqual(m.preferred_soc_route(values), 'auto')
+        self.assertEqual(m.preferred_soc_route({**values, 'scf.symmetry.covariancetolerance': '1e-6'}), 'generic')
+        prep=m.module('route_prepare', CPU/'geometry/prepare.py')
+        structure={'cell':cell}
+        self.assertEqual(prep.automatic_soc_route('D3', structure, 1e-5), 'legacy')
+        self.assertEqual(prep.automatic_soc_route('D2', structure, 1e-5), 'generic')
+        self.assertEqual(prep.automatic_soc_route('D3', {'cell':np.eye(3)}, 1e-5), 'generic')
+
+    def test_native_d3_defaults_use_complete_legacy_soc_profile(self):
+        m = helper()
+        text = INPUT.replace('PointGroup D2', 'PointGroup D3').replace('0 14 0', '-6 10.392304845413264 0')
+        text = text.replace('scf.SpinPolarization off', 'scf.SpinPolarization nc\nscf.SpinOrbit.Coupling on\nscf.restart c2n').replace('scf.maxIter 40', 'scf.maxIter 1')
+        with tempfile.TemporaryDirectory() as d:
+            path, out = self.fixture(Path(d), text)
+            result = m.bootstrap(path, out, 'soc', out/'environment.txt', runtime_cwd=Path(d))
+            env = result['environment']
+            self.assertEqual(result['SOC_route'], 'legacy')
+            for key in ('GRID_SHARED','GRID_FIELDS_SHARED','SOC_COMPACT','OWNER_SPARSE','SOC_TR','SOC_REAL','HNL_BATCH'):
+                self.assertEqual(env['OPENMX_CPU_'+key], '1', key)
+            self.assertEqual(env['OPENMX_CPU_C3'], '3')
+            self.assertEqual(env['OPENMX_CPU_GSOC'], '0')
+
     def test_native_logical_aliases_match_stock_inputtools(self):
         m = helper()
         for value in ('on', 'yes', 'true', '.true.', 'ok', 'ON'):

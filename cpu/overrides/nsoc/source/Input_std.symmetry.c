@@ -25,6 +25,10 @@ void Input_std(char *file) {
   if(!bad){
     has_toggle=input_string("scf.Symmetry",toggle,"off");
     enabled=!strcasecmp(toggle,"on");
+    if(enabled && (stress_flag || StressConsistency_flag)){
+      if(!rank)fprintf(stderr,"CPU_INPUT_SYMMETRY_REJECT: stress diagnostics are outside the fixed-geometry symmetry scope\n");
+      bad=1;
+    }
     if(has_toggle<0 || (strcasecmp(toggle,"on") && strcasecmp(toggle,"off")))bad=1;
     has_mode=input_string("scf.Symmetry.Mode",mode,enabled?"Auto":"Off");
     if(has_mode<0 || (has_toggle>0 && ((!enabled && strcasecmp(mode,"off")) ||
@@ -56,9 +60,10 @@ void Input_std(char *file) {
     MPI_Allreduce(&bad,&any,1,MPI_INT,MPI_MAX,mpi_comm_level1);
     if(!any && enabled){
       char *environment=NULL,error[PATH_MAX+256]="";
-      int length=0,status=0;
+      int length=0,status=0,pinned=cpu_bootstrap_single_cpu_affinity(),all_pinned;
+      MPI_Allreduce(&pinned,&all_pinned,1,MPI_INT,MPI_MIN,mpi_comm_level1);
       if(!rank){
-        status=cpu_bootstrap_prepare(file,soc?"soc":"nsoc",&environment,error,sizeof(error));
+        status=cpu_bootstrap_prepare(file,soc?"soc":"nsoc",openmp_threads_num,all_pinned,&environment,error,sizeof(error));
         if(!status)length=(int)strlen(environment)+1;
         else fprintf(stderr,"CPU_INPUT_SYMMETRY_REJECT: %s\n",error);
       }
@@ -89,20 +94,32 @@ void Input_std(char *file) {
       }
     }
     if(strcasecmp(mode,"off")){
-      const char *basis=getenv(soc?"OPENMX_CPU_GSOC_BASIS":"OPENMX_CPU_NSOC_BASIS");
+      int legacy=soc && cpu_input_env_equal("OPENMX_CPU_C3","3") && !cpu_input_env_equal("OPENMX_CPU_GSOC","1");
+      const char *basis=getenv(legacy?"OPENMX_CPU_C3_BASIS":soc?"OPENMX_CPU_GSOC_BASIS":"OPENMX_CPU_NSOC_BASIS");
       const char *tol=getenv("OPENMX_CPU_INPUT_SYMMETRY_TOL");
-      const char *cov=getenv(soc?"OPENMX_CPU_GSOC_COV_TOL":"OPENMX_CPU_NSOC_GENERIC_COV_TOL");
+      const char *cov=getenv(legacy?"OPENMX_CPU_INPUT_SYMMETRY_COV_TOL":soc?"OPENMX_CPU_GSOC_COV_TOL":"OPENMX_CPU_NSOC_GENERIC_COV_TOL");
       const char *selected=getenv("OPENMX_CPU_INPUT_SYMMETRY_GROUP");
       char *end=NULL;double actual=tol?strtod(tol,&end):NAN;
       if(!cpu_input_env_equal("OPENMX_CPU_INPUT_SYMMETRY_MODE",mode) ||
          !cpu_input_env_equal("OPENMX_CPU_INPUT_SYMMETRY_EXPORT",policy) ||
          !tol || !end || *end || !isfinite(actual) || actual!=tolerance || !selected ||
          (!strcasecmp(mode,"user") && strcasecmp(group,selected)) ||
-         !cpu_input_env_equal(soc?"OPENMX_CPU_GSOC":"OPENMX_CPU_NSOC_SYM","1") ||
+         (!legacy && !cpu_input_env_equal(soc?"OPENMX_CPU_GSOC":"OPENMX_CPU_NSOC_SYM","1")) ||
          !basis || basis[0]!='/')bad=1;
       end=NULL;actual=cov?strtod(cov,&end):NAN;
       if(!cov||!end||*end||!isfinite(actual)||actual!=covariance)bad=1;
       if(basis){FILE *f=fopen(basis,"rb");if(!f)bad=1;else fclose(f);}
+      if(legacy){
+        const char *map=getenv("OPENMX_CPU_SOC_NATIVE_MAP");FILE *f=NULL;
+        if(!selected || (strcmp(selected,"C3")&&strcmp(selected,"D3")) ||
+           strcasecmp(policy,"symmetrize") ||
+           !cpu_input_env_equal("OPENMX_CPU_SOC_NATIVE_GROUP",selected?selected:"") ||
+           !cpu_input_env_equal("OPENMX_CPU_D3",selected&&!strcmp(selected,"D3")?"1":"0") ||
+           !map || map[0]!='/' || !(f=fopen(map,"rb")))bad=1;
+        if(f)fclose(f);
+        if(selected&&!strcmp(selected,"C3") &&
+           (cpu_input_env_equal("OPENMX_CPU_SOC_TR","1")||cpu_input_env_equal("OPENMX_CPU_SOC_REAL","1")))bad=1;
+      }
       if(!soc){
         const char *rs=getenv("OPENMX_CPU_REALSPACE_D3");
         int active=rs&&(!strcmp(rs,"scf")||!strcmp(rs,"1"));
@@ -114,10 +131,10 @@ void Input_std(char *file) {
           if(f)fclose(f);
         }else if(rs&&strcmp(rs,"off")&&strcmp(rs,"0"))bad=1;
       }
-      if(!strcasecmp(policy,"symmetrize") && soc &&
+      if(!strcasecmp(policy,"symmetrize") && soc && !legacy &&
          (!cpu_input_env_equal("OPENMX_CPU_GSOC_EXPORT_SYMMETRIZE",hs_fileout?"1":"0") ||
           !cpu_input_env_equal("OPENMX_CPU_GSOC_PROJECT","1")))bad=1;
-      if(!strcasecmp(policy,"raw") && soc &&
+      if(!strcasecmp(policy,"raw") && soc && !legacy &&
          !cpu_input_env_equal("OPENMX_CPU_GSOC_EXPORT_SYMMETRIZE","0") &&
          getenv("OPENMX_CPU_GSOC_EXPORT_SYMMETRIZE"))bad=1;
     }else if(strcasecmp(policy,"raw"))bad=1;

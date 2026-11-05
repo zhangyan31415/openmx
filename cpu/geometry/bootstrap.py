@@ -97,10 +97,15 @@ def check_scope(values, blocks, stage):
         raise ValueError('native symmetry requires scf.eigen.lib elpa1 or elpa2')
     if values.get('md.type', 'nomd').lower() not in ('nomd', 'none'):
         raise ValueError('native symmetry requires fixed geometry/no MD')
+    if (values.get('orbitalopt.method','off').lower() != 'off' or
+            native_logical(values.get('scf.mixing.control.temp','off'))):
+        raise ValueError('native symmetry requires uncontracted orbitals and fixed electronic temperature')
     spin = values.get('scf.spinpolarization', 'off').lower()
     spinorbit = native_logical(values.get('scf.spinorbit.coupling', 'off'))
     if stage == 'nsoc' and (spin != 'off' or spinorbit):
         raise ValueError('NSOC preparation requires nonmagnetic scalar input')
+    if stage == 'nsoc' and values.get('scf.restart','off').lower() not in ('off','no','false','.false.','ng'):
+        raise ValueError('native symmetry NSOC requires a fresh calculation with restart off')
     if stage == 'soc' and (spin != 'nc' or not spinorbit or
             values.get('scf.restart', 'off').lower() != 'c2n' or
             int(values.get('scf.maxiter', '40')) != 1):
@@ -113,29 +118,98 @@ def check_scope(values, blocks, stage):
             raise ValueError('native symmetry requires nonmagnetic initial atom populations')
 
 
-def profiles(prepared, q, api):
+def fast_memory_scope(values):
+    """Conservative intersection of the verified sparse/cache native guards."""
+    off = ('off','no','false','.false.','ng','0','none')
+    if (values.get('scf.eigenvaluesolver', '').lower() not in ('cluster','band') or
+            values.get('scf.mixing.type', 'simple').lower() != 'rmm-diis' or
+            values.get('orbitalopt.method','off').lower() != 'off' or
+            not native_logical(values.get('scf.proexpn.vna','on')) or
+            int(values.get('level.of.fileout','1')) >= 2):
+        return False
+    blocked = ('scf.hubbard.u','scf.constraint.nc.spin','scf.nc.zeeman.spin',
+               'scf.nc.zeeman.orbital','scf.core.hole','xmcd.calc','partial.charge',
+               'cddf.start','lnao.calc.flag','lnbo.calc.flag','nbo.switch',
+               'voronoi.charge','voronoi.orbital.moment','dos.fileout','dosgauss.fileout',
+               'lno.flag','cwf.calc','mo.fileout','xanes.calc','dm.export',
+               'scf.stress.tensor','scf.mixing.control.temp')
+    if any(values.get(key,'off').lower() not in off for key in blocked):
+        return False
+    return all(float(x.replace('D','E').replace('d','e')) == 0
+               for x in values.get('scf.electric.field','0 0 0').split())
+
+
+def preferred_soc_route(values):
+    # Explicit advanced covariance requests retain the generic raw-H/S gate.
+    if (values.get('scf.eigenvaluesolver', '').lower() != 'cluster' or not fast_memory_scope(values) or
+            'scf.symmetry.covariancetolerance' in values):
+        return 'generic'
+    return 'auto'
+
+
+def profiles(prepared, q, api, *, threads=1, values=None, ranks_single_cpu_pinned=False):
     group = prepared['selected_group']
+    templates = json.loads((CPU/'tools/examples/profile_templates.json').read_text())['templates']
+    scalar_template = 'D3_legacy_fast_candidate' if group == 'D3' else 'C3_gsoc'
+    def defaults(template, stage):
+        return {k:v for k,v in templates[template]['profiles'][stage]['environment'].items()
+                if '${' not in v}
     common = {'OPENMX_CPU_INPUT_SYMMETRY_MODE': q['mode'],
               'OPENMX_CPU_INPUT_SYMMETRY_GROUP': group,
               'OPENMX_CPU_INPUT_SYMMETRY_TOL': format(q['tolerance'], '.17g'),
               'OPENMX_CPU_INPUT_SYMMETRY_EXPORT': q['export_policy'],
+              'OPENMX_CPU_INPUT_SYMMETRY_COV_TOL': format(q['covariance_tolerance'], '.17g'),
               'OPENMX_CPU_DM_BLAS3': '1'}
-    nenv = {**prepared['NSOC_environment_additions'], **common,
+    nenv = {**defaults(scalar_template, 'nsoc'), **prepared['NSOC_environment_additions'], **common,
             'OPENMX_CPU_NSOC_GENERIC_COV_TOL': format(q['covariance_tolerance'], '.17g'),
             'OPENMX_CPU_NSOC_WARM_STEPS': '0', 'OPENMX_CPU_NSOC_RESET_DIIS': '0',
             'OPENMX_CPU_NSOC_RAW_RESET_AT': '0',
+            'OPENMX_CPU_NSOC_PHASE': '0',
             'OPENMX_CPU_NSOC_SPARSE_U': '1', 'OPENMX_CPU_NSOC_SPARSE_BACK': '1',
             **api.return_optimizations(group)}
+    # Python stays serial; select native caches from the actual parent -nt.
+    nenv['OPENMX_CPU_GRID_NUMA'] = '1' if threads == 1 and ranks_single_cpu_pinned else '0'
+    if threads > 1:
+        nenv['OPENMX_CPU_VNA_SHARED'] = '0'
+    values = values or {}
+    fast_memory = fast_memory_scope(values)
+    if not fast_memory:
+        safe = set(prepared['NSOC_environment_additions']) | set(common) | set(api.return_optimizations(group))
+        safe.update('OPENMX_CPU_NSOC_'+key for key in
+                    ('GENERIC_COV_TOL','WARM_STEPS','RESET_DIIS','RAW_RESET_AT','PHASE','SPARSE_U','SPARSE_BACK'))
+        nenv = {k:v for k,v in nenv.items() if k in safe}
+    if int(values.get('scf.mixing.history','5')) != 30 or q['hamiltonian_policy'] != 'symmetrize':
+        nenv['OPENMX_CPU_NSOC_SYM_HISTORY'] = '0'
+    if q['hamiltonian_policy'] != 'symmetrize':
+        nenv.update(OPENMX_CPU_NSOC_REPRESENTATIVE_DM='0', OPENMX_CPU_NSOC_REP_TAIL_BOUND='0')
     if q['export_policy'] == 'symmetrize' and q['hamiltonian_policy'] == 'free':
         nenv['OPENMX_CPU_REALSPACE_D3'] = 'export'
-    senv = {**prepared['SOC_environment_additions'], **common,
-            'OPENMX_CPU_GSOC_PROJECT': '1' if q['export_policy'] == 'symmetrize' else '0',
-            'OPENMX_CPU_GSOC_COV_TOL': format(q['covariance_tolerance'], '.17g'),
-            'OPENMX_CPU_GSOC_GEOMETRY_TOL_ANG': format(q['tolerance'], '.17g')}
+    if prepared['SOC_route'] == 'legacy':
+        senv = {**defaults('D3_legacy_fast_candidate', 'soc'),
+                **prepared['SOC_environment_additions'], **common}
+        senv.update(OPENMX_CPU_GSOC='0', OPENMX_CPU_GSOC_COMPACT='0')
+        if group == 'C3':
+            senv.update(OPENMX_CPU_D3='0', OPENMX_CPU_SOC_TR='0', OPENMX_CPU_SOC_REAL='0')
+    else:
+        template = group+'_gsoc' if group in ('D2','C2') else 'C3_gsoc'
+        senv = {**defaults(template, 'soc'), **prepared['SOC_environment_additions'], **common,
+                'OPENMX_CPU_GSOC_PROJECT': '1' if q['export_policy'] == 'symmetrize' else '0',
+                'OPENMX_CPU_GSOC_COV_TOL': format(q['covariance_tolerance'], '.17g'),
+                'OPENMX_CPU_GSOC_GEOMETRY_TOL_ANG': format(q['tolerance'], '.17g')}
+    senv['OPENMX_CPU_GRID_NUMA'] = '0'
+    if not fast_memory:
+        senv = {**prepared['SOC_environment_additions'], **common,
+                'OPENMX_CPU_GSOC_PROJECT': '1' if q['export_policy']=='symmetrize' else '0',
+                'OPENMX_CPU_GSOC_COV_TOL': format(q['covariance_tolerance'], '.17g'),
+                'OPENMX_CPU_GSOC_GEOMETRY_TOL_ANG': format(q['tolerance'], '.17g')}
+    if int(values.get('scf.mixing.startpulay','6')) < 4:
+        senv['OPENMX_CPU_ONESTEP_HISTORY'] = '0'
     return {'nsoc': nenv, 'soc': senv}
 
 
-def bootstrap(input_path, output, stage, environment_file, *, runtime_cwd=None):
+def bootstrap(input_path, output, stage, environment_file, *, runtime_cwd=None, threads=1, ranks_single_cpu_pinned=False):
+    if isinstance(threads, bool) or not isinstance(threads, int) or threads < 1:
+        raise ValueError('native thread count must be a positive integer')
     input_path = Path(input_path).resolve(strict=True)
     out = Path(output).resolve(strict=True)
     envfile = Path(environment_file).absolute()
@@ -151,7 +225,8 @@ def bootstrap(input_path, output, stage, environment_file, *, runtime_cwd=None):
                   'actual_input_modified': False, 'runtime_cwd': str(cwd),
                   'hostname': socket.gethostname(), 'python': sys.executable,
                   'environment_prefix': sys.prefix, 'command': list(sys.argv),
-                  'helper_sha256': sha(__file__), 'helper_threads': 1,
+                  'helper_sha256': sha(__file__), 'helper_threads': 1, 'parent_threads': threads,
+                  'ranks_single_cpu_pinned': bool(ranks_single_cpu_pinned),
                   'native_calculation_started': False,
                   'canonical_inputs_are_metadata_only': True}
     try:
@@ -194,11 +269,11 @@ def bootstrap(input_path, output, stage, environment_file, *, runtime_cwd=None):
         with preparation_log.open('x') as stream, contextlib.redirect_stdout(stream):
             prepared = prepare.prepare(npath, spath, out/'metadata', q['group'],
                         atom_tol=q['tolerance'], project_nsoc=q['hamiltonian_policy'] == 'symmetrize',
-                        soc_route='generic', export_policy=q['export_policy'],
+                        soc_route=preferred_soc_route(values) if q['export_policy']=='symmetrize' else 'generic', export_policy=q['export_policy'],
                         detection_mode=q['mode'], operations_file=ops)
-        env = profiles(prepared, q, api)[stage]
+        env = profiles(prepared, q, api, threads=threads, values=values, ranks_single_cpu_pinned=ranks_single_cpu_pinned)[stage]
         export_requested=native_logical(values.get('hs.fileout','off'))
-        if stage=='soc' and not export_requested:
+        if stage=='soc' and prepared['SOC_route']=='generic' and not export_requested:
             # Preserve the projected solve without activating a file-export
             # hook when the native input did not request an H/S file.
             env['OPENMX_CPU_GSOC_EXPORT_SYMMETRIZE']='0'
@@ -209,7 +284,7 @@ def bootstrap(input_path, output, stage, environment_file, *, runtime_cwd=None):
                 raise ValueError('unsafe native environment record: '+key)
         if sha(input_path) != provenance['actual_input_sha256']:
             raise ValueError('actual input changed while symmetry metadata was being prepared')
-        provenance.update(status='prepared', request=q, selected_group=prepared['selected_group'],
+        provenance.update(status='prepared', request=q, selected_group=prepared['selected_group'], SOC_route=prepared['SOC_route'],
                           actual_HS_export_requested=export_requested,
                           environment=env, environment_file=str(envfile),
                           canonical_inputs={k: {'path': str(p), 'sha256': sha(p)}
@@ -236,9 +311,12 @@ def main():
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--stage', choices=('nsoc', 'soc'), required=True)
     parser.add_argument('--environment-file', type=Path, required=True)
+    parser.add_argument('--threads', type=int, default=1)
+    parser.add_argument('--rank-pinned', type=int, choices=(0,1), default=0)
     args = parser.parse_args()
     try:
-        bootstrap(args.input, args.output, args.stage, args.environment_file)
+        bootstrap(args.input, args.output, args.stage, args.environment_file, threads=args.threads,
+                  ranks_single_cpu_pinned=bool(args.rank_pinned))
     except (OSError, ValueError, RuntimeError, ImportError) as exc:
         print('OpenMX symmetry preparation failed: '+str(exc), file=sys.stderr, flush=True)
         return 1

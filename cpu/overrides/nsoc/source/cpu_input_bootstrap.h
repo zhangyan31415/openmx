@@ -89,13 +89,22 @@ static const char *cpu_bootstrap_helper(char *resolved,size_t capacity) {
   return OPENMX_SYMMETRY_BOOTSTRAP;
 }
 
-static int cpu_bootstrap_prepare(const char *input,const char *stage,
+static int cpu_bootstrap_single_cpu_affinity(void) {
+  char line[4096],extra;int cpu,one=0;FILE *f=fopen("/proc/self/status","r");
+  if(!f)return 0;
+  while(fgets(line,sizeof(line),f))if(!strncmp(line,"Cpus_allowed_list:",18)){
+    one=sscanf(line+18,"%d %c",&cpu,&extra)==1 && cpu>=0;break;
+  }
+  fclose(f);return one;
+}
+
+static int cpu_bootstrap_prepare(const char *input,const char *stage,int threads,int ranks_pinned,
                                  char **environment,char *error,size_t error_size) {
   char absolute[PATH_MAX], cwd[PATH_MAX], directory[PATH_MAX];
   char protocol[PATH_MAX+32], logfile[PATH_MAX+32], helper_path[PATH_MAX];
   const char *helper=cpu_bootstrap_helper(helper_path,sizeof(helper_path));
   const char *python=getenv("OPENMX_CPU_SYMMETRY_PYTHON");
-  char *argv[12];
+  char *argv[16],thread_value[32];
   posix_spawn_file_actions_t actions;
   pid_t child;
   int rc,status;
@@ -118,7 +127,10 @@ static int cpu_bootstrap_prepare(const char *input,const char *stage,
   printf("CPU_INPUT_SYMMETRY_PREPARE stage=%s directory=%s\n",stage,directory);fflush(stdout);
   argv[0]=(char*)python;argv[1]=(char*)helper;argv[2]="--input";argv[3]=absolute;
   argv[4]="--output";argv[5]=directory;argv[6]="--stage";argv[7]=(char*)stage;
-  argv[8]="--environment-file";argv[9]=protocol;argv[10]=NULL;
+  snprintf(thread_value,sizeof(thread_value),"%d",threads);
+  argv[8]="--environment-file";argv[9]=protocol;
+  argv[10]="--threads";argv[11]=thread_value;
+  argv[12]="--rank-pinned";argv[13]=ranks_pinned?"1":"0";argv[14]=NULL;
   rc=posix_spawn_file_actions_init(&actions);
   if(rc){snprintf(error,error_size,"cannot initialize preparation log: %s",strerror(rc));return 1;}
   if(!rc)rc=posix_spawn_file_actions_addopen(&actions,STDOUT_FILENO,logfile,O_WRONLY|O_CREAT|O_EXCL,0600);

@@ -38,7 +38,7 @@ python cpu/build.py --profile unified \
 scf.Symmetry on
 ```
 
-默认关闭，也可显式写 `scf.Symmetry off`。开启后，程序自动识别并验证可用子群、准备对称基并选择求解路径，无需用户生成 JSON 或单独运行准备工具。日志报告实际采用的群；映射或算子检查失败时明确停止。
+默认关闭，也可显式写 `scf.Symmetry off`。开启后，程序自动识别并验证可用子群、准备对称基，并按输入、线程数和绑核情况启用已验证且兼容的求解与内存优化，无需用户生成 JSON 或单独运行准备工具。日志报告实际采用的群；映射或算子检查失败时明确停止。
 
 在已加载上述 oneAPI 运行库和 Python 环境的计算节点上，照常运行，例如 **64 MPI × 1 线程**：
 
@@ -58,10 +58,23 @@ mpirun -np 64 ./build/cpu/openmx-cpu input.dat -nt 1
 
 - D3/C3 包含专用优化；D2/C2 等受支持子群使用通用表示分块，实际路径由日志确认。
 - 对称投影可能改变离散算子和 SCF 轨迹，需独立核对能量、力等物理误差。识别成功不保证任意材料都正确或更快。
-- 当前直接开关通过了小体系单节点、双节点和安装目录搬移验证；MoTe₂ 9.43°、222 原子的 NSOC 完成，但通用 SOC 未通过默认协变门限。这例不能列为全流程成功。
+- 当前默认配置已通过 MoTe₂ 9.43°（222 原子）和 7.34°（366 原子）的完整 NSOC＋自身一步 SOC。标准定向的 C3/D3 层状结构自动选择已验证专用 SOC 路径；其他受支持情况使用通用路径及其算子检查。
 - 历史加速和内存数据属于各自配置，不能当作当前入口的普遍保证。多节点也不保证核时下降或总内存不变。
 
 [原生开关验收](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/NATIVE_SYMMETRY_VALIDATION_20261106.md) · [时间与内存基准](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/BENCHMARKS_20261031.md) · [数值验收标准](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/ACCEPTANCE.zh-CN.md)
+
+## 5. 原代码参考与最新版对比
+
+本次重新进行同节点实测：**node040，64 MPI × 1**，两版使用相同编译选项和物理输入，均完成 NSOC 后从自身检查点接一步 SOC。每个版本、每种原子数各测一次。
+
+![原代码参考与最新版的原子数、耗时和物理内存对比](https://raw.githubusercontent.com/zhangyan31415/openmx/experiments/cpu-d3-20261019/cpu/docs/benchmarks/20261106/latest_vs_reference.png)
+
+| MoTe₂ | 参考版 → 最新版总耗时 | 参考版 → 最新版物理峰值内存 |
+|---|---:|---:|
+| 9.43°，222 原子 | 184.86 → **86.42 秒** | 73.59 → **25.22 GiB** |
+| 7.34°，366 原子 | 552.02 → **147.25 秒** | 110.99 → **35.35 GiB** |
+
+参考版为仓库保留的 CPU4.0 源码快照，不使用优化替换。该对比包含对称约束及 SCF 轨迹变化，不代表原始算子逐项相同。完整设置、分阶段时间／内存和物理误差见[报告](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/benchmarks/20261106/README.md)、[数据](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/benchmarks/20261106/measurements.csv)及[物理差异](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/benchmarks/20261106/physical_differences.json)，其中力差超过此前的物理门限。两点连线不是规模律拟合或外推。
 
 ## 代码目录与来源
 
