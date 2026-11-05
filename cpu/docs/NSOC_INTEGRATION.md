@@ -65,8 +65,7 @@ disagreement is rejected without changing the live layout. See
 | Off | Native scalar path | Only independently compatible memory/runtime options |
 
 The experimental scalar solver supports fixed-geometry, nonmagnetic Gamma
-Cluster calculations with an uncontracted basis. Enabling `FULL_PROJECT` is an
-explicit physical symmetry projection, distinct from implementation-equivalent
+Cluster calculations with an uncontracted basis. Physical symmetry projection is distinct from implementation-equivalent
 fused/selected return. Unsupported combinations fail rather than silently
 falling back to unoptimized NSOC.
 
@@ -83,10 +82,10 @@ own generated environments, since scalar-only flags intentionally reject SOC.
 The unified build includes the verified `Set_XC_Grid.workspace.c` patch and
 `cpu_xc_workspace.h`, both recovered from the 28 October generic-memory work.
 The generated source matches that archived source exactly; its helper header
-SHA256 matches the previous native build. Runtime `OPENMX_CPU_XC_WORKSPACE=0`
-remains the default. Mode 1 reuses private gradient storage. Mode 2 additionally
-aliases exactly equal finite scalar spin-density inputs/core corrections;
-unequal inputs are rejected. External derivative outputs keep native storage.
+SHA256 matches the previous native build. The optional implementation can
+reuse private gradient storage and, with stronger preconditions, alias exactly
+equal finite scalar spin-density inputs/core corrections; unequal inputs are
+rejected. External derivative outputs keep native storage.
 The XC arithmetic loops are unchanged.
 
 Previous component validation covered 144 cases with zero grid-value difference

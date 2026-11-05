@@ -1,13 +1,12 @@
-# OpenMX CPU：统一源码与运行入口
+# OpenMX CPU：源码构建与使用
 
-这个目录从源码构建一个同时包含 NSOC 和 SOC 的 CPU 程序，并提供同一套单节点、多节点运行与验收工具。它不依赖历史结果目录中的 OpenMX 对象文件、ELPA 对象文件或旧二进制。
+这个目录从源码构建同时包含 NSOC 和 SOC 的 CPU 程序，不依赖历史结果目录中的对象文件或旧二进制。输入文件中加入 `scf.Symmetry on` 即可启用对称性；仍按普通 OpenMX 的方式启动。
 
-当前计算范围是**固定几何、非磁性、Gamma 点，完整 NSOC 收敛后接自身检查点的一步 SOC**。一步 SOC 不等于 SOC 自洽计算。对称性检测成功、求解路径支持、数值通过、运行更快，分别记录，不能互相代替。
+当前验证范围是**固定几何、非磁性、Gamma 点，完整 NSOC 收敛后接自身检查点的一步 SOC**。一步 SOC 不等于 SOC 自洽计算。对称性检测成功、数值通过、运行更快分别记录，不能互相代替。
 
-## 从这里开始
+## 安装
 
-完整CPU代码目前位于 `experiments/cpu-d3-20261019` 分支，默认 `main`
-仍保留GPU实现。新用户先取得正确分支：
+完整 CPU 代码目前位于 `experiments/cpu-d3-20261019` 分支；根目录 CMake 的 CPU/GPU 构建尚未统一。先取得正确分支：
 
 ```bash
 git clone --branch experiments/cpu-d3-20261019 --single-branch \
@@ -15,56 +14,51 @@ git clone --branch experiments/cpu-d3-20261019 --single-branch \
 cd openmx-cpu
 conda create -n openmx-cpu python=3.12 numpy scipy spglib
 conda activate openmx-cpu
+python cpu/build.py --profile unified \
+  --oneapi-prefix /path/to/oneapi \
+  --output /path/to/new-build --execute
 ```
 
-Python环境用于元数据准备，不能替代外部Intel oneAPI classic编译器、MPI和MKL。
-现有工作流还依赖Linux、可用的用户systemd服务、cgroup v2和SSH；不是跨平台
-一键安装器。原生CPU源码构建和运行控制器的依赖分别见下面文档。
+需要外部 Intel oneAPI classic 编译器、Intel MPI 2021.7.1 和 MKL 2022.2.1，具体版本与目录布局见[独立构建](docs/BUILD.zh-CN.md)。当前不是跨平台一键安装器。原子基组和赝势由输入的 `DATA.PATH` 指定。
 
-输入驱动的新用法见 [Auto/User 与统一 H/S 导出](docs/INPUT_SYMMETRY.zh-CN.md)：
-`configure request.json --output /ABS/new-config` 自动准备匹配元数据和完整
-profile，然后 `run /ABS/new-config/workflow.json --wait`。无需手动合并开关。
-输入适配器限于统一 CPU 构建；裸二进制不会自行调用 Python 几何检测器。
+Python、NumPy、SciPy 和 spglib 用于程序内部调用的对称性准备工具；启用对称性时须保留构建所用的 Python 环境及配套工具。检测没有改成原生 C spglib 实现。普通 MPI 运行不依赖可选的 SSH/systemd 基准控制器。
 
-1. [独立构建](docs/BUILD.zh-CN.md)：使用 `--profile unified`，生成二进制和构建清单。
-2. [统一工作流](docs/WORKFLOW.zh-CN.md)：准备两个匹配输入，生成同一闭合子群的元数据，填写明确的运行配置，先 `plan` 再 `run --wait`。
-3. [NSOC 源码与路径](docs/NSOC_INTEGRATION.md)、[旧 C3/D3 SOC 路径](docs/LEGACY_SOC.md)：核对所选路径的适用条件和导出语义。
-4. [大角度单／多节点实测](docs/BENCHMARKS_20261031.md)、[验收方法](docs/ACCEPTANCE.zh-CN.md)：查看时间、内存、核时和数值边界。
+## 使用
+
+在普通 OpenMX 输入中加入：
+
+```text
+scf.Symmetry on
+```
+
+省略时默认为 `off`。程序内部识别并验证可用的闭合对称操作，准备对称基、分发元数据并选择求解路径；不需要单独准备 JSON 或手工合并环境开关。日志报告实际选择的群及校验结果。无法满足几何映射、求解支持或 H/S 检查时会明确停止。
+
+加载与构建匹配的 Intel MPI/MKL 运行库后，照常运行，例如单节点 64 MPI×1：
 
 ```bash
-python /ABS/REPO/cpu/build.py \
-  --profile unified --oneapi-prefix /path/to/oneapi \
-  --output /ABS/new-build --execute
-
-cp cpu/tools/examples/input_request.json /ABS/request.json
-# 按输入驱动说明填写两个输入、build-manifest、主机、CPU和运行库路径。
-python /ABS/REPO/cpu/tools/workflow.py configure /ABS/request.json \
-  --output /ABS/new-config
-
-python /ABS/REPO/cpu/tools/workflow.py plan /ABS/new-config/workflow.json
-python /ABS/REPO/cpu/tools/workflow.py run /ABS/new-config/workflow.json --wait
+mpirun -np 64 /path/to/new-build/openmx-cpu input.dat -nt 1
 ```
 
-`prepare` 只生成元数据和环境增量，不会自行启用所有优化或启动计算。完整配置示例在 [`tools/examples/workflow.json`](tools/examples/workflow.json)；四条路径的配置模板及合并方法在 [PROFILE_TEMPLATES.md](tools/examples/PROFILE_TEMPLATES.md)。输入的基组、截断、电子温度、SCF 精度和混合历史不会被入口改写；`DATA.PATH` 必须明确给出。
+NSOC 和 SOC 输入都使用 `scf.Symmetry on`。SOC 必须读取本次 NSOC 自己的收敛检查点，保持相同结构、基组和 MPI 布局。普通 `HS.fileout on` 与对称性开启同时使用时导出相应群下的对称化 H/S。详见[输入说明](docs/INPUT_SYMMETRY.zh-CN.md)与[运行及重启](docs/WORKFLOW.zh-CN.md)。
 
-低层 `geometry/prepare.py` 和显式profile留给高级复现。新用户优先使用上面的
-`configure`，它自动生成完整配置。当前自动入口选择通用GSOC，不自动切换成
-最快历史D3 legacy配置；不能把历史最快计时当成自动入口的测量值。
+多节点使用相同可执行文件，通过站点的普通 MPI 或调度器设置主机和绑定。MPI 数变化后应重新运行 NSOC，不能假定已有检查点跨布局兼容。程序没有内部计算倒计时；调度器外部期限仍有效。
 
-## 共用入口，按表示选择求解路径
+## 实现与验证边界
 
-| 群／阶段 | 实现 | 说明 |
+| 群／阶段 | 实现 | 验证边界 |
 |---|---|---|
-| D3 NSOC | NSYM v3 | 保留等价表示块复用、可选合并返回和按需回变换 |
-| C3 NSOC | NSYM v4 | 保留复共轭表示配对；不套用 D3 专用开关 |
-| D2、C2 等 NSOC | 通用标量表示分块 | 按选定闭合子群构造表示，运行时仍检查 H/S 协变性 |
-| 通用 SOC | GSOC 自旋表示 | 可显式选择投影和紧凑系数；支持 raw 或原生 symmetrize H/S 导出，含求解／导出算子一致性检查 |
-| 旧 C3/D3 SOC | 专用已验证路径 | D3 保留 TR/REAL；C3 禁用 D3 专用 TR/REAL。原生导出投影须显式选择 `symmetrize` |
+| D3 NSOC | 等价表示块复用、合并返回和按需回变换 | 固定非磁 Gamma 路径 |
+| C3 NSOC | 共轭表示配对及公共 DM/EDM 内核 | 不套用 D3 专有算法 |
+| D2、C2 等 NSOC | 通用标量表示分块 | 运行时检查 H/S 协变性 |
+| 通用 SOC | 自旋表示分块和一致的 H/S 导出 | 目前以自身 NSOC 后一步 SOC 验证 |
+| 旧 C3/D3 SOC | 历史专用路径保留用于回归 | 历史最快配置不代表当前自动入口的计时 |
 
-NSOC 的全程分块求解和实空间 H/S 投影是两个设置。`--project-nsoc` 明确请求在 SCF 中投影实空间 H/S，并导出投影后的 H/S，使用选定闭合操作集合；新群的生产认证仍需单独验收。相应 DM/EDM 钩子只检查，不写回投影密度矩阵。SOC 求解前的矩阵投影与最终导出的 H/S 是否投影也分别声明。几何容差不会自动变成电子结构误差许可。
+H/S 投影改变离散算子，必须与未对称参考独立比较物理误差；它不意味着 DM/EDM 被导出钩子改写。几何识别成功不能代替数值及性能验收，也不保证任意材料、磁性、任意 k 点、几何优化或多步 SOC 已支持。
 
-单节点和多节点使用同一个程序；MPI 数变化后必须重新运行 NSOC，不能直接套用另一布局的重启文件。运行记录包含实际绑定、MPI 提供者、原生耗时、启动耗时、核时、每节点物理内存峰值和同步集群内存峰值。
+- [大角度单／多节点实测](docs/BENCHMARKS_20261031.md)：时间、内存、核时和失败门限。
+- [验收方法](docs/ACCEPTANCE.zh-CN.md)：实现等价与物理精度的不同标准。
+- [历史输入及导出验证](docs/INPUT_SYMMETRY_VALIDATION_20261102.md)：小体系集成证据，不是当前入口的性能保证。
+- [原生开关验收](docs/NATIVE_SYMMETRY_VALIDATION_20261106.md)：直接启动、双节点、整体搬移及当前SOC拒绝边界。
+- [NSOC 实现记录](docs/NSOC_INTEGRATION.md)、[历史 SOC 算法记录](docs/LEGACY_SOC.md)：源码来源及算法范围。
 
-`run --wait` 为整个流程保留连接，适用于没有用户服务常驻的节点。它不会修改用户的 Linger 设置，也不承诺客户端断开后继续计算。需要无人值守时，应在已有的持久作业脚本内运行此命令。
-
-本目录不宣称任意点群、磁性、任意 k 点、几何优化或多步 SOC 均已优化，也不根据小体系测试承诺多节点线性加速。
+历史 MoTe₂ 9.43°、222 原子同节点测试的优化配置，相对 CPU4.0 源码快照参考，完整 NSOC＋SOC 约快 2.05 倍、内存少 3.08 倍；它包含对称投影及收敛轨迹变化，不能都归因于实现优化。其历史最大力差约 12.44 meV/Å，未通过 1 meV/Å 的物理门限。多节点测试也没有达到核时不增长的目标，详见基准报告。

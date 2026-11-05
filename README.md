@@ -42,9 +42,9 @@ external inputs.
 ## CPU quick start
 
 The unified CPU binary includes optimized scalar NSOC solvers, specialized
-C3/D3 SOC paths, and a general spinor SOC framework. Symmetry metadata and
-runtime configuration are prepared through one workflow rather than a manual
-collection of environment switches.
+C3/D3 SOC paths, and a general spinor SOC framework. Enable symmetry in the
+ordinary OpenMX input file; the program prepares and validates its runtime
+metadata internally.
 
 The currently tested workflow is **fixed geometry, nonmagnetic, Gamma point:
 converge NSOC, then run one SOC step from that same run's checkpoint**. One SOC
@@ -60,11 +60,11 @@ conda create -n openmx-cpu python=3.12 numpy scipy spglib
 conda activate openmx-cpu
 ```
 
-These packages prepare metadata; they do not supply the native compiler or MKL.
-The checked workflow also needs Linux, SSH access to the selected compute
-hosts, an available user systemd manager and cgroup v2 memory accounting.
-Native OpenMX can be built separately; the current workflow wrapper is not a
-portable scheduler or a Windows/macOS launcher.
+These packages are used by the symmetry preparation helper invoked internally
+by the CPU program. Keep the build-time Python environment available when
+running with symmetry enabled. They do not supply the native compiler or MKL.
+Normal MPI execution does not require the optional SSH/systemd benchmark
+controller. The current CPU build is tested on Linux.
 
 Use Python 3 with the preparation dependencies listed in the
 [CPU guide](cpu/README.md), and an Intel oneAPI installation matching the
@@ -84,59 +84,50 @@ external OpenMX object files. It writes `openmx-cpu`, compiler logs and a
 `build-manifest.json`. Provide basis sets and pseudopotentials separately
 through each input's `DATA.PATH`.
 
-### 2. Prepare matching inputs and a request
+### 2. Enable symmetry in the input
 
-Start with matching NSOC and SOC inputs for the same geometry and basis.
-For automatic selection of a supported subgroup, put the same settings in
-both inputs, for example:
+Add one line to the normal OpenMX input:
 
 ```text
-scf.Symmetry.Mode           Auto
-scf.Symmetry.Tolerance      1e-5
-scf.Symmetry.HSExport       Symmetrize
+scf.Symmetry on
 ```
 
-For an explicitly requested subgroup, use `Mode User` and specify
-`scf.Symmetry.PointGroup`, such as `D3`, `C3`, `D2` or `C2`. Geometry tolerance
-is measured in angstroms and must fit the structure; it is separate from the
-electronic H/S covariance check. See the
-[input-driven symmetry guide](cpu/docs/INPUT_SYMMETRY.zh-CN.md) for supported
-groups, policies, limits and export semantics.
+The default is `off`. The program detects and validates a supported symmetry
+subgroup, builds the required representation, and selects its solver path.
+The log reports the selected group and the checks actually performed. A
+failed mapping or operator check stops the run instead of silently ignoring
+the request. Input basis sets, cutoff, temperature and SCF stopping criteria
+remain the user's ordinary OpenMX settings.
 
-Copy [the request template](cpu/tools/examples/input_request.json) to
-`/path/to/request.json`. Set the binary and build manifest, both input paths,
-a new result directory, authorized hosts, CPU binding and MPI/runtime paths.
-For each host, `ranks_per_host × threads` is its requested physical core count.
+### 3. Run normally
 
-### 3. Configure, inspect and run
+After loading the matching Intel compiler/MPI/MKL runtime and making the
+Python environment above available, launch the built executable directly:
 
 ```bash
-python cpu/tools/workflow.py configure /path/to/request.json \
-  --output /path/to/new-prepared-config
-python cpu/tools/workflow.py plan /path/to/new-prepared-config/workflow.json
-python cpu/tools/workflow.py run /path/to/new-prepared-config/workflow.json --wait
+mpirun -np 64 /path/to/new-build/openmx-cpu input.dat -nt 1
 ```
 
-Run preparation and native calculations on authorized compute machines.
-`configure` validates the inputs and prepares matching scalar/spinor metadata;
-it does not launch MPI. Directly running the binary with `Auto/User` without
-this preparation is rejected. `run --wait` keeps the workflow connection open;
-for unattended operation, use an existing persistent batch job. No internal
-calculation deadline is imposed; scheduler limits still apply.
+For the tested NSOC plus one-step SOC workflow, prepare the ordinary matching
+NSOC and SOC inputs, run NSOC to convergence, then run SOC from that NSOC
+checkpoint with the same MPI layout. Add `scf.Symmetry on` to both inputs.
+See the [run guide](cpu/docs/WORKFLOW.zh-CN.md) for restart requirements.
+No separate metadata command or JSON request is needed for this entry point.
+Multi-node host selection and process binding use the site's normal MPI or
+scheduler launch settings.
 
-The workflow records source/build identity, exact commands, rank/thread
-binding, stage timings, core-hours, per-node memory and synchronized cluster
-memory. After a layout change, rerun NSOC before its SOC step: restart files
-are not assumed interchangeable between MPI layouts.
+No internal calculation deadline is imposed; scheduler limits still apply.
+The optional benchmark controller records binding, stage times, core-hours
+and node/cluster memory, but is not required for ordinary calculations.
 
 ### Scope and validation
 
-H/S export is explicit: `Raw` retains the original real-space operators;
-`Symmetrize` projects them using the selected operations. Symmetry projection
-changes a discretized operator and requires a physical-error comparison.
-General SOC additionally checks consistency between its solve and exported
-operator. Invalid mappings, unsupported settings or failed covariance checks
-stop the run rather than silently ignoring symmetry.
+With `scf.Symmetry on` and the ordinary `HS.fileout on`, exported H/S are
+symmetrized consistently with the selected group. Symmetry projection changes
+a discretized operator and requires a physical-error comparison against an
+unsymmetrized reference. The SOC path also checks consistency between its
+solve and exported operator. Invalid mappings, unsupported settings or failed
+covariance checks stop the run.
 
 D3/C3 retain specialized optimizations; D2/C2 and other supported subgroups use
 general representation machinery. This is not a claim that every point group,
@@ -147,9 +138,12 @@ lower core-hours or constant total memory.
 Read the [acceptance criteria](cpu/docs/ACCEPTANCE.zh-CN.md),
 [large-angle benchmarks](cpu/docs/BENCHMARKS_20261031.md), and
 [input/export integration validation](cpu/docs/INPUT_SYMMETRY_VALIDATION_20261102.md)
-for measured results and remaining boundaries. The
-[full workflow guide](cpu/docs/WORKFLOW.zh-CN.md) documents advanced explicit
-profiles and recovery.
+and [native switch validation](cpu/docs/NATIVE_SYMMETRY_VALIDATION_20261106.md)
+for measured results and remaining boundaries. The native MoTe2 9.43-degree,
+222-atom NSOC check completed, but its SOC operator failed the default covariance
+gate; that case is not a successful full-workflow validation. The
+[run guide](cpu/docs/WORKFLOW.zh-CN.md) describes ordinary MPI execution and
+restart requirements.
 
 ### Comparison with the CPU reference
 
@@ -170,9 +164,8 @@ reference is a frozen installed CPU4.0 snapshot, not an independently
 authenticated pristine upstream distribution, and no matched latest-build
 CPU3.9 comparison is established here.
 
-The input-driven `configure` command currently selects general SOC profiles;
-it does **not** automatically select the legacy D3 profile used for the
-fastest row. Use the explicit validated profiles when reproducing that row.
+The historical fastest row used a specific legacy D3 solver configuration;
+it is not a timing measurement of the current simple input interface.
 Historical MoTe2 projected-vs-raw NSOC force differences reached about
 12.44 meV/angstrom and did not pass the 1 meV/angstrom physical gate.
 Implementation/layout agreement is separate from raw-reference physical

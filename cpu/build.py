@@ -1,10 +1,24 @@
 #!/usr/bin/env python3
 """Compile source-only CPU OpenMX + bundled ELPA into a new output directory."""
 from pathlib import Path
-import argparse,concurrent.futures,hashlib,json,os,shlex,socket,subprocess,time
+import argparse,concurrent.futures,hashlib,json,os,shlex,socket,subprocess,time,shutil,sys
 REPO=Path(__file__).resolve().parents[1]
 BASE=REPO/'cpu/overrides/soc/SOURCES.json'
 DEFAULT_ONEAPI=os.environ.get('ONEAPI_ROOT','/opt/intel/oneapi')
+
+def runtime_resource_files():
+ files=[]
+ for directory in ('cpu/geometry','cpu/overrides/nsoc/metadata'):
+  files.extend(p for p in (REPO/directory).rglob('*')if p.is_file()and p.suffix in ('.py','.json'))
+ files.extend(REPO/'cpu/tools'/name for name in ('workflow.py','workflow_node.py','input_symmetry.py'))
+ return sorted(set(files))
+
+def copy_runtime_resources(output):
+ root=Path(output)/'resources'
+ for source in runtime_resource_files():
+  dest=root/source.relative_to(REPO);dest.parent.mkdir(parents=True,exist_ok=True)
+  shutil.copy2(source,dest)
+ return root
 def sha(p):
  h=hashlib.sha256()
  with Path(p).open('rb')as f:
@@ -62,6 +76,9 @@ def command_plan(plan,out,oneapi,cpu_target):
    else:flags.append(f)
    i+=1
   cmd=[str(mpi/('mpiifort'if u['language']=='fortran'else'mpiicc')),*common,*incs,*flags,'-c',str(local(u['source'])),'-o',str(out/'objects'/u['object'])]
+  if u['source']=='cpu/overrides/nsoc/source/Input_std.symmetry.c':
+   cmd[1:1]=['-DOPENMX_SYMMETRY_BOOTSTRAP="'+str(out/'resources/cpu/geometry/bootstrap.py')+'"',
+             '-DOPENMX_SYMMETRY_PYTHON="'+sys.executable+'"']
   commands.append({'label':u['object'],'language':u['language'],'command':cmd})
  libs=['-L'+str(mkl/'lib/intel64'),'-lmkl_scalapack_lp64','-lmkl_intel_lp64','-lmkl_intel_thread','-lmkl_core','-lifcore','-lmkl_blacs_intelmpi_lp64','-liomp5','-lpthread','-lm','-ldl']
  link=[str(mpi/'mpiicc'),*common,*[str(out/'objects'/u['object'])for u in plan['units']],*libs,'-o',str(out/'openmx-cpu')]
@@ -86,10 +103,14 @@ def main():
  for d in plan['include_dirs']:
   for f in local(d).rglob('*'):
    if f.is_file()and f.suffix.lower()in ['.c','.h','.f','.inc','.f90']:inputs[str(f.relative_to(REPO))]=sha(f)
+ runtime_sources={str(f.relative_to(REPO)):sha(f)for f in runtime_resource_files()}if plan['capabilities'].get('input_symmetry')else{}
  manifest={'schema':1,'state':'planned','hostname':socket.gethostname(),'cwd':str(REPO),'environment_prefix':str(a.oneapi_prefix.resolve()),'python_prefix':os.sys.prefix,'builder_sha256':sha(__file__),'cpu_target':a.cpu_target,'profile':a.profile,'selection':str(selection)if selection else None,'source_manifest':str(BASE.relative_to(REPO)),'sources_sha256':inputs,'capabilities':plan['capabilities'],'external_openmx_objects':[],'external_elpa_objects':[],'build_environment':{'I_MPI_ROOT':str(a.oneapi_prefix.resolve()/'mpi/2021.7.1')},'jobs':a.jobs,'compile_commands':commands,'link_command':link,'binary':{'path':str(out/'openmx-cpu'),'sha256':None},'numerics_validated':False}
+ manifest['runtime_resources_sha256']=runtime_sources
+ manifest['runtime_python']=sys.executable
  if not a.execute:print(json.dumps(manifest,indent=2));return
  if socket.gethostname().split('.')[0].startswith('login'):p.error('compile on an authorized compute node')
  (out/'objects').mkdir(parents=True);(out/'logs').mkdir()
+ if runtime_sources:copy_runtime_resources(out)
  shell='source '+shlex.quote(str(a.oneapi_prefix.resolve()/'setvars.sh'))+' >/dev/null 2>&1; export I_MPI_ROOT='+shlex.quote(str(a.oneapi_prefix.resolve()/'mpi/2021.7.1'))+'; exec "$@"'
  def run(cmd,label):
   start=time.monotonic();q=subprocess.run(['/bin/bash','-c',shell,'cpu-build',*cmd],cwd=out/'objects',stdin=subprocess.DEVNULL,capture_output=True,text=True)

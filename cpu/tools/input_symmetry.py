@@ -22,12 +22,20 @@ def module(name, path):
 
 def request(values):
     prefix = 'scf.symmetry.'
+    public=values.get('scf.symmetry')
+    if public is not None and public.lower() not in ('on','off'):
+        raise ValueError('scf.Symmetry must be on or off')
+    simple_on=public is not None and public.lower()=='on'
     allowed = {'mode', 'tolerance', 'pointgroup', 'operationsfile', 'geometrypolicy',
                'kpointpolicy', 'densitypolicy', 'forcepolicy', 'hsexport', 'covariancetolerance', 'hamiltonianpolicy'}
     for key in values:
         if key.startswith(prefix) and key[len(prefix):] not in allowed:
             raise ValueError('unknown symmetry keyword: '+key)
-    mode = values.get(prefix+'mode', 'off').lower()
+    mode = values.get(prefix+'mode', 'auto'if simple_on else'off').lower()
+    if public is not None and public.lower()=='off' and mode!='off':
+        raise ValueError('scf.Symmetry off conflicts with an enabled developer mode')
+    if simple_on and mode=='off':
+        raise ValueError('scf.Symmetry on conflicts with disabled developer mode')
     if mode not in ('off', 'auto', 'user'):
         raise ValueError('scf.Symmetry.Mode must be Off, Auto or User')
     for key, default in [('geometrypolicy', 'strict'), ('kpointpolicy', 'auto'),
@@ -40,14 +48,14 @@ def request(values):
         raise ValueError('User requires a supported scf.Symmetry.PointGroup')
     if mode != 'user' and group not in ('none', 'auto'):
         raise ValueError('scf.Symmetry.PointGroup requires Mode User')
-    tol = float(values.get(prefix+'tolerance', '1e-5'))
-    cov = float(values.get(prefix+'covariancetolerance', '1e-10'))
+    tol = float(values.get(prefix+'tolerance', '5e-5'if simple_on else'1e-5'))
+    cov = float(values.get(prefix+'covariancetolerance', '1e-5'if simple_on else'1e-10'))
     if not math.isfinite(tol) or not 0 < tol <= .02:
         raise ValueError('scf.Symmetry.Tolerance must be finite in (0,0.02] Angstrom')
     if not math.isfinite(cov) or not 1e-14 <= cov <= 1e-3:
         raise ValueError('scf.Symmetry.CovarianceTolerance must be in [1e-14,1e-3]')
-    policy = values.get(prefix+'hsexport', 'raw').lower()
-    hpolicy = values.get(prefix+'hamiltonianpolicy','free').lower()
+    policy = values.get(prefix+'hsexport', 'symmetrize'if simple_on else'raw').lower()
+    hpolicy = values.get(prefix+'hamiltonianpolicy','symmetrize'if simple_on else'free').lower()
     if hpolicy not in ('free','symmetrize'):
         raise ValueError('scf.Symmetry.HamiltonianPolicy must be Free or Symmetrize')
     if policy not in ('raw', 'symmetrize'):

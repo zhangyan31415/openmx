@@ -19,12 +19,12 @@ described by that record. It is not a checksum of a public JSON record whose pat
 strings have been redacted. Where a distributed source file changes, its original
 snapshot hash is retained separately from the current distributed file hash.
 Archived command records containing these labels are evidence, not runnable
-configuration files. Use `tools/examples/` and the current workflow instructions
-to prepare a new calculation.
+configuration files. Follow the current input and run guides for a new
+calculation.
 
 User instructions use `$CONDA_PREFIX` for an activated Python environment and
-`/path/to/python-env` where an explicit prefix is required in JSON. The build
+`/path/to/python-env` for a generic environment prefix. The build
 uses `ONEAPI_ROOT` when set, otherwise `/opt/intel/oneapi`; `--oneapi-prefix`
 overrides both. The supported classic Intel compiler, MPI and MKL versioned
-subdirectory layout is documented in `BUILD.zh-CN.md`. No shell-variable
-expansion is performed inside JSON configuration values.
+subdirectory layout is documented in `BUILD.zh-CN.md`. Historical JSON records are literal records; shell-variable expansion is not
+implied for their path values.

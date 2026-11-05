@@ -26,8 +26,11 @@ class PublicLayout(unittest.TestCase):
     def test_public_readme_has_cpu_quickstart(self):
         text=(CPU.parent/'README.md').read_text()
         self.assertIn('cpu/build.py',text)
-        self.assertIn('configure',text)
+        self.assertIn('scf.Symmetry on',text)
+        self.assertIn('mpirun',text)
         self.assertIn('cpu/README.md',text)
+        for private_keyword in ('scf.Symmetry.Mode','scf.Symmetry.PointGroup'):
+            self.assertNotIn(private_keyword,text)
 
 
 if __name__=='__main__':unittest.main()

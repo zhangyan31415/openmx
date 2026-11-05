@@ -15,6 +15,19 @@ def load(name, path):
 
 
 class InputSymmetry(unittest.TestCase):
+    def test_public_boolean_switch_preserves_developer_mode(self):
+        m=self.api()
+        q=m.request({'scf.symmetry':'on'})
+        self.assertEqual(q['mode'],'auto')
+        self.assertEqual(q['export_policy'],'symmetrize')
+        self.assertEqual(q['hamiltonian_policy'],'symmetrize')
+        self.assertEqual(q['tolerance'],5e-5)
+        self.assertEqual(q['covariance_tolerance'],1e-5)
+        self.assertEqual(m.request({'scf.symmetry':'on','scf.symmetry.mode':'User','scf.symmetry.pointgroup':'C2'})['group'],'C2')
+        self.assertEqual(m.request({'scf.symmetry':'off'})['mode'],'off')
+        for values in ({'scf.symmetry':'garbage'},{'scf.symmetry':'off','scf.symmetry.mode':'Auto'}):
+            with self.assertRaises(ValueError):m.request(values)
+
     def api(self):
         path = ROOT / 'tools/input_symmetry.py'
         self.assertTrue(path.exists(), 'input-driven symmetry adapter is missing')

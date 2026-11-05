@@ -85,7 +85,8 @@
     "nsoc_positive_history": true,
     "nsoc_xc_workspace": true,
     "input_symmetry": true,
-    "generic_soc_export": true
+    "generic_soc_export": true,
+    "native_symmetry_switch": true
   },
   "provenance": [
     {

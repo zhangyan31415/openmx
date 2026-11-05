@@ -95,3 +95,6 @@ __pycache__/
 
 # CPU documentation; upstream ignores untracked *.md files.
 !/cpu/**/*.md
+
+# Per-run generated symmetry metadata and runtime logs
+.openmx-symmetry-*/

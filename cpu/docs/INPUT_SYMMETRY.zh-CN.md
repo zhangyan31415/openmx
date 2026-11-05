@@ -1,81 +1,35 @@
 # 从输入启用 CPU 对称性
 
-统一 CPU 构建现在提供输入驱动的 `configure` 入口。它读取两个输入中的
-`scf.Symmetry.*`，生成匹配的标量／自旋对称基和完整运行配置；用户不需要
-手动合并 profile、替换 JSON 占位符或填写求解器环境开关。
-
-适用范围仍是固定几何、非磁性、Gamma 点，完整 NSOC 后接自身检查点的
-一步 SOC。识别和求解支持不等于任意材料都通过了物理误差与性能验收。
-
-## 输入
-
-NSOC 和 SOC 两个输入使用相同的对称性设置，例如：
+使用统一 CPU 构建的 `openmx-cpu`，在普通输入中加入：
 
 ```text
-scf.Symmetry.Mode           User
-scf.Symmetry.PointGroup     D2
-scf.Symmetry.Tolerance      1e-5
-scf.Symmetry.HSExport       Symmetrize
-scf.Symmetry.CovarianceTolerance 1e-8
+scf.Symmetry on
 ```
 
-`Tolerance` 单位是 Å，约束几何映射；`CovarianceTolerance` 是电子算子的
-相对协变残差限值，两者不同。上面的 `1e-8` 是小体系集成测试的显式选择，
-不是所有材料的推荐值。默认协变限值是 `1e-10`；只允许在明确选择
-`HSExport Symmetrize` 时放宽，程序不在失败后自动改限值。
-
-- `Mode Off`：保持原有普通输入和显式历史 profile 的行为。
-- `Mode Auto`：在几何容差以内扫描，选择当前求解器支持的闭合子群。省略
-  `PointGroup`。它报告实际选择的群；不能把所选子群冒充完整晶体点群。
-- `Mode User`：必须指定群，使用给定唯一几何容差检测并验证该子群。
-  `OperationsFile` 可给显式操作集合，集合必须与请求的受支持子群完全一致；
-  不允许默默删操作或退回 P1。
-- `HamiltonianPolicy Free`（默认）：不改写 SCF 各步的原始实空间 H/S。显式
-  `HamiltonianPolicy Symmetrize` 另行请求 NSOC 各步投影，且必须同时选择
-  `HSExport Symmetrize`；这会改变离散算子，须另行检查物理误差。
-- `HSExport Raw`：保留原始实空间 H/S。它不表示“不使用求解器分块”。
-- `HSExport Symmetrize`：NSOC 在原生导出时投影实空间 H/S；通用 SOC 在成功
-  求解和原生能量／力计算后，使用轨道及 SU(2) 表示投影 H/S。DM 不在导出时
-  重写。SOC 额外检查导出算子与求解所用 sector/TR/real 投影算子的一致性，
-  不一致则拒绝写出 scfout。不能把投影误差当成舍入误差或自动放宽物理标准。
-
-受支持的准备选项是 C2/D2、C3/D3、C4/D4、C6/D6、Ci、Cs；各自的生产认证
-范围以实际验收为准。`GeometryPolicy Strict`、`KPointPolicy Auto`、
-`DensityPolicy Free`、`ForcePolicy Free` 是当前支持的策略；其他值和未知
-对称性关键字明确报错。
-
-## 配置与启动
-
-复制 [最小请求示例](../tools/examples/input_request.json)，填写二进制及其
-构建清单、两个输入、全新结果目录、已授权主机和实际 CPU 布局。示例是
-4 MPI×1 的小体系配置；生产核数须按实际硬件调整。无需 `profiles` 或
-`symmetry` 字段，它们从输入生成。
+默认是 `off`；省略这一行保持普通输入的行为。NSOC 和随后的 SOC 输入应使用相同设置。
 
 ```bash
-"$CONDA_PREFIX/bin/python" /ABS/REPO/cpu/tools/workflow.py configure \
-  /ABS/request.json --output /ABS/new-prepared-config
-
-"$CONDA_PREFIX/bin/python" /ABS/REPO/cpu/tools/workflow.py run \
-  /ABS/new-prepared-config/workflow.json --wait
+mpirun -np 64 /path/to/build/openmx-cpu input.dat -nt 1
 ```
 
-`configure` 生成元数据和只读运行计划，不启动 MPI；应在计算节点执行几何
-准备。它保留原输入，绑定输入及显式操作文件的 SHA256。修改输入或操作
-文件后须重新 configure。`plan` 仍然不写文件、不启动计算。
+不需要用户预先执行元数据准备命令、编写 JSON 请求或填写求解器环境变量。程序在初始化阶段调用配套 Python 工具，识别可用的闭合对称子群、验证原子与周期邻居映射、生成标量或自旋表示，并分发给 MPI 进程。应保留构建时使用的 Python 环境和 NumPy、SciPy、spglib，以及与二进制匹配的配套工具。
 
-新 CPU 二进制的原生输入适配器验证 Auto/User 和实际求解器配置一致。
-因此直接对带 Auto/User 的输入运行裸 `mpirun openmx-cpu input.dat`，但没有
-上述准备步骤，会明确报错；不会忽略请求然后继续原始 SCF。这里的自动
-识别由统一 Python 入口实现，未把 Python 几何检测器嵌入 MPI 二进制。
-这些变动不修改 HIP/GPU 输入解析器。
+## 行为
 
-## 运行时限
+日志明确报告实际识别、采用的群和求解路径。程序不会将受支持子群冒称为完整晶体点群；无法完成映射、表示构造或 H/S 检查时明确停止，不打印“启用成功”后忽略请求。
 
-入口、MPI 调用、监控及控制器都没有内部运行倒计时。systemd 服务明确设置
-`RuntimeMaxSec=infinity`、启动／停止时限为 infinity，rank scope 也显式无限。
-`timeout_seconds` 只能省略、写 `null` 或 `"infinity"`；旧有限值明确拒绝，
-不能把旧的86400配置直接照搬。SSH 建连失败和断连检测不作为计算时限。
-Slurm 分区或既有 allocation 的外部期限仍由调度器执行，本入口不会绕过它。
+对称性贯穿受支持 NSOC 路径的 SCF 计算，不只在前若干步使用。保留用户指定的基组、截断、电子温度、SCF 精度和混合历史长度。通过对称性约束的收敛与完全不约束的收敛并非同一个数值问题，需分别报告残差及物理差异。
 
-`run --wait` 需要保持连接，或在已有持久作业脚本中运行；无限运行时限不等于
-客户端断开后服务一定存活。入口不更改用户 Linger 设置。
+当输入还指定普通 `HS.fileout on` 时，导出的 H/S 与所采用的群投影一致。SOC 使用轨道与自旋表示，并检查求解算子和导出算子是否一致。导出钩子不改写 DM。OpenMX 基组非正交，后处理仍须使用这次计算匹配的 S，不能替换成单位阵。
+
+## 范围和精度
+
+当前验证范围为固定几何、非磁性、Gamma 点：完整 NSOC 收敛后接自身检查点的一步 SOC。不同群、材料和角度的支持及性能以实际验收为准；识别成功不表示任意材料都获得加速或通过物理误差标准。当前不宣称任意 k 点、磁性、几何优化和多步 SOC 已认证。
+
+几何容差、电子算子协变残差与最终能量／力误差是三个不同检查。不能把放宽几何识别解释为允许同样大的物理误差，也不会在检查失败后自动降低标准。与未对称参考的物理精度比较应独立保留，见[验收说明](ACCEPTANCE.zh-CN.md)。
+
+## 运行生命周期
+
+程序没有内部计算倒计时；调度器分区或 allocation 的外部期限仍由调度器执行。普通 MPI 任务的持久性由启动它的批作业或会话决定，无限内部时限不等于关闭终端后仍会继续。
+
+两步输入和检查点要求见[运行及重启](WORKFLOW.zh-CN.md)，安装依赖见[构建说明](BUILD.zh-CN.md)。
