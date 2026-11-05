@@ -1,83 +1,176 @@
-# OpenMX — CPU symmetry optimization and GPU acceleration
+# OpenMX: CPU symmetry solvers and CUDA/HIP acceleration
 
-## CPU用户：先选择CPU分支 / Choose the CPU branch
+This repository extends [OpenMX](https://www.openmx-square.org/), a
+first-principles electronic-structure code based on numerical atomic orbitals,
+with two independently built targets:
 
-**当前默认分支 `main` 保留GPU实现。完整CPU代码、独立构建和对称性工作流在
-`experiments/cpu-d3-20261019`，直接克隆main不会得到CPU包。**
+| Target | Entry point | Intended use |
+|---|---|---|
+| Standalone CPU | [CPU guide](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/README.md), `cpu/build.py` | Symmetry-aware NSOC and SOC solvers, memory optimizations, reproducible single- and multi-node workflows |
+| NVIDIA CUDA / AMD HIP | [GPU build guide](docs/GPU_BACKENDS.md), CMake or the existing GPU Makefile | GPU-accelerated solvers, matrix construction, grids and related stages |
+
+The CPU and GPU targets have different compiler, library and validation
+requirements. A GPU build's CPU fallback is not the standalone optimized CPU
+target. Choose a target before following its build instructions.
+
+The GitHub default branch is `main`, which currently contains the GPU target.
+The standalone CPU package is published on **`experiments/cpu-d3-20261019`**.
+Clone that branch explicitly to obtain the `cpu/` directory:
 
 ```bash
 git clone --branch experiments/cpu-d3-20261019 --single-branch \
   https://github.com/zhangyan31415/openmx.git openmx-cpu
 cd openmx-cpu
+```
+
+### Directory layout
+
+| Directory | Contents |
+|---|---|
+| `cpu/vendor/` | OpenMX CPU and bundled ELPA source snapshots, with licenses |
+| `cpu/overrides/` | Optimized scalar/spinor solvers and memory kernels |
+| `cpu/geometry/` | Geometry detection, subgroup validation and basis/map preparation |
+| `cpu/tools/` | Single/multi-node workflow, templates and output comparison |
+| `cpu/tests/`, `cpu/docs/` | Regression tests, installation instructions and measured limits |
+| `source/`, `doc/`, `docs/` | Existing CUDA/HIP implementation and GPU documentation |
+
+CPU builds and runtime preparation are self-contained under `cpu/`; no personal
+experiment tree, historical result directory or external OpenMX object file is
+required. Basis/pseudopotential data and the compiler/MPI/MKL installation are
+external inputs.
+
+## CPU quick start
+
+The unified CPU binary includes optimized scalar NSOC solvers, specialized
+C3/D3 SOC paths, and a general spinor SOC framework. Enable symmetry in the
+ordinary OpenMX input file; the program prepares and validates its runtime
+metadata internally.
+
+The currently tested workflow is **fixed geometry, nonmagnetic, Gamma point:
+converge NSOC, then run one SOC step from that same run's checkpoint**. One SOC
+step is not a fully self-consistent SOC calculation. Detection of a point group
+does not establish that a material is accurate or faster with that group.
+
+### 1. Build from source
+
+Prepare a separate Python environment, for example:
+
+```bash
 conda create -n openmx-cpu python=3.12 numpy scipy spglib
 conda activate openmx-cpu
 ```
 
-### 目录与安装
+These packages are used by the symmetry preparation helper invoked internally
+by the CPU program. Keep the build-time Python environment available when
+running with symmetry enabled. They do not supply the native compiler or MKL.
+Normal MPI execution does not require the optional SSH/systemd benchmark
+controller. The current CPU build is tested on Linux.
 
-| 目录 | 内容 |
-|---|---|
-| `cpu/vendor/` | OpenMX CPU及ELPA源码和许可证 |
-| `cpu/overrides/` | NSOC/SOC求解器及内存优化 |
-| `cpu/geometry/` | 对称性识别、子群验证及对称基准备 |
-| `cpu/tools/` | 单／多节点工作流、输入模板和数值验收 |
-| `cpu/tests/`、`cpu/docs/` | 测试、安装说明和性能报告 |
-
-Python环境只用于元数据工具。原生构建另需Intel oneAPI classic、
-Intel MPI2021.7.1、MKL2022.2.1及匹配安装布局；任意新版本尚未验证。
-运行控制器需要Linux、SSH、用户systemd服务及cgroup v2。赝势和PAO基组通过
-输入的`DATA.PATH`提供。运行不依赖个人实验目录或历史编译对象。
-
-在已有授权的计算主机上编译：
+Use Python 3 with the preparation dependencies listed in the
+[CPU guide](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/README.md), and an Intel oneAPI installation matching the
+[CPU build requirements](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/BUILD.zh-CN.md): classic compilers, Intel MPI
+2021.7.1 and MKL 2022.2.1. The current builder expects that installation layout;
+an arbitrary newer oneAPI release is not a tested substitute.
 
 ```bash
-python cpu/build.py --profile unified --oneapi-prefix /path/to/oneapi \
+python cpu/build.py --profile unified \
+  --oneapi-prefix /path/to/oneapi \
   --output /path/to/new-build --jobs 8 --execute
 ```
 
-生成`openmx-cpu`和`build-manifest.json`。准备匹配的NSOC、SOC输入，复制
-`cpu/tools/examples/input_request.json`，填写二进制、manifest、输入、全新结果
-目录、主机、CPU布局和运行库路径。两个输入用相同的对称性请求，例如：
+Run compilation on a compute machine. The output directory must be new; the
+builder compiles repository sources and bundled ELPA rather than reusing
+external OpenMX object files. It writes `openmx-cpu`, compiler logs and a
+`build-manifest.json`. Provide basis sets and pseudopotentials separately
+through each input's `DATA.PATH`.
+
+### 2. Enable symmetry in the input
+
+Add one line to the normal OpenMX input:
 
 ```text
-scf.Symmetry.Mode       Auto
-scf.Symmetry.Tolerance  1e-5
-scf.Symmetry.HSExport   Symmetrize
+scf.Symmetry on
 ```
+
+The default is `off`. The program detects and validates a supported symmetry
+subgroup, builds the required representation, and selects its solver path.
+The log reports the selected group and the checks actually performed. A
+failed mapping or operator check stops the run instead of silently ignoring
+the request. Input basis sets, cutoff, temperature and SCF stopping criteria
+remain the user's ordinary OpenMX settings.
+
+### 3. Run normally
+
+After loading the matching Intel compiler/MPI/MKL runtime and making the
+Python environment above available, launch the built executable directly:
 
 ```bash
-python cpu/tools/workflow.py configure /path/to/request.json \
-  --output /path/to/new-prepared-config
-python cpu/tools/workflow.py plan /path/to/new-prepared-config/workflow.json
-python cpu/tools/workflow.py run /path/to/new-prepared-config/workflow.json --wait
+mpirun -np 64 /path/to/new-build/openmx-cpu input.dat -nt 1
 ```
 
-当前验证范围：固定几何、非磁Gamma，收敛NSOC后从自身检查点接一步SOC。
-一步SOC不是完整SOC自洽。Auto/User通过准备入口接入求解器，裸二进制没有
-匹配元数据时会拒绝运行；识别到几何对称性也不保证电子算子协变检查通过。
+For the tested NSOC plus one-step SOC workflow, prepare the ordinary matching
+NSOC and SOC inputs, run NSOC to convergence, then run SOC from that NSOC
+checkpoint with the same MPI layout. Add `scf.Symmetry on` to both inputs.
+See the [run guide](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/WORKFLOW.zh-CN.md) for restart requirements.
+No separate metadata command or JSON request is needed for this entry point.
+Multi-node host selection and process binding use the site's normal MPI or
+scheduler launch settings.
 
-### 与CPU参考的实测差别
+No internal calculation deadline is imposed; scheduler limits still apply.
+The optional benchmark controller records binding, stage times, core-hours
+and node/cluster memory, but is not required for ordinary calculations.
 
-以下为同节点64 MPI×1，MoTe2 9.43°、222原子／3848标量AO的保存结果：
+### Scope and validation
 
-| 配置 | NSOC秒 | 一步SOC秒 | 合计秒 | 流程峰值GiB |
+With `scf.Symmetry on` and the ordinary `HS.fileout on`, exported H/S are
+symmetrized consistently with the selected group. Symmetry projection changes
+a discretized operator and requires a physical-error comparison against an
+unsymmetrized reference. The SOC path also checks consistency between its
+solve and exported operator. Invalid mappings, unsupported settings or failed
+covariance checks stop the run.
+
+D3/C3 retain specialized optimizations; D2/C2 and other supported subgroups use
+general representation machinery. This is not a claim that every point group,
+magnetic state, arbitrary k-point calculation or multi-step SOC run has been
+validated. Multi-node operation is supported, but more nodes do not guarantee
+lower core-hours or constant total memory.
+
+Read the [acceptance criteria](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/ACCEPTANCE.zh-CN.md),
+[large-angle benchmarks](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/BENCHMARKS_20261031.md), and
+[input/export integration validation](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/INPUT_SYMMETRY_VALIDATION_20261102.md)
+and [native switch validation](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/NATIVE_SYMMETRY_VALIDATION_20261106.md)
+for measured results and remaining boundaries. The native MoTe2 9.43-degree,
+222-atom NSOC check completed, but its SOC operator failed the default covariance
+gate; that case is not a successful full-workflow validation. The
+[run guide](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/WORKFLOW.zh-CN.md) describes ordinary MPI execution and
+restart requirements.
+
+### Comparison with the CPU reference
+
+The saved same-node, 64 MPI × 1 thread comparison for **MoTe2 9.43 degrees,
+222 atoms / 3848 scalar AOs** is:
+
+| Configuration | NSOC (s) | Own one-step SOC (s) | Total (s) | Workflow memory peak (GiB) |
 |---|---:|---:|---:|---:|
-| CPU4.0源码快照参考 | 86.17 | 69.11 | 155.27 | 70.41 |
-| 优化D3＋legacy SOC配置 | 41.80 | 33.95 | 75.75 | 22.84 |
+| CPU 4.0 source-snapshot reference | 86.17 | 69.11 | 155.27 | 70.41 |
+| Optimized D3 + legacy SOC profile | 41.80 | 33.95 | 75.75 | 22.84 |
 
-该完整配置约快2.05倍，峰值约少3.08倍；均为150 Ry、300 K、SCF 1e-7、
-StartPulay15、History30。包含对称约束和SCF轨迹变化，不能归因成纯代码加速。
-参考是已安装CPU4.0源码快照，未认证为原封上游发行包，也没有本轮匹配的
-3.9对照。历史MoTe2投影相对raw的NSOC最大力差约12.44 meV/Å，未通过
-1 meV/Å物理门限；不能声称与原版结果全部等价。
+The complete configured workflow was about **2.05× faster**, with about
+**3.08× lower peak memory**, for that case. Both used 150 Ry, 300 K,
+SCF criterion `1e-7`, StartPulay15 and History30. This is a saved profile
+comparison, including symmetry constraints and SCF trajectory differences;
+it is not a claim of identical raw operators or a universal speedup. The
+reference is a frozen installed CPU4.0 snapshot, not an independently
+authenticated pristine upstream distribution, and no matched latest-build
+CPU3.9 comparison is established here.
 
-**自动configure入口目前选择通用GSOC，表中的最快legacy D3配置需显式选择；
-上述计时不是自动入口的新实测。** 多节点虽可运行，但不保证核时或总内存降低。
-
-- [CPU完整说明](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/README.md)
-- [编译依赖与构建](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/BUILD.zh-CN.md)
-- [Auto/User输入和H/S导出](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/INPUT_SYMMETRY.zh-CN.md)
-- [实测时间、内存和未通过项](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/BENCHMARKS_20261031.md)
+The historical fastest row used a specific legacy D3 solver configuration;
+it is not a timing measurement of the current simple input interface.
+Historical MoTe2 projected-vs-raw NSOC force differences reached about
+12.44 meV/angstrom and did not pass the 1 meV/angstrom physical gate.
+Implementation/layout agreement is separate from raw-reference physical
+accuracy. Full inputs, timing attribution and failed gates are described in
+[the benchmark report](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/BENCHMARKS_20261031.md).
 
 ## GPU实现 / GPU implementation on this branch
 
