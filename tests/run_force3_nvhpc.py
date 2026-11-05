@@ -16,6 +16,7 @@ import signal
 import socket
 import subprocess
 import time
+import sys
 
 FLOAT = r"[-+]?(?:\d+\.?\d*|\.\d+)(?:[EeDd][-+]?\d+)?"
 
@@ -76,7 +77,7 @@ def main():
            "--bind-to", "none", "--report-bindings",
            str(binary), "./input.dat", "-nt", str(args.threads)]
     metadata = dict(node=socket.gethostname(), allocation=env.get("SLURM_JOB_ID"),
-                    environment=env.get("OPENMX_GPU_ENV"), runtime_prefix="snapshots/home/mambaforge",
+                    environment=env.get("OPENMX_GPU_ENV"), runtime_prefix=sys.prefix,
                     command=cmd, binary=str(binary), binary_sha256=hashlib.sha256(binary.read_bytes()).hexdigest(),
                     source_input=str(inp), input_sha256=hashlib.sha256(inp.read_bytes()).hexdigest(),
                     reference=str(reference), atoms=args.atoms, MPI=1, OMP=args.threads,

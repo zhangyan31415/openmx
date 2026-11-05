@@ -63,7 +63,7 @@ commands, input/binary hashes, loaded runtime paths, GPU samples and thread
 CPU masks. OpenMP binding operates within the CPU set inherited from Slurm.
 
 The server-specific evidence directory is
-`snapshots/work/software/2.mp_openmx/results/openmx_force3_fix_20261018`.
+`snapshots/openmx_force3_fix_20261018`.
 Its report and summary distinguish expected failing controls from the fixed
 application runs. The source structure is bulk `mp_poscar/mp-602.vasp`, using
 Mo7.0-s3p2d2 and Te7.0-s3p2d2f1, SOC, Gamma, native FP64 and three SCF iterations.
