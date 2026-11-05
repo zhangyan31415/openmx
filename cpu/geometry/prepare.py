@@ -7,7 +7,7 @@ from pathlib import Path
 import argparse,hashlib,importlib.util,json,sys
 import numpy as np
 HERE=Path(__file__).resolve().parent;REPO=HERE.parents[1]
-TOOLS=REPO/'local-records/cpu_d3/historical/geometry_tools'
+TOOLS=HERE/'metadata'
 def module(name,path):
  spec=importlib.util.spec_from_file_location(name,path);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m);return m
 
@@ -77,7 +77,7 @@ def prepare(nsoc_input,soc_input,output,group='auto',tolerances=None,atom_tol=5e
  if out.exists():raise ValueError('output must be a new metadata directory')
  out.mkdir(parents=True)
  detector=module('unified_detector',TOOLS/'symmetry_detect.py')
- spinor=module('unified_spinor_prepare',REPO/'local-records/cpu_d3/generic_soc/tools/prepare_soc_basis.py')
+ spinor=module('unified_spinor_prepare',HERE/'prepare_soc_basis.py')
  realspace=module('unified_realspace_prepare',TOOLS/'prepare_realspace_d3.py')
  ladder=tolerances or [1e-6,3e-6,1e-5,2e-5,3e-5,5e-5,1e-4]
  try:

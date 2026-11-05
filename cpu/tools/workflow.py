@@ -399,10 +399,11 @@ def plan_config(config):
     interval = float(config.get('monitor_interval_seconds',0.25))
     if not 0.05<=interval<=5:
         raise ValueError('monitor interval must be in [0.05,5] seconds')
+    shared_scratch=absolute(runtime.get('shared_scratch_root',str(output.parent/'.openmx-scratch')),'shared_scratch_root',exists=False)
     return {'schema':1,'category':'full converged NSOC then own exactly-one-step SOC; native H/S and original physics retained',
         'binary':str(binary),'binary_sha256':sha256(binary),'build_manifest':str(Path(config['build_manifest']).resolve()) if config.get('build_manifest') else None,
         'inputs':{k:str(v) for k,v in sources.items()},'input_hashes':{k:sha256(v) for k,v in sources.items()},
-        'output':str(output),'scratch_root':str(Path('/data/work/tmp')/os.environ.get('USER','zy')/'codex/openmx-unified'/hashlib.sha256(str(output).encode()).hexdigest()[:20]),'layout':layout,'hosts':hosts,'ranks_per_host':per_host,'ranks':len(hosts)*per_host,'threads':threads,
+        'output':str(output),'scratch_root':str(shared_scratch/hashlib.sha256(str(output).encode()).hexdigest()[:20]),'layout':layout,'hosts':hosts,'ranks_per_host':per_host,'ranks':len(hosts)*per_host,'threads':threads,
         'total_cores':len(hosts)*per_host*threads,'runtime':{**runtime,'mpiexec':str(mpiexec),'runtime_prefix':str(prefix),'environment_prefix':str(python_prefix),'transport':transport},
         'profiles':profiles,'symmetry':{**symmetry,'soc_export_policy':symmetry.get('soc_export_policy','raw')},'soc_export_policy':symmetry.get('soc_export_policy','raw'),'dependencies_sha256':dependencies,'system_names':{'nsoc':n['system.name'],'soc':s['system.name']},
         'monitor_interval_seconds':interval,'memory_limit_bytes_per_host':positive_int(config['memory_limit_bytes_per_host'],'memory_limit_bytes_per_host') if config.get('memory_limit_bytes_per_host') is not None else None,'timeout_seconds':None,
@@ -831,7 +832,7 @@ def main(argv=None):
     p=sub.add_parser('prepare'); p.add_argument('--nsoc-input',required=True,type=Path); p.add_argument('--soc-input',required=True,type=Path)
     p.add_argument('--output',required=True,type=Path); p.add_argument('--group','--point-group',dest='group',default='auto',choices=['auto','C2','D2','C3','D3','C4','D4','C6','D6','Ci','Cs'])
     p.add_argument('--symprec-ladder',type=float,nargs='+'); p.add_argument('--geometry-tol',type=float,default=5e-5)
-    p.add_argument('--project-nsoc',action='store_true',help='explicit NSOC real-space H/S projection; DM/EDM are checked, not projected by this hook'); p.add_argument('--environment-prefix',default='snapshots/home/mambaforge')
+    p.add_argument('--project-nsoc',action='store_true',help='explicit NSOC real-space H/S projection; DM/EDM are checked, not projected by this hook'); p.add_argument('--environment-prefix',default=sys.prefix)
     args=parser.parse_args(argv)
     try:
         if args.action=='_controller': return controller(args.plan)

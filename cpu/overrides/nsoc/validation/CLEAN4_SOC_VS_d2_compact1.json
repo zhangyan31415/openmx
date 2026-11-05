@@ -16,8 +16,8 @@
     "force_max_vector_meV_A": 0.0
   },
   "HS": {
-    "reference": "snapshots/work/software/2.mp_openmx/results/openmx_gsoc_compact_20261030/native_density_v2/d2_compact1/hgi2_tiny.scfout",
-    "candidate": "snapshots/work/software/2.mp_openmx/results/openmx_unified_cpu_20261031/runs/tiny_D2_optimized_clean4_node042_4x1/soc/hgi2_tiny.scfout",
+    "reference": "snapshots/results/openmx_gsoc_compact_20261030/native_density_v2/d2_compact1/hgi2_tiny.scfout",
+    "candidate": "snapshots/results/openmx_unified_cpu_20261031/runs/tiny_D2_optimized_clean4_node042_4x1/soc/hgi2_tiny.scfout",
     "atom_count": 3,
     "scalar_AO_count": 57,
     "header_spin": 15,

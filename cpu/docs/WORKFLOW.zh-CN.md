@@ -11,16 +11,16 @@
 3. 准备同一操作集合的标量和自旋对称基。已有验证资产可以直接使用；新资产用下面的 `prepare`。SOC 矩阵修复和紧凑存储默认关闭；`prepare --project-nsoc` 控制额外的 NSOC 实空间 H/S 投影，默认不加。准备元数据不会自行运行 OpenMX。
 4. 完整显式 profile 和布局写入 JSON，先 `plan`，再 `run`。前台 SSH 保持连接，计算节点的用户 systemd 服务监督执行；所有主机另有任务专属 SSH 会话锚点，覆盖完整 NSOC＋SOC。`inspect` 检查服务和科学输出。入口不会申请或取消 Slurm 作业；这些 SSH 主机必须已经得到用户授权或已有资源分配。
 
-环境前缀 `snapshots/home/mambaforge`；入口使用标准库。元数据工具另需该环境提供 numpy/scipy/spglib。非交互命令直接使用绝对 Python：
+先激活提供 numpy/scipy/spglib 的 Python 环境；入口本身使用标准库。下面以 `$CONDA_PREFIX` 表示已激活环境，非交互命令也可直接填写环境的绝对路径。`prepare --environment-prefix` 默认使用当前解释器的 `sys.prefix`：
 
 ```bash
-snapshots/home/mambaforge/bin/python /ABS/REPO/cpu/tools/workflow.py prepare \
+"$CONDA_PREFIX/bin/python" /ABS/REPO/cpu/tools/workflow.py prepare \
   --nsoc-input /ABS/case/nsoc.dat --soc-input /ABS/case/soc.dat \
   --output /ABS/metadata-new --group D3 --geometry-tol 0.00005
 
-snapshots/home/mambaforge/bin/python /ABS/REPO/cpu/tools/workflow.py plan /ABS/config.json
-snapshots/home/mambaforge/bin/python /ABS/REPO/cpu/tools/workflow.py run /ABS/config.json --wait
-snapshots/home/mambaforge/bin/python /ABS/REPO/cpu/tools/workflow.py inspect /ABS/results-new
+"$CONDA_PREFIX/bin/python" /ABS/REPO/cpu/tools/workflow.py plan /ABS/config.json
+"$CONDA_PREFIX/bin/python" /ABS/REPO/cpu/tools/workflow.py run /ABS/config.json --wait
+"$CONDA_PREFIX/bin/python" /ABS/REPO/cpu/tools/workflow.py inspect /ABS/results-new
 ```
 
 `plan` 只读：不创建目录、不 SSH、不启动任务。`run` 要求结果目录不存在；失败目录保留，不会自动覆盖、重试或静默切换为原始路径。必须加 `--wait` 并保持前台调用，直到本次受监督工作流退出。当前主机没有开启用户 Linger，异步启动会在最后的 SSH 会话退出后被系统结束，因此入口明确拒绝省略 `--wait` 的异步提交。**不承诺断开客户端后继续计算**，也不会擅自改变用户级 Linger 设置。
@@ -61,6 +61,11 @@ NSOC 只有正常退出、原生收敛标志、能量、有效 H/S 和完整同 
 `workflow.json` 给出两步原生完整耗时之和、启动耗时之和、核时与内存。原生 `Elapsed.Time.` 与包含 MPI/systemd 启动的耗时同时保留。核时采用总物理核数 × 原生耗时；选布局时也应检查启动成本。所有终态和失败日志保留。
 
 ## 输出目录
+
+临时运行文件默认位于共享结果目录父级的 `.openmx-scratch/`，按本次输出路径的
+哈希分开。可用 `runtime.shared_scratch_root` 指定其他绝对共享临时目录。
+多节点时，该目录与结果目录一样必须能从所有主机访问；没有固定用户名或
+个人站点路径。
 
 ```text
 results-new/

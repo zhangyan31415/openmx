@@ -19,7 +19,7 @@ _pair_module = importlib.util.module_from_spec(_pair_spec)
 _pair_spec.loader.exec_module(_pair_module)
 paired_basis = _pair_module.paired_basis
 
-DEFAULT_HELPER = Path(__file__).resolve().parents[4]/'local-records/cpu_d3/historical/geometry_tools/prepare_nsoc_auto.py'
+DEFAULT_HELPER = Path(__file__).resolve().parents[3]/'geometry/metadata/prepare_nsoc_auto.py'
 
 
 def _load(path):

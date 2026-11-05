@@ -10,7 +10,7 @@ import numpy as np
 HERE=Path(__file__).resolve().parent;REPO=HERE.parents[1]
 def _load(name,path):
  s=importlib.util.spec_from_file_location(name,path);m=importlib.util.module_from_spec(s);s.loader.exec_module(m);return m
-spinor=_load('gsoc_export_spinor',REPO/'local-records/cpu_d3/generic_soc/tools/prepare_soc_basis.py')
+spinor=_load('gsoc_export_spinor',HERE/'prepare_soc_basis.py')
 def spin_lifts(rotations):
  return [spinor.spin_rotation(np.linalg.det(q)*np.asarray(q))for q in rotations]
 def build(input_path,soc_metadata,output,provenance):

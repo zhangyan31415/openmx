@@ -1,5 +1,5 @@
 {
-  "original_file": "snapshots/work/software/2.mp_openmx/results/openmx_soc_symmetry_restore_20261022_140000/tools/prepare_soc_metadata.py",
+  "original_file": "snapshots/results/openmx_soc_symmetry_restore_20261022_140000/tools/prepare_soc_metadata.py",
   "original_sha256": "7c080cb794833f621c1e3edcf8531b3934430d5df2ef1c0ceff7aedc77370d26",
   "preserved_functions": [
     "shell_list",

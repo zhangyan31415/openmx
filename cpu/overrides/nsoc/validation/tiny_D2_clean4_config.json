@@ -1,12 +1,12 @@
 {
   "schema": 1,
-  "binary": "snapshots/work/software/2.mp_openmx/results/openmx_unified_cpu_20261031/build/unified-HOST-clean4/openmx-cpu",
-  "build_manifest": "snapshots/work/software/2.mp_openmx/results/openmx_unified_cpu_20261031/build/unified-HOST-clean4/build-manifest.json",
+  "binary": "snapshots/results/openmx_unified_cpu_20261031/build/unified-HOST-clean4/openmx-cpu",
+  "build_manifest": "snapshots/results/openmx_unified_cpu_20261031/build/unified-HOST-clean4/build-manifest.json",
   "inputs": {
-    "nsoc": "snapshots/work/software/2.mp_openmx/results/openmx_generic_soc_20261028/c2n/scalar/input.dat",
-    "soc": "snapshots/work/software/2.mp_openmx/results/openmx_gsoc_compact_20261030/native_density_v2/d2_compact1/input.dat"
+    "nsoc": "snapshots/results/openmx_generic_soc_20261028/c2n/scalar/input.dat",
+    "soc": "snapshots/results/openmx_gsoc_compact_20261030/native_density_v2/d2_compact1/input.dat"
   },
-  "output": "snapshots/work/software/2.mp_openmx/results/openmx_unified_cpu_20261031/runs/tiny_D2_optimized_clean4_node042_4x1",
+  "output": "snapshots/results/openmx_unified_cpu_20261031/runs/tiny_D2_optimized_clean4_node042_4x1",
   "layout": {
     "hosts": [
       "node042"
@@ -23,9 +23,9 @@
     }
   },
   "runtime": {
-    "mpiexec": "/data/home/apps/oneapi2022.3/mpi/2021.7.1/bin/mpirun",
-    "runtime_prefix": "/data/home/apps/oneapi2022.3",
-    "environment_prefix": "snapshots/home/mambaforge",
+    "mpiexec": "/opt/intel/oneapi/mpi/2021.7.1/bin/mpirun",
+    "runtime_prefix": "/opt/intel/oneapi",
+    "environment_prefix": "/path/to/python-env",
     "transport": "shm"
   },
   "profiles": {
@@ -34,7 +34,7 @@
       "environment": {
         "OPENMX_CPU_NSOC_SYM": "1",
         "OPENMX_CPU_NSOC_FULL_PROJECT": "1",
-        "OPENMX_CPU_NSOC_BASIS": "snapshots/work/software/2.mp_openmx/results/openmx_unified_cpu_20261031/metadata/tiny_D2/scalar.nsym",
+        "OPENMX_CPU_NSOC_BASIS": "snapshots/results/openmx_unified_cpu_20261031/metadata/tiny_D2/scalar.nsym",
         "OPENMX_CPU_NSOC_RELEASE_NORM": "0",
         "OPENMX_CPU_NSOC_RESET_DIIS": "0",
         "OPENMX_CPU_NSOC_WARM_STEPS": "0",
@@ -85,7 +85,7 @@
         "OPENMX_CPU_NSOC_SELECTED_BACK": "0",
         "OPENMX_CPU_D3": "0",
         "OPENMX_CPU_C3": "0",
-        "OPENMX_CPU_REALSPACE_MAP": "snapshots/work/software/2.mp_openmx/results/openmx_unified_cpu_20261031/metadata/tiny_D2/operations.rsd3",
+        "OPENMX_CPU_REALSPACE_MAP": "snapshots/results/openmx_unified_cpu_20261031/metadata/tiny_D2/operations.rsd3",
         "OPENMX_CPU_XC_WORKSPACE": "2"
       }
     },
@@ -122,7 +122,7 @@
         "OPENMX_CPU_FORCE3_TILE": "4096",
         "OPENMX_CPU_FORCE3_RELEASE_MKL": "2",
         "OPENMX_CPU_GSOC": "1",
-        "OPENMX_CPU_GSOC_BASIS": "snapshots/work/software/2.mp_openmx/results/openmx_unified_cpu_20261031/metadata/tiny_D2/spinor.gsoc",
+        "OPENMX_CPU_GSOC_BASIS": "snapshots/results/openmx_unified_cpu_20261031/metadata/tiny_D2/spinor.gsoc",
         "OPENMX_CPU_GSOC_PROJECT": "1",
         "OPENMX_CPU_GSOC_COV_TOL": "1e-8",
         "OPENMX_CPU_GSOC_GEOMETRY_TOL_ANG": "3e-5",
@@ -148,8 +148,8 @@
   "symmetry": {
     "project": true,
     "compact": true,
-    "nsoc_basis": "snapshots/work/software/2.mp_openmx/results/openmx_unified_cpu_20261031/metadata/tiny_D2/scalar.nsym",
-    "soc_basis": "snapshots/work/software/2.mp_openmx/results/openmx_unified_cpu_20261031/metadata/tiny_D2/spinor.gsoc",
+    "nsoc_basis": "snapshots/results/openmx_unified_cpu_20261031/metadata/tiny_D2/scalar.nsym",
+    "soc_basis": "snapshots/results/openmx_unified_cpu_20261031/metadata/tiny_D2/spinor.gsoc",
     "geometry_tolerance_ang": 3e-05,
     "covariance_tolerance": 1e-08
   },

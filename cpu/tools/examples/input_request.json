@@ -11,9 +11,9 @@
     "cpu_ids_per_host": {"node040": [0, 1, 2, 3]}
   },
   "runtime": {
-    "mpiexec": "/data/home/apps/oneapi2022.3/mpi/2021.7.1/bin/mpirun",
-    "runtime_prefix": "/data/home/apps/oneapi2022.3",
-    "environment_prefix": "snapshots/home/mambaforge",
+    "mpiexec": "/opt/intel/oneapi/mpi/2021.7.1/bin/mpirun",
+    "runtime_prefix": "/opt/intel/oneapi",
+    "environment_prefix": "/path/to/python-env",
     "transport": "shm"
   },
   "timeout_seconds": null

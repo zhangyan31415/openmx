@@ -53,7 +53,7 @@ class CommonSOCPreparation(unittest.TestCase):
     def test_explicit_generic_symmetrize_writes_native_map(self):
         with tempfile.TemporaryDirectory()as d:
             d=Path(d);inp,selected=fixture.MetadataContract().case(d)
-            spinor=common.module('generic_prepare_positive',ROOT.parent/'local-records/cpu_d3/generic_soc/tools/prepare_soc_basis.py')
+            spinor=common.module('generic_prepare_positive',ROOT/'geometry/prepare_soc_basis.py')
             r=common.prepare_soc_artifacts(inp,selected,d,'D3',spinor,{},export_policy='symmetrize')
             self.assertEqual(r['export_HS'],'symmetrized')
             self.assertTrue(r['files']['soc_native_map'].is_file())

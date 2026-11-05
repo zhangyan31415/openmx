@@ -1,0 +1,32 @@
+[
+  {
+    "file": "neighbor_support.py",
+    "sha256": "274d3b7756dff38b11a85b33220ab87e81803241c34cf7a1237d599696aaee6d",
+    "source_commit": "41035c6935ff05cb608eb144cc7e347e07836fa5",
+    "changes": "public CPU layout; repository-local imports and portable runtime provenance; scientific operations unchanged"
+  },
+  {
+    "file": "prepare_nsoc_auto.py",
+    "sha256": "72d7f546f72ca93ef1547cbdedaacf32b4c9df12d842b9d3acf5194251810ff2",
+    "source_commit": "41035c6935ff05cb608eb144cc7e347e07836fa5",
+    "changes": "public CPU layout; repository-local imports and portable runtime provenance; scientific operations unchanged"
+  },
+  {
+    "file": "prepare_nsoc_d3.py",
+    "sha256": "919e6bf69ea7f92068f829dca1916db038d7fffbaf4217cb5bdae044f53f95d2",
+    "source_commit": "41035c6935ff05cb608eb144cc7e347e07836fa5",
+    "changes": "public CPU layout; repository-local imports and portable runtime provenance; scientific operations unchanged"
+  },
+  {
+    "file": "prepare_realspace_d3.py",
+    "sha256": "c5962d281fe245ecb6f7a904ffab33138df619e02aefd767d37e76ce8a2d1b68",
+    "source_commit": "41035c6935ff05cb608eb144cc7e347e07836fa5",
+    "changes": "public CPU layout; repository-local imports and portable runtime provenance; scientific operations unchanged"
+  },
+  {
+    "file": "symmetry_detect.py",
+    "sha256": "88111612e42e84fbe10a19fe3461cdfae49ab1ad9ba44ddab7f386c5d275c63a",
+    "source_commit": "41035c6935ff05cb608eb144cc7e347e07836fa5",
+    "changes": "public CPU layout; repository-local imports and portable runtime provenance; scientific operations unchanged"
+  }
+]

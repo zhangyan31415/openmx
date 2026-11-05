@@ -52,10 +52,10 @@ scf.Symmetry.CovarianceTolerance 1e-8
 `symmetry` 字段，它们从输入生成。
 
 ```bash
-snapshots/home/mambaforge/bin/python /ABS/REPO/cpu/tools/workflow.py configure \
+"$CONDA_PREFIX/bin/python" /ABS/REPO/cpu/tools/workflow.py configure \
   /ABS/request.json --output /ABS/new-prepared-config
 
-snapshots/home/mambaforge/bin/python /ABS/REPO/cpu/tools/workflow.py run \
+"$CONDA_PREFIX/bin/python" /ABS/REPO/cpu/tools/workflow.py run \
   /ABS/new-prepared-config/workflow.json --wait
 ```
 

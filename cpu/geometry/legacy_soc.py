@@ -43,7 +43,7 @@ def _input_guard(text):
 
 def _ordered_operations(raw,selected,group):
     """Revalidate mappings, then retain the historical +120deg-z gauge."""
-    detector=_module('legacy_metadata_detector',REPO/'local-records/cpu_d3/historical/geometry_tools/symmetry_detect.py')
+    detector=_module('legacy_metadata_detector',HERE/'metadata/symmetry_detect.py')
     entries=selected.get('operations',[])
     _require(selected.get('valid') and entries,'validated symmetry operations required')
     original_entries=entries
@@ -146,7 +146,7 @@ def prepare(input_soc,symmetry_json,output_dir,group,*,export_policy='raw'):
     inp=Path(input_soc).resolve();meta=Path(symmetry_json).resolve();out=Path(output_dir).resolve()
     _require(not out.exists(),'output must be a new metadata directory')
     _input_guard(inp.read_text())
-    detector=_module('legacy_input_detector',REPO/'local-records/cpu_d3/historical/geometry_tools/symmetry_detect.py')
+    detector=_module('legacy_input_detector',HERE/'metadata/symmetry_detect.py')
     raw=detector.parse_openmx(inp);metadata=json.loads(meta.read_text());selected=metadata.get('selected',metadata)
     ops,qs,us,bound,residual=_ordered_operations(raw,selected,group)
     result=build_spinor_basis(raw['species'],raw['species_basis'],ops[1]['atom_permutation'],

@@ -42,10 +42,8 @@ class MergeStagesTest(unittest.TestCase):
     def test_real_dft_merge_retains_both_lifecycles(self):
         repo = ROOT.parent
         stock = repo/'cpu/vendor/openmx4.0/source/DFT.c'
-        if not stock.exists():
-            stock = pathlib.Path('snapshots/home/software/openmx4.0/source/DFT.c')
         nsoc = ROOT/'overrides/nsoc/source/DFT.direct.c'
-        soc = repo/'local-records/cpu_d3/generic_soc/integration/DFT.compact.c'
+        soc = ROOT/'overrides/soc/source/DFT.compact.c'
         self.assertTrue(nsoc.exists(), 'recovered NSOC DFT source missing')
         merged = self.module.merge_text(stock.read_text(), nsoc.read_text(), soc.read_text())
         scalar_start=merged.index('void Allocate_Free_Cluster_Col(int todo_flag)\n{')

@@ -5,7 +5,7 @@
 #                                                                 #
 ###################################################################
 
-MKLROOT = /data/home/apps/oneapi2022.3/mkl/2022.2.1
+MKLROOT = /opt/intel/oneapi/mkl/2022.2.1
 CC = mpiicc -O3 -xHOST -ip -no-prec-div -qopenmp -I${MKLROOT}/include -I${MKLROOT}/include/fftw
 FC = mpiifort -O3 -xHOST -ip -no-prec-div -qopenmp
 LIB= -L${MKLROOT}/lib/intel64 -lmkl_scalapack_lp64 -lmkl_intel_lp64 -lmkl_intel_thread -lmkl_core -lifcore -lmkl_blacs_intelmpi_lp64 -liomp5 -lpthread -lm -ldl

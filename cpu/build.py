@@ -4,7 +4,7 @@ from pathlib import Path
 import argparse,concurrent.futures,hashlib,json,os,shlex,socket,subprocess,time
 REPO=Path(__file__).resolve().parents[1]
 BASE=REPO/'cpu/overrides/soc/SOURCES.json'
-DEFAULT_ONEAPI='/data/home/apps/oneapi2022.3'
+DEFAULT_ONEAPI=os.environ.get('ONEAPI_ROOT','/opt/intel/oneapi')
 def sha(p):
  h=hashlib.sha256()
  with Path(p).open('rb')as f:

@@ -17,8 +17,8 @@
       "force_max_vector_meV_A": 6.684868771918999e-06
     },
     "HS": {
-      "reference": "snapshots/work/software/2.mp_openmx/results/openmx_unified_cpu_20261031/workflow_probe/raw3atom_foreground040_041/nsoc/hgi2_tiny.scfout",
-      "candidate": "snapshots/work/software/2.mp_openmx/results/openmx_unified_cpu_20261031/runs/tiny_D2_optimized_clean4_node042_4x1/nsoc/hgi2_tiny.scfout",
+      "reference": "snapshots/results/openmx_unified_cpu_20261031/workflow_probe/raw3atom_foreground040_041/nsoc/hgi2_tiny.scfout",
+      "candidate": "snapshots/results/openmx_unified_cpu_20261031/runs/tiny_D2_optimized_clean4_node042_4x1/nsoc/hgi2_tiny.scfout",
       "atom_count": 3,
       "scalar_AO_count": 57,
       "header_spin": 12,
@@ -75,8 +75,8 @@
       "force_max_vector_meV_A": 6.684868771918999e-06
     },
     "HS": {
-      "reference": "snapshots/work/software/2.mp_openmx/results/openmx_unified_cpu_20261031/workflow_probe/raw3atom_foreground040_041/nsoc/hgi2_tiny.scfout",
-      "candidate": "snapshots/work/software/2.mp_openmx/results/openmx_unified_cpu_20261031/runs/tiny_D2_optimized_clean4_node042_4x1/nsoc/hgi2_tiny.scfout",
+      "reference": "snapshots/results/openmx_unified_cpu_20261031/workflow_probe/raw3atom_foreground040_041/nsoc/hgi2_tiny.scfout",
+      "candidate": "snapshots/results/openmx_unified_cpu_20261031/runs/tiny_D2_optimized_clean4_node042_4x1/nsoc/hgi2_tiny.scfout",
       "atom_count": 3,
       "scalar_AO_count": 57,
       "header_spin": 12,
@@ -136,8 +136,8 @@
       "force_max_vector_meV_A": 1.4657183598545767e-05
     },
     "HS": {
-      "reference": "snapshots/work/software/2.mp_openmx/results/openmx_unified_cpu_20261031/workflow_probe/raw3atom_foreground040_041/soc/hgi2_tiny.scfout",
-      "candidate": "snapshots/work/software/2.mp_openmx/results/openmx_unified_cpu_20261031/runs/tiny_D2_optimized_clean4_node042_4x1/soc/hgi2_tiny.scfout",
+      "reference": "snapshots/results/openmx_unified_cpu_20261031/workflow_probe/raw3atom_foreground040_041/soc/hgi2_tiny.scfout",
+      "candidate": "snapshots/results/openmx_unified_cpu_20261031/runs/tiny_D2_optimized_clean4_node042_4x1/soc/hgi2_tiny.scfout",
       "atom_count": 3,
       "scalar_AO_count": 57,
       "header_spin": 15,
@@ -236,8 +236,8 @@
       "force_max_vector_meV_A": 1.4657183598545767e-05
     },
     "HS": {
-      "reference": "snapshots/work/software/2.mp_openmx/results/openmx_unified_cpu_20261031/workflow_probe/raw3atom_foreground040_041/soc/hgi2_tiny.scfout",
-      "candidate": "snapshots/work/software/2.mp_openmx/results/openmx_unified_cpu_20261031/runs/tiny_D2_optimized_clean4_node042_4x1/soc/hgi2_tiny.scfout",
+      "reference": "snapshots/results/openmx_unified_cpu_20261031/workflow_probe/raw3atom_foreground040_041/soc/hgi2_tiny.scfout",
+      "candidate": "snapshots/results/openmx_unified_cpu_20261031/runs/tiny_D2_optimized_clean4_node042_4x1/soc/hgi2_tiny.scfout",
       "atom_count": 3,
       "scalar_AO_count": 57,
       "header_spin": 15,
@@ -339,8 +339,8 @@
       "force_max_vector_meV_A": 0.0
     },
     "HS": {
-      "reference": "snapshots/work/software/2.mp_openmx/results/openmx_generic_soc_20261028/c2n/scalar/hgi2_tiny.scfout",
-      "candidate": "snapshots/work/software/2.mp_openmx/results/openmx_unified_cpu_20261031/runs/tiny_D2_optimized_clean4_node042_4x1/nsoc/hgi2_tiny.scfout",
+      "reference": "snapshots/results/openmx_generic_soc_20261028/c2n/scalar/hgi2_tiny.scfout",
+      "candidate": "snapshots/results/openmx_unified_cpu_20261031/runs/tiny_D2_optimized_clean4_node042_4x1/nsoc/hgi2_tiny.scfout",
       "atom_count": 3,
       "scalar_AO_count": 57,
       "header_spin": 12,

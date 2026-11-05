@@ -1,22 +1,22 @@
 {
   "files": [
     {
-      "origin": "local-records/cpu_d3/generic_memory/cpu_nsoc_history_capacity.h",
+      "origin": "snapshots/source/cpu_d3/generic_memory/cpu_nsoc_history_capacity.h",
       "sha256": "d56efb5ae0ceec8c2ae9419f6afc99d2494a08f77ded4050a3e3c890f2baa98a",
       "source": "cpu/overrides/nsoc/source/cpu_nsoc_history_capacity.unified.h"
     },
     {
-      "origin": "local-records/cpu_d3/generic_memory/cpu_xc_workspace.h",
+      "origin": "snapshots/source/cpu_d3/generic_memory/cpu_xc_workspace.h",
       "sha256": "82d0713ffe68d46c8fd5c6531f6ab5951a33e706a433e6d9494863196e8b0ff4",
       "source": "cpu/overrides/nsoc/source/cpu_xc_workspace.h"
     },
     {
-      "origin": "local-records/cpu_d3/generic_memory/prepare_xc_workspace.py",
+      "origin": "snapshots/source/cpu_d3/generic_memory/prepare_xc_workspace.py",
       "sha256": "becc0001a5ad27bd9953bdc50b6678026df707644c45baf314d29e52629301a6",
       "source": "cpu/overrides/nsoc/prepare_xc_workspace.py"
     },
     {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_HgI2_generic_memory_20261028/xc/Set_XC_Grid.workspace.c",
+      "origin": "snapshots/results/openmx_HgI2_generic_memory_20261028/xc/Set_XC_Grid.workspace.c",
       "source": "cpu/overrides/nsoc/source/Set_XC_Grid.workspace.c",
       "sha256": "4c01d2630282e232aaa2ee10765f1db80c02b3879c70418a8e6199fc950e6ac2",
       "exact_generated_and_archived": true

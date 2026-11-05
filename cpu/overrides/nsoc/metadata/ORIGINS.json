@@ -1,21 +1,21 @@
 [
   {
     "path": "prepare_paired_d3.py",
-    "origin": "snapshots/work/software/2.mp_openmx/results/openmx_equivalent_blocks_20261022_065042/tools/prepare_paired_d3.py",
+    "origin": "snapshots/results/openmx_equivalent_blocks_20261022_065042/tools/prepare_paired_d3.py",
     "origin_sha256": "f2672c44d7efd9ab137843dcf778cd48fe6464ea2447b026faa206c7040d6009",
-    "sha256": "3dff98ff435541cdff5d636158eea1dd9f6ad8c9e1ab9f934188cd4762032e83",
+    "sha256": "cd73af88c5d25fc4067c3f490b89be7de3aecfd04f3b69d557f23c987b53d3d8",
     "changes": "helper resolution repository-local only"
   },
   {
     "path": "prepare_paired_c3.py",
-    "origin": "snapshots/work/software/2.mp_openmx/results/openmx_equivalent_blocks_20261022_065042/c3_research/prepare_paired_c3.py",
+    "origin": "snapshots/results/openmx_equivalent_blocks_20261022_065042/c3_research/prepare_paired_c3.py",
     "origin_sha256": "6a2be93b0cad945e8296f677572e1becb9bf4693f789961c3c44c99ae9c3b600",
-    "sha256": "8f68afcbf3870d4b8c80e7cce0b41eb20a97048beb4d914e93d691f498f60938",
+    "sha256": "61fe08c015b5f06b7e77d93c6f7697deee5fb17830f9e97a541f0992feefd9bc",
     "changes": "helper resolution and sibling mathematical module import repository-local; numerical algorithm unchanged"
   },
   {
     "path": "c3_pair_math.py",
-    "origin": "snapshots/work/software/2.mp_openmx/results/openmx_equivalent_blocks_20261022_065042/c3_research/c3_pair_math.py",
+    "origin": "snapshots/results/openmx_equivalent_blocks_20261022_065042/c3_research/c3_pair_math.py",
     "origin_sha256": "b2408e2deda0d8f28116ac34542392e0491884746921bde9070d871a0a1bdcad",
     "sha256": "b2408e2deda0d8f28116ac34542392e0491884746921bde9070d871a0a1bdcad",
     "changes": "exact copy"

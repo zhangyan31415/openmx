@@ -5,14 +5,14 @@
 
 ## 构建与环境
 
-- 源码：`snapshots/work/software/2.mp_openmx/openmx-dev`。
-- Python 环境：`snapshots/home/mambaforge`，Python 3.12.7。
+- 源码：`/path/to/openmx`。
+- Python 环境：`$CONDA_PREFIX`，Python 3.12.7。
 - 构建：gpuh204，oneAPI2022.3，统一 CPU 目标311个源码翻译单元。
-- 最终二进制：`snapshots/work/software/2.mp_openmx/results/openmx_input_symmetry_20261102/build-final/openmx-cpu`。
+- 最终二进制：`snapshots/results/openmx_input_symmetry_20261102/build-final/openmx-cpu`。
 - SHA256：`f14eea9dce033faf42717954390edced4efb6af7d4aaf32fb612209402eed7ec`。
 - 最终构建清单保留了独立源码构建及输入适配器增量重编译记录；验收时静态源码闭包没有变化。
 
-完整证据目录：`snapshots/work/software/2.mp_openmx/results/openmx_input_symmetry_20261102`。
+完整证据目录：`snapshots/results/openmx_input_symmetry_20261102`。
 
 ## 通过的原生计算
 

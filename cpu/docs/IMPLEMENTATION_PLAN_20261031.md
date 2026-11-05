@@ -2,7 +2,7 @@
 
 User authorization: unify verified paths, standalone CPU source build, common single/multi-node acceptance and several large-angle benches; direct SSH node040--043. User explicitly forbids commits until completion. Do not push. Preserve unrelated dirty files and existing worktrees.
 
-Hardware observed: node040--043 each64 physical cores, Intel Xeon Gold6530, ~251GiB memory. Shared environment snapshots/home/mambaforge; native compiler/runtime oneAPI22.3. No resource scans or re-approval gates under the direct-SSH authorization.
+Hardware observed: node040--043 each64 physical cores, Intel Xeon Gold6530, ~251GiB memory. Shared environment $CONDA_PREFIX; native compiler/runtime oneAPI22.3. No resource scans or re-approval gates under the direct-SSH authorization.
 
 ## Objective and boundaries
 

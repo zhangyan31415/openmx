@@ -1,14 +1,121 @@
-> **Local development fork:** validated snapshots, local acceleration changes,
-> version tags and installation notes are documented in [local-records/README.md](local-records/README.md).
-> GPU smoke-test notes and CPU validation have separate scopes.
-> The [standalone CPU target](cpu/README.md) combines the NSOC/SOC symmetry paths,
-> with its own source build, explicit single/multi-node workflow and acceptance records.
-> Its compiler and bundled ELPA requirements differ from the GPU targets below.
+# OpenMX: CPU symmetry solvers and CUDA/HIP acceleration
 
-# openmx4.0_gpu
+This repository extends [OpenMX](https://www.openmx-square.org/), a
+first-principles electronic-structure code based on numerical atomic orbitals,
+with two independently built targets:
 
-This repository includes both the NVIDIA CUDA and AMD HIP backends. Select one
-per build with CMake; the existing NVIDIA `make -C source` workflow also works.
+| Target | Entry point | Intended use |
+|---|---|---|
+| Standalone CPU | [CPU guide](cpu/README.md), `cpu/build.py` | Symmetry-aware NSOC and SOC solvers, memory optimizations, reproducible single- and multi-node workflows |
+| NVIDIA CUDA / AMD HIP | [GPU build guide](docs/GPU_BACKENDS.md), CMake or the existing GPU Makefile | GPU-accelerated solvers, matrix construction, grids and related stages |
+
+The CPU and GPU targets have different compiler, library and validation
+requirements. A GPU build's CPU fallback is not the standalone optimized CPU
+target. Choose a target before following its build instructions.
+
+## CPU quick start
+
+The unified CPU binary includes optimized scalar NSOC solvers, specialized
+C3/D3 SOC paths, and a general spinor SOC framework. Symmetry metadata and
+runtime configuration are prepared through one workflow rather than a manual
+collection of environment switches.
+
+The currently tested workflow is **fixed geometry, nonmagnetic, Gamma point:
+converge NSOC, then run one SOC step from that same run's checkpoint**. One SOC
+step is not a fully self-consistent SOC calculation. Detection of a point group
+does not establish that a material is accurate or faster with that group.
+
+### 1. Build from source
+
+Use Python 3 with the preparation dependencies listed in the
+[CPU guide](cpu/README.md), and an Intel oneAPI installation matching the
+[CPU build requirements](cpu/docs/BUILD.zh-CN.md): classic compilers, Intel MPI
+2021.7.1 and MKL 2022.2.1. The current builder expects that installation layout;
+an arbitrary newer oneAPI release is not a tested substitute.
+
+```bash
+python cpu/build.py --profile unified \
+  --oneapi-prefix /path/to/oneapi \
+  --output /path/to/new-build --jobs 8 --execute
+```
+
+Run compilation on a compute machine. The output directory must be new; the
+builder compiles repository sources and bundled ELPA rather than reusing
+external OpenMX object files. It writes `openmx-cpu`, compiler logs and a
+`build-manifest.json`. Provide basis sets and pseudopotentials separately
+through each input's `DATA.PATH`.
+
+### 2. Prepare matching inputs and a request
+
+Start with matching NSOC and SOC inputs for the same geometry and basis.
+For automatic selection of a supported subgroup, put the same settings in
+both inputs, for example:
+
+```text
+scf.Symmetry.Mode           Auto
+scf.Symmetry.Tolerance      1e-5
+scf.Symmetry.HSExport       Symmetrize
+```
+
+For an explicitly requested subgroup, use `Mode User` and specify
+`scf.Symmetry.PointGroup`, such as `D3`, `C3`, `D2` or `C2`. Geometry tolerance
+is measured in angstroms and must fit the structure; it is separate from the
+electronic H/S covariance check. See the
+[input-driven symmetry guide](cpu/docs/INPUT_SYMMETRY.zh-CN.md) for supported
+groups, policies, limits and export semantics.
+
+Copy [the request template](cpu/tools/examples/input_request.json) to
+`/path/to/request.json`. Set the binary and build manifest, both input paths,
+a new result directory, authorized hosts, CPU binding and MPI/runtime paths.
+For each host, `ranks_per_host × threads` is its requested physical core count.
+
+### 3. Configure, inspect and run
+
+```bash
+python cpu/tools/workflow.py configure /path/to/request.json \
+  --output /path/to/new-prepared-config
+python cpu/tools/workflow.py plan /path/to/new-prepared-config/workflow.json
+python cpu/tools/workflow.py run /path/to/new-prepared-config/workflow.json --wait
+```
+
+Run preparation and native calculations on authorized compute machines.
+`configure` validates the inputs and prepares matching scalar/spinor metadata;
+it does not launch MPI. Directly running the binary with `Auto/User` without
+this preparation is rejected. `run --wait` keeps the workflow connection open;
+for unattended operation, use an existing persistent batch job. No internal
+calculation deadline is imposed; scheduler limits still apply.
+
+The workflow records source/build identity, exact commands, rank/thread
+binding, stage timings, core-hours, per-node memory and synchronized cluster
+memory. After a layout change, rerun NSOC before its SOC step: restart files
+are not assumed interchangeable between MPI layouts.
+
+### Scope and validation
+
+H/S export is explicit: `Raw` retains the original real-space operators;
+`Symmetrize` projects them using the selected operations. Symmetry projection
+changes a discretized operator and requires a physical-error comparison.
+General SOC additionally checks consistency between its solve and exported
+operator. Invalid mappings, unsupported settings or failed covariance checks
+stop the run rather than silently ignoring symmetry.
+
+D3/C3 retain specialized optimizations; D2/C2 and other supported subgroups use
+general representation machinery. This is not a claim that every point group,
+magnetic state, arbitrary k-point calculation or multi-step SOC run has been
+validated. Multi-node operation is supported, but more nodes do not guarantee
+lower core-hours or constant total memory.
+
+Read the [acceptance criteria](cpu/docs/ACCEPTANCE.zh-CN.md),
+[large-angle benchmarks](cpu/docs/BENCHMARKS_20261031.md), and
+[input/export integration validation](cpu/docs/INPUT_SYMMETRY_VALIDATION_20261102.md)
+for measured results and remaining boundaries. The
+[full workflow guide](cpu/docs/WORKFLOW.zh-CN.md) documents advanced explicit
+profiles and recovery.
+
+## GPU builds: NVIDIA CUDA and AMD HIP
+
+Select one backend per build with CMake; the existing NVIDIA
+`make -C source` workflow also works.
 
 ```sh
 cmake -S . -B build/cuda -DOPENMX_GPU_BACKEND=CUDA
@@ -25,10 +132,10 @@ dependency builds are isolated in each build directory. See
 [GPU backend build instructions](docs/GPU_BACKENDS.md) for requirements,
 configuration, AMD runtime settings and validation limits.
 
-## What does this code do?
+## GPU acceleration scope
 This is a GPU-accelerated version of [OpenMX](https://www.openmx-square.org/), a first-principles calculation code based on numerical atomic orbitals (NAO). The dense eigensolvers of the band calculations (collinear and non-collinear) and of the cluster calculations (collinear and non-collinear), the O(N)-type solvers (DC, DC-LNO, Krylov), and the heavy matrix-construction stages around them (Hamiltonian/overlap assembly, charge-density and orbital grids, forces, charge mixing) are GPU-accelerated. Since v2.0, the cluster diagonalization can also be distributed over multiple GPUs and multiple nodes with ELPA (GPU kernels) + COSMA; see below.
 
-## Code author
+## GPU implementation author
 Hiroyuki Kawai (Niigata Univ.)</br>
 X account: [@dc1394](https://x.com/dc1394)
 

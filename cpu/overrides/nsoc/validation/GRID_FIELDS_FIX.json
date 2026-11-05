@@ -30,6 +30,6 @@
     "source/cpu_grid_fields_shared.unified.h": "f6964eaac33bcbab8f5cb1c733534a34e2400e0963ef6049213e718bbdc7b7ba",
     "tests/grid_fields_unified.c": "95d553b3cd83ddb9ef18fee69dc91ebe73355e614817e3c6578e9f2ff3f2172f"
   },
-  "new_native_output": "snapshots/work/software/2.mp_openmx/results/openmx_unified_cpu_20261031/runs/tiny_D2_optimized_clean4_node042_4x1",
+  "new_native_output": "snapshots/results/openmx_unified_cpu_20261031/runs/tiny_D2_optimized_clean4_node042_4x1",
   "native_guard_followup": "clean3 initial publication fixed then exposed legacy SOC-only LOCAL_HS one-step guard; clean4 scopes that guard to spinor SOC, actual C-predicate test red-to-green"
 }

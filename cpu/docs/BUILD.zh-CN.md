@@ -2,12 +2,12 @@
 
 此目录把原来散布在历史结果目录的 CPU 源码、OpenMX4.0 原生源码和随包 ELPA2018 源码收集到仓库内。默认统一构建编译全部311个翻译单元，不读取历史 OpenMX `.o`、ELPA `.o/.mod`、预编译库或已有 OpenMX 二进制。优化源码的原始版权声明保留，来源及 SHA256 见 `cpu/vendor/ORIGINS.json`，基础目标清单见 `cpu/overrides/soc/SOURCES.json`，统一NSOC/SOC选择清单见 `cpu/overrides/nsoc/UNIFIED_SELECTION.json`。OpenMX GPL 声明和 ELPA LGPLv3 声明保留在各源文件中；`cpu/vendor/COPYING.GPL-3` 和 `cpu/vendor/COPYING.LESSER-3` 提供许可文本。
 
-外部依赖是编译器 Intel oneAPI2022.3 classic、Intel MPI2021.7.1、MKL2022.2.1（LP64、Intel MPI BLACS、线程 MKL；FFTW 兼容头/实现来自 MKL）。不是纯 Python 项目。默认外部前缀 `/data/home/apps/oneapi2022.3`，可用 `--oneapi-prefix` 更换同布局安装。运行时加载同一 oneAPI `setvars.sh`。原子基组/赝势数据由运行输入的 `DATA.PATH` 显式提供，不打包进二进制。
+外部依赖是编译器 Intel oneAPI2022.3 classic、Intel MPI2021.7.1、MKL2022.2.1（LP64、Intel MPI BLACS、线程 MKL；FFTW 兼容头/实现来自 MKL）。不是纯 Python 项目。默认外部前缀取环境变量 `ONEAPI_ROOT`，未设置时为 `/opt/intel/oneapi`；可用 `--oneapi-prefix` 更换同布局安装。运行时加载同一 oneAPI `setvars.sh`。原子基组/赝势数据由运行输入的 `DATA.PATH` 显式提供，不打包进二进制。
 
 在已授权计算节点上执行：
 
 ```bash
-snapshots/home/mambaforge/bin/python /ABS/openmx-dev/cpu/build.py \
+"$CONDA_PREFIX/bin/python" /ABS/openmx-dev/cpu/build.py \
   --profile unified --output /ABS/new-empty-build --jobs 15 --execute
 ```
 

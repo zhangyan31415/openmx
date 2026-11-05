@@ -54,7 +54,7 @@ approximation/projection of H/S.
 
 `comp2real.json` contains real/imaginary pairs extracted once from OpenMX 4.0's
 `source/SetPara_DFT.c`. The original file was
-`snapshots/home/software/openmx4.0/source/SetPara_DFT.c`, SHA256:
+`snapshots/openmx4.0/source/SetPara_DFT.c`, SHA256:
 
 ```
 e594f08b4632b19dea5112f3269cd4d4a632ba9ce5344b2dbc521dfa76dac1ad
@@ -68,13 +68,13 @@ unitarity, and never evaluates source text.
 ## Bounded verification, 2026-10-31
 
 Test host: `node042`, direct SSH. Environment prefix:
-`snapshots/home/mambaforge`, Python 3.12.7. OMP/MKL/OpenBLAS threads all 1.
+`$CONDA_PREFIX`, Python 3.12.7. OMP/MKL/OpenBLAS threads all 1.
 No MPI or production SCF jobs were started by these tests.
 
 ```bash
-cd snapshots/work/software/2.mp_openmx/openmx-dev
+cd /path/to/openmx
 OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 OPENBLAS_NUM_THREADS=1 \
-snapshots/home/mambaforge/bin/python -m unittest discover \
+"$CONDA_PREFIX/bin/python" -m unittest discover \
   -s cpu/tests -p test_orbitals.py -v
 ```
 
@@ -84,7 +84,7 @@ z-axis rotations, arbitrary C2 axes, explicit s/p/d/f solid-harmonic polynomial
 substitution, multi-radial block ordering and invalid input rejection.
 
 An additional one-time reference comparison loaded the established
-`snapshots/work/software/1.tapw_code/moirekp-release/tapw/tapw/geometry/rotations.py`
+`snapshots/moirekp-release/tapw/tapw/geometry/rotations.py`
 directly through Python's file loader. Four deterministic random O(3) operations
 (two proper, two improper), all four shells, gave maximum absolute difference
 `9.992007221626409e-16`. This reference is not required for ordinary tests.

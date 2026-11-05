@@ -1,3 +1,4 @@
+import sys
 """Safety contracts of the public NSOC -> own-checkpoint -> SOC workflow."""
 import importlib.util
 import json
@@ -56,7 +57,7 @@ class WorkflowContract(unittest.TestCase):
         self.mpi = self.root / 'mpirun'; self.mpi.write_text('#!/bin/sh\nexit 0\n'); self.mpi.chmod(0o755)
         self.config = {'schema':1,'binary':str(self.binary), 'inputs':{'nsoc':str(self.n),'soc':str(self.s)},'output':str(self.root/'results'),
           'layout':{'hosts':['node040'],'ranks_per_host':2,'threads':1,'cpu_ids_per_host':{'node040':[0,1]}},
-          'runtime':{'mpiexec':str(self.mpi),'runtime_prefix':str(self.root),'environment_prefix':'snapshots/home/mambaforge','transport':'shm'},
+          'runtime':{'mpiexec':str(self.mpi),'runtime_prefix':str(self.root),'environment_prefix':sys.prefix,'transport':'shm'},
           'profiles':{'nsoc':{'name':'raw','environment':{}},'soc':{'name':'raw','environment':{}}},'symmetry':{'project':False,'compact':False}}
 
     def test_plan_is_read_only_and_preserves_inputs(self):
@@ -65,6 +66,13 @@ class WorkflowContract(unittest.TestCase):
         self.assertEqual(p['ranks'],2); self.assertEqual(p['threads'],1)
         self.assertFalse((self.root/'results').exists())
         self.assertEqual(before, (self.n.read_bytes(),self.s.read_bytes()))
+
+    def test_scratch_defaults_to_shared_output_parent_and_can_be_overridden(self):
+        plan=wf.plan_config(self.config)
+        self.assertTrue(Path(plan['scratch_root']).is_relative_to(self.root/'.openmx-scratch'))
+        self.config['runtime']['shared_scratch_root']=str(self.root/'shared-temporary')
+        plan=wf.plan_config(self.config)
+        self.assertTrue(Path(plan['scratch_root']).is_relative_to(self.root/'shared-temporary'))
 
     def test_duplicate_json_keys_rejected(self):
         with self.assertRaisesRegex(ValueError,'duplicate'):
@@ -344,7 +352,7 @@ class CleanupContracts(unittest.TestCase):
 class PreparationContracts(unittest.TestCase):
     def test_common_metadata_command_never_enables_projection_by_default(self):
         from types import SimpleNamespace
-        args=SimpleNamespace(environment_prefix='snapshots/home/mambaforge',group='C3',symprec_ladder=[1e-6,3e-6],geometry_tol=5e-5,project_nsoc=False)
+        args=SimpleNamespace(environment_prefix=sys.prefix,group='C3',symprec_ladder=[1e-6,3e-6],geometry_tol=5e-5,project_nsoc=False)
         cmd=wf.preparation_command(args,Path('/case/nsoc.dat'),Path('/case/soc.dat'),Path('/new/meta'))
         self.assertIn(str(wf.REPO/'cpu/geometry/prepare.py'),cmd)
         self.assertEqual(cmd[cmd.index('--group')+1],'C3')

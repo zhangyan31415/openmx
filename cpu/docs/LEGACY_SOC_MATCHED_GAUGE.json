@@ -19,7 +19,7 @@
   },
   "scope": "metadata gauge equivalence, no native SCF",
   "node": "node041",
-  "environment_prefix": "snapshots/home/mambaforge",
+  "environment_prefix": "/path/to/python-env",
   "threads": 1,
   "native_export_map": {
     "header_equal": true,

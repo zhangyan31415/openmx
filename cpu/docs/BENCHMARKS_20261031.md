@@ -1,6 +1,6 @@
 # 统一 CPU 构建与大角度验收：2026-10-31
 
-本轮验证源码整合、独立 CPU 构建和同一套单／多节点工作流，保留历史优化算法；没有声称本轮整合本身又产生两倍算法加速。全部应用测试使用授权的 node040–043：每台64个物理核、Intel Xeon Gold6530、约251 GiB内存。分析环境为 `snapshots/home/mambaforge`，原生编译／MPI／MKL为 oneAPI22.3。
+本轮验证源码整合、独立 CPU 构建和同一套单／多节点工作流，保留历史优化算法；没有声称本轮整合本身又产生两倍算法加速。全部应用测试使用授权的 node040–043：每台64个物理核、Intel Xeon Gold6530、约251 GiB内存。分析环境为 `$CONDA_PREFIX`，原生编译／MPI／MKL为 oneAPI22.3。
 
 优化二进制SHA256：`da9bf7bf640206551cca6ccd3d20baa43850c1c9fb9d2f580d28e2352200551a`。参考二进制为同编译器、同HOST目标从已安装CPU4.0源码快照新建，SHA256 `6e64fb92faca9e170e730b511568579189b312138165c32fe977416d899cab9f`；未独立证明该快照等同未经修改的上游发行包。
 
@@ -89,7 +89,7 @@ MoTe₂／Bi₂Se₃ NSOC对历史同算符优化结果，完整H/S、DM、能�
 
 仓库内精简汇总：[summary.csv](benchmarks/20261031/summary.csv)。完整原始输入、元数据、逐步日志、绑定、MPI提供者、独立构建与失败记录保存在：
 
-`snapshots/work/software/2.mp_openmx/results/openmx_unified_cpu_20261031/`
+`snapshots/results/openmx_unified_cpu_20261031/`
 
 主要索引为 `bench/BENCHMARK_SUMMARY.json`、`bench/MATCHED_GROUP_SUMMARY.csv`、`bench/NATIVE_CRITICAL_PATH.json`、`bench/FINAL_SCIENCE_INDEX.json` 和 `build/` 中的构建清单。独立构建不读取历史OpenMX或ELPA对象；四节点提供者以实际启动日志为准，不把布局收益归因于未经配对的网络优化。
 

@@ -3,17 +3,17 @@
     "object": "DFT.o",
     "exit_code": 0,
     "command": [
-      "/data/home/apps/oneapi2022.3/mpi/2021.7.1/bin/mpiicc",
+      "/opt/intel/oneapi/mpi/2021.7.1/bin/mpiicc",
       "-O2",
       "-qopenmp",
-      "-Isnapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source",
-      "-Isnapshots/home/software/openmx4.0/source",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include/fftw",
+      "-Irepo/cpu/overrides/nsoc/source",
+      "-Isnapshots/openmx4.0/source",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include/fftw",
       "-c",
-      "snapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source/DFT.direct.c",
+      "repo/cpu/overrides/nsoc/source/DFT.direct.c",
       "-o",
-      "snapshots/scratch/codex/openmx-unified-nsoc-20261031/objects/DFT.o"
+      "snapshots/scratch/openmx-unified-nsoc-20261031/objects/DFT.o"
     ],
     "stderr": "icc: remark #10441: The Intel(R) C++ Compiler Classic (ICC) is deprecated and will be removed from product release in the second half of 2023. The Intel(R) oneAPI DPC++/C++ Compiler (ICX) is the recommended compiler moving forward. Please transition to use this compiler. Use '-diag-disable=10441' to disable this message.\n"
   },
@@ -21,17 +21,17 @@
     "object": "Cluster_DFT_Col.o",
     "exit_code": 0,
     "command": [
-      "/data/home/apps/oneapi2022.3/mpi/2021.7.1/bin/mpiicc",
+      "/opt/intel/oneapi/mpi/2021.7.1/bin/mpiicc",
       "-O2",
       "-qopenmp",
-      "-Isnapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source",
-      "-Isnapshots/home/software/openmx4.0/source",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include/fftw",
+      "-Irepo/cpu/overrides/nsoc/source",
+      "-Isnapshots/openmx4.0/source",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include/fftw",
       "-c",
-      "snapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source/Cluster_DFT_Col.direct.c",
+      "repo/cpu/overrides/nsoc/source/Cluster_DFT_Col.direct.c",
       "-o",
-      "snapshots/scratch/codex/openmx-unified-nsoc-20261031/objects/Cluster_DFT_Col.o"
+      "snapshots/scratch/openmx-unified-nsoc-20261031/objects/Cluster_DFT_Col.o"
     ],
     "stderr": "icc: remark #10441: The Intel(R) C++ Compiler Classic (ICC) is deprecated and will be removed from product release in the second half of 2023. The Intel(R) oneAPI DPC++/C++ Compiler (ICX) is the recommended compiler moving forward. Please transition to use this compiler. Use '-diag-disable=10441' to disable this message.\n"
   },
@@ -39,17 +39,17 @@
     "object": "cpu_nsoc_sym.o",
     "exit_code": 0,
     "command": [
-      "/data/home/apps/oneapi2022.3/mpi/2021.7.1/bin/mpiicc",
+      "/opt/intel/oneapi/mpi/2021.7.1/bin/mpiicc",
       "-O2",
       "-qopenmp",
-      "-Isnapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source",
-      "-Isnapshots/home/software/openmx4.0/source",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include/fftw",
+      "-Irepo/cpu/overrides/nsoc/source",
+      "-Isnapshots/openmx4.0/source",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include/fftw",
       "-c",
-      "snapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source/cpu_nsoc_sym.direct.c",
+      "repo/cpu/overrides/nsoc/source/cpu_nsoc_sym.direct.c",
       "-o",
-      "snapshots/scratch/codex/openmx-unified-nsoc-20261031/objects/cpu_nsoc_sym.o"
+      "snapshots/scratch/openmx-unified-nsoc-20261031/objects/cpu_nsoc_sym.o"
     ],
     "stderr": "icc: remark #10441: The Intel(R) C++ Compiler Classic (ICC) is deprecated and will be removed from product release in the second half of 2023. The Intel(R) oneAPI DPC++/C++ Compiler (ICX) is the recommended compiler moving forward. Please transition to use this compiler. Use '-diag-disable=10441' to disable this message.\n"
   },
@@ -57,17 +57,17 @@
     "object": "cpu_realspace_d3.o",
     "exit_code": 0,
     "command": [
-      "/data/home/apps/oneapi2022.3/mpi/2021.7.1/bin/mpiicc",
+      "/opt/intel/oneapi/mpi/2021.7.1/bin/mpiicc",
       "-O2",
       "-qopenmp",
-      "-Isnapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source",
-      "-Isnapshots/home/software/openmx4.0/source",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include/fftw",
+      "-Irepo/cpu/overrides/nsoc/source",
+      "-Isnapshots/openmx4.0/source",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include/fftw",
       "-c",
-      "snapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source/cpu_realspace_d3.panel.c",
+      "repo/cpu/overrides/nsoc/source/cpu_realspace_d3.panel.c",
       "-o",
-      "snapshots/scratch/codex/openmx-unified-nsoc-20261031/objects/cpu_realspace_d3.o"
+      "snapshots/scratch/openmx-unified-nsoc-20261031/objects/cpu_realspace_d3.o"
     ],
     "stderr": "icc: remark #10441: The Intel(R) C++ Compiler Classic (ICC) is deprecated and will be removed from product release in the second half of 2023. The Intel(R) oneAPI DPC++/C++ Compiler (ICX) is the recommended compiler moving forward. Please transition to use this compiler. Use '-diag-disable=10441' to disable this message.\n"
   },
@@ -75,17 +75,17 @@
     "object": "cpu_nsoc_owner.o",
     "exit_code": 0,
     "command": [
-      "/data/home/apps/oneapi2022.3/mpi/2021.7.1/bin/mpiicc",
+      "/opt/intel/oneapi/mpi/2021.7.1/bin/mpiicc",
       "-O2",
       "-qopenmp",
-      "-Isnapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source",
-      "-Isnapshots/home/software/openmx4.0/source",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include/fftw",
+      "-Irepo/cpu/overrides/nsoc/source",
+      "-Isnapshots/openmx4.0/source",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include/fftw",
       "-c",
-      "snapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source/cpu_nsoc_owner.c",
+      "repo/cpu/overrides/nsoc/source/cpu_nsoc_owner.c",
       "-o",
-      "snapshots/scratch/codex/openmx-unified-nsoc-20261031/objects/cpu_nsoc_owner.o"
+      "snapshots/scratch/openmx-unified-nsoc-20261031/objects/cpu_nsoc_owner.o"
     ],
     "stderr": "icc: remark #10441: The Intel(R) C++ Compiler Classic (ICC) is deprecated and will be removed from product release in the second half of 2023. The Intel(R) oneAPI DPC++/C++ Compiler (ICX) is the recommended compiler moving forward. Please transition to use this compiler. Use '-diag-disable=10441' to disable this message.\n"
   },
@@ -93,17 +93,17 @@
     "object": "cpu_nsoc_owner_openmx.o",
     "exit_code": 0,
     "command": [
-      "/data/home/apps/oneapi2022.3/mpi/2021.7.1/bin/mpiicc",
+      "/opt/intel/oneapi/mpi/2021.7.1/bin/mpiicc",
       "-O2",
       "-qopenmp",
-      "-Isnapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source",
-      "-Isnapshots/home/software/openmx4.0/source",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include/fftw",
+      "-Irepo/cpu/overrides/nsoc/source",
+      "-Isnapshots/openmx4.0/source",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include/fftw",
       "-c",
-      "snapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source/cpu_nsoc_owner_openmx.c",
+      "repo/cpu/overrides/nsoc/source/cpu_nsoc_owner_openmx.c",
       "-o",
-      "snapshots/scratch/codex/openmx-unified-nsoc-20261031/objects/cpu_nsoc_owner_openmx.o"
+      "snapshots/scratch/openmx-unified-nsoc-20261031/objects/cpu_nsoc_owner_openmx.o"
     ],
     "stderr": "icc: remark #10441: The Intel(R) C++ Compiler Classic (ICC) is deprecated and will be removed from product release in the second half of 2023. The Intel(R) oneAPI DPC++/C++ Compiler (ICX) is the recommended compiler moving forward. Please transition to use this compiler. Use '-diag-disable=10441' to disable this message.\n"
   },
@@ -111,17 +111,17 @@
     "object": "cpu_nsoc_rep_tail.o",
     "exit_code": 0,
     "command": [
-      "/data/home/apps/oneapi2022.3/mpi/2021.7.1/bin/mpiicc",
+      "/opt/intel/oneapi/mpi/2021.7.1/bin/mpiicc",
       "-O2",
       "-qopenmp",
-      "-Isnapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source",
-      "-Isnapshots/home/software/openmx4.0/source",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include/fftw",
+      "-Irepo/cpu/overrides/nsoc/source",
+      "-Isnapshots/openmx4.0/source",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include/fftw",
       "-c",
-      "snapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source/cpu_nsoc_rep_tail.c",
+      "repo/cpu/overrides/nsoc/source/cpu_nsoc_rep_tail.c",
       "-o",
-      "snapshots/scratch/codex/openmx-unified-nsoc-20261031/objects/cpu_nsoc_rep_tail.o"
+      "snapshots/scratch/openmx-unified-nsoc-20261031/objects/cpu_nsoc_rep_tail.o"
     ],
     "stderr": "icc: remark #10441: The Intel(R) C++ Compiler Classic (ICC) is deprecated and will be removed from product release in the second half of 2023. The Intel(R) oneAPI DPC++/C++ Compiler (ICX) is the recommended compiler moving forward. Please transition to use this compiler. Use '-diag-disable=10441' to disable this message.\n"
   },
@@ -129,17 +129,17 @@
     "object": "rep_panel.o",
     "exit_code": 0,
     "command": [
-      "/data/home/apps/oneapi2022.3/mpi/2021.7.1/bin/mpiicc",
+      "/opt/intel/oneapi/mpi/2021.7.1/bin/mpiicc",
       "-O2",
       "-qopenmp",
-      "-Isnapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source",
-      "-Isnapshots/home/software/openmx4.0/source",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include/fftw",
+      "-Irepo/cpu/overrides/nsoc/source",
+      "-Isnapshots/openmx4.0/source",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include/fftw",
       "-c",
-      "snapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source/rep_panel.c",
+      "repo/cpu/overrides/nsoc/source/rep_panel.c",
       "-o",
-      "snapshots/scratch/codex/openmx-unified-nsoc-20261031/objects/rep_panel.o"
+      "snapshots/scratch/openmx-unified-nsoc-20261031/objects/rep_panel.o"
     ],
     "stderr": "icc: remark #10441: The Intel(R) C++ Compiler Classic (ICC) is deprecated and will be removed from product release in the second half of 2023. The Intel(R) oneAPI DPC++/C++ Compiler (ICX) is the recommended compiler moving forward. Please transition to use this compiler. Use '-diag-disable=10441' to disable this message.\n"
   },
@@ -147,17 +147,17 @@
     "object": "selected_left.o",
     "exit_code": 0,
     "command": [
-      "/data/home/apps/oneapi2022.3/mpi/2021.7.1/bin/mpiicc",
+      "/opt/intel/oneapi/mpi/2021.7.1/bin/mpiicc",
       "-O2",
       "-qopenmp",
-      "-Isnapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source",
-      "-Isnapshots/home/software/openmx4.0/source",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include/fftw",
+      "-Irepo/cpu/overrides/nsoc/source",
+      "-Isnapshots/openmx4.0/source",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include/fftw",
       "-c",
-      "snapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source/selected_left.c",
+      "repo/cpu/overrides/nsoc/source/selected_left.c",
       "-o",
-      "snapshots/scratch/codex/openmx-unified-nsoc-20261031/objects/selected_left.o"
+      "snapshots/scratch/openmx-unified-nsoc-20261031/objects/selected_left.o"
     ],
     "stderr": "icc: remark #10441: The Intel(R) C++ Compiler Classic (ICC) is deprecated and will be removed from product release in the second half of 2023. The Intel(R) oneAPI DPC++/C++ Compiler (ICX) is the recommended compiler moving forward. Please transition to use this compiler. Use '-diag-disable=10441' to disable this message.\n"
   },
@@ -165,17 +165,17 @@
     "object": "cpu_nsoc_sparse.o",
     "exit_code": 0,
     "command": [
-      "/data/home/apps/oneapi2022.3/mpi/2021.7.1/bin/mpiicc",
+      "/opt/intel/oneapi/mpi/2021.7.1/bin/mpiicc",
       "-O2",
       "-qopenmp",
-      "-Isnapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source",
-      "-Isnapshots/home/software/openmx4.0/source",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include/fftw",
+      "-Irepo/cpu/overrides/nsoc/source",
+      "-Isnapshots/openmx4.0/source",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include/fftw",
       "-c",
-      "snapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source/cpu_nsoc_sparse.c",
+      "repo/cpu/overrides/nsoc/source/cpu_nsoc_sparse.c",
       "-o",
-      "snapshots/scratch/codex/openmx-unified-nsoc-20261031/objects/cpu_nsoc_sparse.o"
+      "snapshots/scratch/openmx-unified-nsoc-20261031/objects/cpu_nsoc_sparse.o"
     ],
     "stderr": "icc: remark #10441: The Intel(R) C++ Compiler Classic (ICC) is deprecated and will be removed from product release in the second half of 2023. The Intel(R) oneAPI DPC++/C++ Compiler (ICX) is the recommended compiler moving forward. Please transition to use this compiler. Use '-diag-disable=10441' to disable this message.\n"
   },
@@ -183,17 +183,17 @@
     "object": "cpu_nsoc_imag.o",
     "exit_code": 0,
     "command": [
-      "/data/home/apps/oneapi2022.3/mpi/2021.7.1/bin/mpiicc",
+      "/opt/intel/oneapi/mpi/2021.7.1/bin/mpiicc",
       "-O2",
       "-qopenmp",
-      "-Isnapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source",
-      "-Isnapshots/home/software/openmx4.0/source",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include/fftw",
+      "-Irepo/cpu/overrides/nsoc/source",
+      "-Isnapshots/openmx4.0/source",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include/fftw",
       "-c",
-      "snapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source/cpu_nsoc_imag.c",
+      "repo/cpu/overrides/nsoc/source/cpu_nsoc_imag.c",
       "-o",
-      "snapshots/scratch/codex/openmx-unified-nsoc-20261031/objects/cpu_nsoc_imag.o"
+      "snapshots/scratch/openmx-unified-nsoc-20261031/objects/cpu_nsoc_imag.o"
     ],
     "stderr": "icc: remark #10441: The Intel(R) C++ Compiler Classic (ICC) is deprecated and will be removed from product release in the second half of 2023. The Intel(R) oneAPI DPC++/C++ Compiler (ICX) is the recommended compiler moving forward. Please transition to use this compiler. Use '-diag-disable=10441' to disable this message.\n"
   },
@@ -201,17 +201,17 @@
     "object": "cpu_symhistory_diis.o",
     "exit_code": 0,
     "command": [
-      "/data/home/apps/oneapi2022.3/mpi/2021.7.1/bin/mpiicc",
+      "/opt/intel/oneapi/mpi/2021.7.1/bin/mpiicc",
       "-O2",
       "-qopenmp",
-      "-Isnapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source",
-      "-Isnapshots/home/software/openmx4.0/source",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include/fftw",
+      "-Irepo/cpu/overrides/nsoc/source",
+      "-Isnapshots/openmx4.0/source",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include/fftw",
       "-c",
-      "snapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source/cpu_symhistory_diis.c",
+      "repo/cpu/overrides/nsoc/source/cpu_symhistory_diis.c",
       "-o",
-      "snapshots/scratch/codex/openmx-unified-nsoc-20261031/objects/cpu_symhistory_diis.o"
+      "snapshots/scratch/openmx-unified-nsoc-20261031/objects/cpu_symhistory_diis.o"
     ],
     "stderr": "icc: remark #10441: The Intel(R) C++ Compiler Classic (ICC) is deprecated and will be removed from product release in the second half of 2023. The Intel(R) oneAPI DPC++/C++ Compiler (ICX) is the recommended compiler moving forward. Please transition to use this compiler. Use '-diag-disable=10441' to disable this message.\n"
   },
@@ -219,17 +219,17 @@
     "object": "truncation.o",
     "exit_code": 0,
     "command": [
-      "/data/home/apps/oneapi2022.3/mpi/2021.7.1/bin/mpiicc",
+      "/opt/intel/oneapi/mpi/2021.7.1/bin/mpiicc",
       "-O2",
       "-qopenmp",
-      "-Isnapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source",
-      "-Isnapshots/home/software/openmx4.0/source",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include/fftw",
+      "-Irepo/cpu/overrides/nsoc/source",
+      "-Isnapshots/openmx4.0/source",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include/fftw",
       "-c",
-      "snapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source/truncation.symhistory.c",
+      "repo/cpu/overrides/nsoc/source/truncation.symhistory.c",
       "-o",
-      "snapshots/scratch/codex/openmx-unified-nsoc-20261031/objects/truncation.o"
+      "snapshots/scratch/openmx-unified-nsoc-20261031/objects/truncation.o"
     ],
     "stderr": "icc: remark #10441: The Intel(R) C++ Compiler Classic (ICC) is deprecated and will be removed from product release in the second half of 2023. The Intel(R) oneAPI DPC++/C++ Compiler (ICX) is the recommended compiler moving forward. Please transition to use this compiler. Use '-diag-disable=10441' to disable this message.\n"
   },
@@ -237,17 +237,17 @@
     "object": "Free_Arrays.o",
     "exit_code": 0,
     "command": [
-      "/data/home/apps/oneapi2022.3/mpi/2021.7.1/bin/mpiicc",
+      "/opt/intel/oneapi/mpi/2021.7.1/bin/mpiicc",
       "-O2",
       "-qopenmp",
-      "-Isnapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source",
-      "-Isnapshots/home/software/openmx4.0/source",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include/fftw",
+      "-Irepo/cpu/overrides/nsoc/source",
+      "-Isnapshots/openmx4.0/source",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include/fftw",
       "-c",
-      "snapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source/Free_Arrays.symhistory.c",
+      "repo/cpu/overrides/nsoc/source/Free_Arrays.symhistory.c",
       "-o",
-      "snapshots/scratch/codex/openmx-unified-nsoc-20261031/objects/Free_Arrays.o"
+      "snapshots/scratch/openmx-unified-nsoc-20261031/objects/Free_Arrays.o"
     ],
     "stderr": "icc: remark #10441: The Intel(R) C++ Compiler Classic (ICC) is deprecated and will be removed from product release in the second half of 2023. The Intel(R) oneAPI DPC++/C++ Compiler (ICX) is the recommended compiler moving forward. Please transition to use this compiler. Use '-diag-disable=10441' to disable this message.\n"
   },
@@ -255,17 +255,17 @@
     "object": "DIIS_Mixing_DM.o",
     "exit_code": 0,
     "command": [
-      "/data/home/apps/oneapi2022.3/mpi/2021.7.1/bin/mpiicc",
+      "/opt/intel/oneapi/mpi/2021.7.1/bin/mpiicc",
       "-O2",
       "-qopenmp",
-      "-Isnapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source",
-      "-Isnapshots/home/software/openmx4.0/source",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include/fftw",
+      "-Irepo/cpu/overrides/nsoc/source",
+      "-Isnapshots/openmx4.0/source",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include/fftw",
       "-c",
-      "snapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source/DIIS_Mixing_DM.symhistory.c",
+      "repo/cpu/overrides/nsoc/source/DIIS_Mixing_DM.symhistory.c",
       "-o",
-      "snapshots/scratch/codex/openmx-unified-nsoc-20261031/objects/DIIS_Mixing_DM.o"
+      "snapshots/scratch/openmx-unified-nsoc-20261031/objects/DIIS_Mixing_DM.o"
     ],
     "stderr": "icc: remark #10441: The Intel(R) C++ Compiler Classic (ICC) is deprecated and will be removed from product release in the second half of 2023. The Intel(R) oneAPI DPC++/C++ Compiler (ICX) is the recommended compiler moving forward. Please transition to use this compiler. Use '-diag-disable=10441' to disable this message.\n"
   },
@@ -273,17 +273,17 @@
     "object": "Mixing_H.o",
     "exit_code": 0,
     "command": [
-      "/data/home/apps/oneapi2022.3/mpi/2021.7.1/bin/mpiicc",
+      "/opt/intel/oneapi/mpi/2021.7.1/bin/mpiicc",
       "-O2",
       "-qopenmp",
-      "-Isnapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source",
-      "-Isnapshots/home/software/openmx4.0/source",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include/fftw",
+      "-Irepo/cpu/overrides/nsoc/source",
+      "-Isnapshots/openmx4.0/source",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include/fftw",
       "-c",
-      "snapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source/Mixing_H.compact.c",
+      "repo/cpu/overrides/nsoc/source/Mixing_H.compact.c",
       "-o",
-      "snapshots/scratch/codex/openmx-unified-nsoc-20261031/objects/Mixing_H.o"
+      "snapshots/scratch/openmx-unified-nsoc-20261031/objects/Mixing_H.o"
     ],
     "stderr": "icc: remark #10441: The Intel(R) C++ Compiler Classic (ICC) is deprecated and will be removed from product release in the second half of 2023. The Intel(R) oneAPI DPC++/C++ Compiler (ICX) is the recommended compiler moving forward. Please transition to use this compiler. Use '-diag-disable=10441' to disable this message.\n"
   },
@@ -291,17 +291,17 @@
     "object": "Hamiltonian_Cluster_Hs.o",
     "exit_code": 0,
     "command": [
-      "/data/home/apps/oneapi2022.3/mpi/2021.7.1/bin/mpiicc",
+      "/opt/intel/oneapi/mpi/2021.7.1/bin/mpiicc",
       "-O2",
       "-qopenmp",
-      "-Isnapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source",
-      "-Isnapshots/home/software/openmx4.0/source",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include/fftw",
+      "-Irepo/cpu/overrides/nsoc/source",
+      "-Isnapshots/openmx4.0/source",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include/fftw",
       "-c",
-      "snapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source/Hamiltonian_Cluster_Hs.compact.c",
+      "repo/cpu/overrides/nsoc/source/Hamiltonian_Cluster_Hs.compact.c",
       "-o",
-      "snapshots/scratch/codex/openmx-unified-nsoc-20261031/objects/Hamiltonian_Cluster_Hs.o"
+      "snapshots/scratch/openmx-unified-nsoc-20261031/objects/Hamiltonian_Cluster_Hs.o"
     ],
     "stderr": "icc: remark #10441: The Intel(R) C++ Compiler Classic (ICC) is deprecated and will be removed from product release in the second half of 2023. The Intel(R) oneAPI DPC++/C++ Compiler (ICX) is the recommended compiler moving forward. Please transition to use this compiler. Use '-diag-disable=10441' to disable this message.\n"
   },
@@ -309,17 +309,17 @@
     "object": "Mixing_DM.o",
     "exit_code": 0,
     "command": [
-      "/data/home/apps/oneapi2022.3/mpi/2021.7.1/bin/mpiicc",
+      "/opt/intel/oneapi/mpi/2021.7.1/bin/mpiicc",
       "-O2",
       "-qopenmp",
-      "-Isnapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source",
-      "-Isnapshots/home/software/openmx4.0/source",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include/fftw",
+      "-Irepo/cpu/overrides/nsoc/source",
+      "-Isnapshots/openmx4.0/source",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include/fftw",
       "-c",
-      "snapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source/Mixing_DM.nsym.c",
+      "repo/cpu/overrides/nsoc/source/Mixing_DM.nsym.c",
       "-o",
-      "snapshots/scratch/codex/openmx-unified-nsoc-20261031/objects/Mixing_DM.o"
+      "snapshots/scratch/openmx-unified-nsoc-20261031/objects/Mixing_DM.o"
     ],
     "stderr": "icc: remark #10441: The Intel(R) C++ Compiler Classic (ICC) is deprecated and will be removed from product release in the second half of 2023. The Intel(R) oneAPI DPC++/C++ Compiler (ICX) is the recommended compiler moving forward. Please transition to use this compiler. Use '-diag-disable=10441' to disable this message.\n"
   },
@@ -327,17 +327,17 @@
     "object": "SCF2File.o",
     "exit_code": 0,
     "command": [
-      "/data/home/apps/oneapi2022.3/mpi/2021.7.1/bin/mpiicc",
+      "/opt/intel/oneapi/mpi/2021.7.1/bin/mpiicc",
       "-O2",
       "-qopenmp",
-      "-Isnapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source",
-      "-Isnapshots/home/software/openmx4.0/source",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include/fftw",
+      "-Irepo/cpu/overrides/nsoc/source",
+      "-Isnapshots/openmx4.0/source",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include/fftw",
       "-c",
-      "snapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source/SCF2File.realspace.c",
+      "repo/cpu/overrides/nsoc/source/SCF2File.realspace.c",
       "-o",
-      "snapshots/scratch/codex/openmx-unified-nsoc-20261031/objects/SCF2File.o"
+      "snapshots/scratch/openmx-unified-nsoc-20261031/objects/SCF2File.o"
     ],
     "stderr": "icc: remark #10441: The Intel(R) C++ Compiler Classic (ICC) is deprecated and will be removed from product release in the second half of 2023. The Intel(R) oneAPI DPC++/C++ Compiler (ICX) is the recommended compiler moving forward. Please transition to use this compiler. Use '-diag-disable=10441' to disable this message.\n"
   },
@@ -345,17 +345,17 @@
     "object": "Force.o",
     "exit_code": 0,
     "command": [
-      "/data/home/apps/oneapi2022.3/mpi/2021.7.1/bin/mpiicc",
+      "/opt/intel/oneapi/mpi/2021.7.1/bin/mpiicc",
       "-O2",
       "-qopenmp",
-      "-Isnapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source",
-      "-Isnapshots/home/software/openmx4.0/source",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include/fftw",
+      "-Irepo/cpu/overrides/nsoc/source",
+      "-Isnapshots/openmx4.0/source",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include/fftw",
       "-c",
-      "snapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source/Force.fields.c",
+      "repo/cpu/overrides/nsoc/source/Force.fields.c",
       "-o",
-      "snapshots/scratch/codex/openmx-unified-nsoc-20261031/objects/Force.o"
+      "snapshots/scratch/openmx-unified-nsoc-20261031/objects/Force.o"
     ],
     "stderr": "icc: remark #10441: The Intel(R) C++ Compiler Classic (ICC) is deprecated and will be removed from product release in the second half of 2023. The Intel(R) oneAPI DPC++/C++ Compiler (ICX) is the recommended compiler moving forward. Please transition to use this compiler. Use '-diag-disable=10441' to disable this message.\n"
   },
@@ -363,17 +363,17 @@
     "object": "Set_Density_Grid.o",
     "exit_code": 0,
     "command": [
-      "/data/home/apps/oneapi2022.3/mpi/2021.7.1/bin/mpiicc",
+      "/opt/intel/oneapi/mpi/2021.7.1/bin/mpiicc",
       "-O2",
       "-qopenmp",
-      "-Isnapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source",
-      "-Isnapshots/home/software/openmx4.0/source",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include/fftw",
+      "-Irepo/cpu/overrides/nsoc/source",
+      "-Isnapshots/openmx4.0/source",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include/fftw",
       "-c",
-      "snapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source/Set_Density_Grid.fields.c",
+      "repo/cpu/overrides/nsoc/source/Set_Density_Grid.fields.c",
       "-o",
-      "snapshots/scratch/codex/openmx-unified-nsoc-20261031/objects/Set_Density_Grid.o"
+      "snapshots/scratch/openmx-unified-nsoc-20261031/objects/Set_Density_Grid.o"
     ],
     "stderr": "icc: remark #10441: The Intel(R) C++ Compiler Classic (ICC) is deprecated and will be removed from product release in the second half of 2023. The Intel(R) oneAPI DPC++/C++ Compiler (ICX) is the recommended compiler moving forward. Please transition to use this compiler. Use '-diag-disable=10441' to disable this message.\n"
   },
@@ -381,17 +381,17 @@
     "object": "Set_Orbitals_Grid.o",
     "exit_code": 0,
     "command": [
-      "/data/home/apps/oneapi2022.3/mpi/2021.7.1/bin/mpiicc",
+      "/opt/intel/oneapi/mpi/2021.7.1/bin/mpiicc",
       "-O2",
       "-qopenmp",
-      "-Isnapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source",
-      "-Isnapshots/home/software/openmx4.0/source",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include/fftw",
+      "-Irepo/cpu/overrides/nsoc/source",
+      "-Isnapshots/openmx4.0/source",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include/fftw",
       "-c",
-      "snapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source/Set_Orbitals_Grid.numa.c",
+      "repo/cpu/overrides/nsoc/source/Set_Orbitals_Grid.numa.c",
       "-o",
-      "snapshots/scratch/codex/openmx-unified-nsoc-20261031/objects/Set_Orbitals_Grid.o"
+      "snapshots/scratch/openmx-unified-nsoc-20261031/objects/Set_Orbitals_Grid.o"
     ],
     "stderr": "icc: remark #10441: The Intel(R) C++ Compiler Classic (ICC) is deprecated and will be removed from product release in the second half of 2023. The Intel(R) oneAPI DPC++/C++ Compiler (ICX) is the recommended compiler moving forward. Please transition to use this compiler. Use '-diag-disable=10441' to disable this message.\n"
   },
@@ -399,17 +399,17 @@
     "object": "Set_dOrbitals_Grid.o",
     "exit_code": 0,
     "command": [
-      "/data/home/apps/oneapi2022.3/mpi/2021.7.1/bin/mpiicc",
+      "/opt/intel/oneapi/mpi/2021.7.1/bin/mpiicc",
       "-O2",
       "-qopenmp",
-      "-Isnapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source",
-      "-Isnapshots/home/software/openmx4.0/source",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include/fftw",
+      "-Irepo/cpu/overrides/nsoc/source",
+      "-Isnapshots/openmx4.0/source",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include/fftw",
       "-c",
-      "snapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source/Set_dOrbitals_Grid.numa.c",
+      "repo/cpu/overrides/nsoc/source/Set_dOrbitals_Grid.numa.c",
       "-o",
-      "snapshots/scratch/codex/openmx-unified-nsoc-20261031/objects/Set_dOrbitals_Grid.o"
+      "snapshots/scratch/openmx-unified-nsoc-20261031/objects/Set_dOrbitals_Grid.o"
     ],
     "stderr": "icc: remark #10441: The Intel(R) C++ Compiler Classic (ICC) is deprecated and will be removed from product release in the second half of 2023. The Intel(R) oneAPI DPC++/C++ Compiler (ICX) is the recommended compiler moving forward. Please transition to use this compiler. Use '-diag-disable=10441' to disable this message.\n"
   },
@@ -417,17 +417,17 @@
     "object": "Set_Aden_Grid.o",
     "exit_code": 0,
     "command": [
-      "/data/home/apps/oneapi2022.3/mpi/2021.7.1/bin/mpiicc",
+      "/opt/intel/oneapi/mpi/2021.7.1/bin/mpiicc",
       "-O2",
       "-qopenmp",
-      "-Isnapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source",
-      "-Isnapshots/home/software/openmx4.0/source",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include/fftw",
+      "-Irepo/cpu/overrides/nsoc/source",
+      "-Isnapshots/openmx4.0/source",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include/fftw",
       "-c",
-      "snapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source/Set_Aden_Grid.fields.c",
+      "repo/cpu/overrides/nsoc/source/Set_Aden_Grid.fields.c",
       "-o",
-      "snapshots/scratch/codex/openmx-unified-nsoc-20261031/objects/Set_Aden_Grid.o"
+      "snapshots/scratch/openmx-unified-nsoc-20261031/objects/Set_Aden_Grid.o"
     ],
     "stderr": "icc: remark #10441: The Intel(R) C++ Compiler Classic (ICC) is deprecated and will be removed from product release in the second half of 2023. The Intel(R) oneAPI DPC++/C++ Compiler (ICX) is the recommended compiler moving forward. Please transition to use this compiler. Use '-diag-disable=10441' to disable this message.\n"
   },
@@ -435,17 +435,17 @@
     "object": "Set_ProExpn_VNA.o",
     "exit_code": 0,
     "command": [
-      "/data/home/apps/oneapi2022.3/mpi/2021.7.1/bin/mpiicc",
+      "/opt/intel/oneapi/mpi/2021.7.1/bin/mpiicc",
       "-O2",
       "-qopenmp",
-      "-Isnapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source",
-      "-Isnapshots/home/software/openmx4.0/source",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include/fftw",
+      "-Irepo/cpu/overrides/nsoc/source",
+      "-Isnapshots/openmx4.0/source",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include/fftw",
       "-c",
-      "snapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source/Set_ProExpn_VNA.vna_shared.c",
+      "repo/cpu/overrides/nsoc/source/Set_ProExpn_VNA.vna_shared.c",
       "-o",
-      "snapshots/scratch/codex/openmx-unified-nsoc-20261031/objects/Set_ProExpn_VNA.o"
+      "snapshots/scratch/openmx-unified-nsoc-20261031/objects/Set_ProExpn_VNA.o"
     ],
     "stderr": "icc: remark #10441: The Intel(R) C++ Compiler Classic (ICC) is deprecated and will be removed from product release in the second half of 2023. The Intel(R) oneAPI DPC++/C++ Compiler (ICX) is the recommended compiler moving forward. Please transition to use this compiler. Use '-diag-disable=10441' to disable this message.\n"
   },
@@ -453,17 +453,17 @@
     "object": "Set_OLP_Kin.o",
     "exit_code": 0,
     "command": [
-      "/data/home/apps/oneapi2022.3/mpi/2021.7.1/bin/mpiicc",
+      "/opt/intel/oneapi/mpi/2021.7.1/bin/mpiicc",
       "-O2",
       "-qopenmp",
-      "-Isnapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source",
-      "-Isnapshots/home/software/openmx4.0/source",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include/fftw",
+      "-Irepo/cpu/overrides/nsoc/source",
+      "-Isnapshots/openmx4.0/source",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include/fftw",
       "-c",
-      "snapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source/Set_OLP_Kin.tight.c",
+      "repo/cpu/overrides/nsoc/source/Set_OLP_Kin.tight.c",
       "-o",
-      "snapshots/scratch/codex/openmx-unified-nsoc-20261031/objects/Set_OLP_Kin.o"
+      "snapshots/scratch/openmx-unified-nsoc-20261031/objects/Set_OLP_Kin.o"
     ],
     "stderr": "icc: remark #10441: The Intel(R) C++ Compiler Classic (ICC) is deprecated and will be removed from product release in the second half of 2023. The Intel(R) oneAPI DPC++/C++ Compiler (ICX) is the recommended compiler moving forward. Please transition to use this compiler. Use '-diag-disable=10441' to disable this message.\n"
   },
@@ -471,17 +471,17 @@
     "object": "Set_Hamiltonian.o",
     "exit_code": 0,
     "command": [
-      "/data/home/apps/oneapi2022.3/mpi/2021.7.1/bin/mpiicc",
+      "/opt/intel/oneapi/mpi/2021.7.1/bin/mpiicc",
       "-O2",
       "-qopenmp",
-      "-Isnapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source",
-      "-Isnapshots/home/software/openmx4.0/source",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include/fftw",
+      "-Irepo/cpu/overrides/nsoc/source",
+      "-Isnapshots/openmx4.0/source",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include/fftw",
       "-c",
-      "snapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source/Set_Hamiltonian.h_blas3.c",
+      "repo/cpu/overrides/nsoc/source/Set_Hamiltonian.h_blas3.c",
       "-o",
-      "snapshots/scratch/codex/openmx-unified-nsoc-20261031/objects/Set_Hamiltonian.o"
+      "snapshots/scratch/openmx-unified-nsoc-20261031/objects/Set_Hamiltonian.o"
     ],
     "stderr": "icc: remark #10441: The Intel(R) C++ Compiler Classic (ICC) is deprecated and will be removed from product release in the second half of 2023. The Intel(R) oneAPI DPC++/C++ Compiler (ICX) is the recommended compiler moving forward. Please transition to use this compiler. Use '-diag-disable=10441' to disable this message.\n"
   },
@@ -489,17 +489,17 @@
     "object": "cpu_h_grid_blas3.o",
     "exit_code": 0,
     "command": [
-      "/data/home/apps/oneapi2022.3/mpi/2021.7.1/bin/mpiicc",
+      "/opt/intel/oneapi/mpi/2021.7.1/bin/mpiicc",
       "-O2",
       "-qopenmp",
-      "-Isnapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source",
-      "-Isnapshots/home/software/openmx4.0/source",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include/fftw",
+      "-Irepo/cpu/overrides/nsoc/source",
+      "-Isnapshots/openmx4.0/source",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include/fftw",
       "-c",
-      "snapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source/cpu_h_grid_blas3.c",
+      "repo/cpu/overrides/nsoc/source/cpu_h_grid_blas3.c",
       "-o",
-      "snapshots/scratch/codex/openmx-unified-nsoc-20261031/objects/cpu_h_grid_blas3.o"
+      "snapshots/scratch/openmx-unified-nsoc-20261031/objects/cpu_h_grid_blas3.o"
     ],
     "stderr": "icc: remark #10441: The Intel(R) C++ Compiler Classic (ICC) is deprecated and will be removed from product release in the second half of 2023. The Intel(R) oneAPI DPC++/C++ Compiler (ICX) is the recommended compiler moving forward. Please transition to use this compiler. Use '-diag-disable=10441' to disable this message.\n"
   },
@@ -507,17 +507,17 @@
     "object": "cpu_grid_shared.o",
     "exit_code": 0,
     "command": [
-      "/data/home/apps/oneapi2022.3/mpi/2021.7.1/bin/mpiicc",
+      "/opt/intel/oneapi/mpi/2021.7.1/bin/mpiicc",
       "-O2",
       "-qopenmp",
-      "-Isnapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source",
-      "-Isnapshots/home/software/openmx4.0/source",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include/fftw",
+      "-Irepo/cpu/overrides/nsoc/source",
+      "-Isnapshots/openmx4.0/source",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include/fftw",
       "-c",
-      "snapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source/cpu_grid_shared.c",
+      "repo/cpu/overrides/nsoc/source/cpu_grid_shared.c",
       "-o",
-      "snapshots/scratch/codex/openmx-unified-nsoc-20261031/objects/cpu_grid_shared.o"
+      "snapshots/scratch/openmx-unified-nsoc-20261031/objects/cpu_grid_shared.o"
     ],
     "stderr": "icc: remark #10441: The Intel(R) C++ Compiler Classic (ICC) is deprecated and will be removed from product release in the second half of 2023. The Intel(R) oneAPI DPC++/C++ Compiler (ICX) is the recommended compiler moving forward. Please transition to use this compiler. Use '-diag-disable=10441' to disable this message.\n"
   },
@@ -525,17 +525,17 @@
     "object": "cpu_grid_fields_shared.o",
     "exit_code": 0,
     "command": [
-      "/data/home/apps/oneapi2022.3/mpi/2021.7.1/bin/mpiicc",
+      "/opt/intel/oneapi/mpi/2021.7.1/bin/mpiicc",
       "-O2",
       "-qopenmp",
-      "-Isnapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source",
-      "-Isnapshots/home/software/openmx4.0/source",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include/fftw",
+      "-Irepo/cpu/overrides/nsoc/source",
+      "-Isnapshots/openmx4.0/source",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include/fftw",
       "-c",
-      "snapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source/cpu_grid_fields_shared.c",
+      "repo/cpu/overrides/nsoc/source/cpu_grid_fields_shared.c",
       "-o",
-      "snapshots/scratch/codex/openmx-unified-nsoc-20261031/objects/cpu_grid_fields_shared.o"
+      "snapshots/scratch/openmx-unified-nsoc-20261031/objects/cpu_grid_fields_shared.o"
     ],
     "stderr": "icc: remark #10441: The Intel(R) C++ Compiler Classic (ICC) is deprecated and will be removed from product release in the second half of 2023. The Intel(R) oneAPI DPC++/C++ Compiler (ICX) is the recommended compiler moving forward. Please transition to use this compiler. Use '-diag-disable=10441' to disable this message.\n"
   },
@@ -543,17 +543,17 @@
     "object": "cpu_vna_shared.o",
     "exit_code": 0,
     "command": [
-      "/data/home/apps/oneapi2022.3/mpi/2021.7.1/bin/mpiicc",
+      "/opt/intel/oneapi/mpi/2021.7.1/bin/mpiicc",
       "-O2",
       "-qopenmp",
-      "-Isnapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source",
-      "-Isnapshots/home/software/openmx4.0/source",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include",
-      "-I/data/home/apps/oneapi2022.3/mkl/2022.2.1/include/fftw",
+      "-Irepo/cpu/overrides/nsoc/source",
+      "-Isnapshots/openmx4.0/source",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include",
+      "-I/opt/intel/oneapi/mkl/2022.2.1/include/fftw",
       "-c",
-      "snapshots/work/software/2.mp_openmx/openmx-dev/cpu/overrides/nsoc/source/cpu_vna_shared.c",
+      "repo/cpu/overrides/nsoc/source/cpu_vna_shared.c",
       "-o",
-      "snapshots/scratch/codex/openmx-unified-nsoc-20261031/objects/cpu_vna_shared.o"
+      "snapshots/scratch/openmx-unified-nsoc-20261031/objects/cpu_vna_shared.o"
     ],
     "stderr": "icc: remark #10441: The Intel(R) C++ Compiler Classic (ICC) is deprecated and will be removed from product release in the second half of 2023. The Intel(R) oneAPI DPC++/C++ Compiler (ICX) is the recommended compiler moving forward. Please transition to use this compiler. Use '-diag-disable=10441' to disable this message.\n"
   }

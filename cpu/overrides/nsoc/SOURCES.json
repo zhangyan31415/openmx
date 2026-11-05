@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "lineage_binary": "snapshots/work/software/2.mp_openmx/results/openmx_fused_return_20261025_190500/nsoc-selected-dc095f2c7b5b09cb",
+  "lineage_binary": "snapshots/results/openmx_fused_return_20261025_190500/nsoc-selected-dc095f2c7b5b09cb",
   "lineage_binary_sha256": "dc095f2c7b5b09cba665c7e4bda81779fae39c74f5cca6063f741065d10f900a",
   "exact_selected_translation_sha256": "e690d495220df3bafe39eef3bc6ee573fa1d9fe41ddff25250b5058d80832abd",
   "units": [
@@ -165,409 +165,409 @@
   ],
   "files": {
     "DFT.direct.c": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/DFT.direct.c",
+      "origin": "snapshots/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/DFT.direct.c",
       "origin_sha256": "f738ebb7cf0fdb3c0a76670ee474bae3687a8e27668f7b58b51ed898c0761791",
       "sha256": "f738ebb7cf0fdb3c0a76670ee474bae3687a8e27668f7b58b51ed898c0761791",
       "rewritten": false
     },
     "cpu_nsoc_owner_openmx.h": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/cpu_nsoc_owner_openmx.h",
+      "origin": "snapshots/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/cpu_nsoc_owner_openmx.h",
       "origin_sha256": "eedf4a1efb11bc91c61c9cf3f72ec9ebe5549ca26849b0252fe0708d48f4ae71",
       "sha256": "eedf4a1efb11bc91c61c9cf3f72ec9ebe5549ca26849b0252fe0708d48f4ae71",
       "rewritten": false
     },
     "cpu_hassembly_workspace.h": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_nsoc_compact_734_20261024_232200/combined/source/cpu_hassembly_workspace.h",
+      "origin": "snapshots/results/openmx_nsoc_compact_734_20261024_232200/combined/source/cpu_hassembly_workspace.h",
       "origin_sha256": "55547fb2bc7dd6f53a0370e1a82e28cc464e90be414e6a1e84af274ed73cd3f3",
       "sha256": "55547fb2bc7dd6f53a0370e1a82e28cc464e90be414e6a1e84af274ed73cd3f3",
       "rewritten": false
     },
     "cpu_nsoc_sym.h": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_nsoc_compact_734_20261024_232200/combined/source/cpu_nsoc_sym.h",
+      "origin": "snapshots/results/openmx_nsoc_compact_734_20261024_232200/combined/source/cpu_nsoc_sym.h",
       "origin_sha256": "0e48940b2794f10828fc22223e157215918f96f303d90c36f2a514c66a0f194c",
       "sha256": "0e48940b2794f10828fc22223e157215918f96f303d90c36f2a514c66a0f194c",
       "rewritten": false,
       "compatible_older_origins": [
-        "snapshots/work/software/2.mp_openmx/results/openmx_equivalent_blocks_20261022_065042/variants/paired/source/cpu_nsoc_sym.h"
+        "snapshots/results/openmx_equivalent_blocks_20261022_065042/variants/paired/source/cpu_nsoc_sym.h"
       ]
     },
     "native_panel_solver.h": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/native_panel_solver.h",
+      "origin": "snapshots/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/native_panel_solver.h",
       "origin_sha256": "2d59b47a157ca9a12cc1b06bfb058b7cacdde1c3d5e52fe5b8c0c02ae5e59de2",
       "sha256": "2d59b47a157ca9a12cc1b06bfb058b7cacdde1c3d5e52fe5b8c0c02ae5e59de2",
       "rewritten": false
     },
     "cpu_realspace_d3.h": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_equivalent_blocks_20261022_065042/variants/paired/source/cpu_realspace_d3.h",
+      "origin": "snapshots/results/openmx_equivalent_blocks_20261022_065042/variants/paired/source/cpu_realspace_d3.h",
       "origin_sha256": "1259924f1209906fb4635bcb76521e899eee3711ccce20c22c3d2544e8500750",
       "sha256": "1259924f1209906fb4635bcb76521e899eee3711ccce20c22c3d2544e8500750",
       "rewritten": false
     },
     "Cluster_DFT_Col.direct.c": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/Cluster_DFT_Col.direct.c",
+      "origin": "snapshots/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/Cluster_DFT_Col.direct.c",
       "origin_sha256": "b47498b5b61543d0b123bb12ca3220895336fd2129075b1687f8d09c81de2ff6",
       "sha256": "b47498b5b61543d0b123bb12ca3220895336fd2129075b1687f8d09c81de2ff6",
       "rewritten": false
     },
     "cpu_nsoc_sym.direct.c": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/cpu_nsoc_sym.direct.c",
+      "origin": "snapshots/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/cpu_nsoc_sym.direct.c",
       "origin_sha256": "b126992a1a594ac2378351c58071b99f804c081ee383ca52601ee0a13d3ef579",
       "sha256": "e690d495220df3bafe39eef3bc6ee573fa1d9fe41ddff25250b5058d80832abd",
       "rewritten": true
     },
     "cpu_nsoc_scratch.h": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_nsoc_compact_734_20261024_232200/combined/source/cpu_nsoc_scratch.h",
+      "origin": "snapshots/results/openmx_nsoc_compact_734_20261024_232200/combined/source/cpu_nsoc_scratch.h",
       "origin_sha256": "b63f027b10636f97a34c2838610939dd161aa76ba5c06252a0fbbadd22c59806",
       "sha256": "b63f027b10636f97a34c2838610939dd161aa76ba5c06252a0fbbadd22c59806",
       "rewritten": false
     },
     "cpu_nsoc_sparse.h": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_multinode_solver_20261025_074000/sparse_transform/source/cpu_nsoc_sparse.h",
+      "origin": "snapshots/results/openmx_multinode_solver_20261025_074000/sparse_transform/source/cpu_nsoc_sparse.h",
       "origin_sha256": "b8b55928a5fe8f2ef79fac60e254554dfe7d2dccbd75bacade5c358e38f92e49",
       "sha256": "b8b55928a5fe8f2ef79fac60e254554dfe7d2dccbd75bacade5c358e38f92e49",
       "rewritten": false
     },
     "fused_return_native_v2.inc": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_fused_return_20261025_190500/fused_return_native_v2.inc",
+      "origin": "snapshots/results/openmx_fused_return_20261025_190500/fused_return_native_v2.inc",
       "origin_sha256": "f36ae6050cf46874fb1e4b8a5e8ab9491cc01540864512ab3a15302917e2d1a8",
       "sha256": "f36ae6050cf46874fb1e4b8a5e8ab9491cc01540864512ab3a15302917e2d1a8",
       "rewritten": false
     },
     "fused_return.h": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_fused_return_20261025_190500/fused_return.h",
+      "origin": "snapshots/results/openmx_fused_return_20261025_190500/fused_return.h",
       "origin_sha256": "72bbb73d0d2490ef82895e9a12e9306a630f6a6d877034d72663942f0e07e197",
       "sha256": "72bbb73d0d2490ef82895e9a12e9306a630f6a6d877034d72663942f0e07e197",
       "rewritten": false
     },
     "selected_left.h": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_fused_return_20261025_190500/selected_left.h",
+      "origin": "snapshots/results/openmx_fused_return_20261025_190500/selected_left.h",
       "origin_sha256": "b23eb63f16323de56fda1e7721b4d0f0179baf6972187c1ae9309bb4ae0559b4",
       "sha256": "b23eb63f16323de56fda1e7721b4d0f0179baf6972187c1ae9309bb4ae0559b4",
       "rewritten": false
     },
     "cpu_nsoc_representatives.h": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/cpu_nsoc_representatives.h",
+      "origin": "snapshots/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/cpu_nsoc_representatives.h",
       "origin_sha256": "ca2d6659f781a2d0517c52a1f346557d27016b78f48d124ec132f75367904c7c",
       "sha256": "ca2d6659f781a2d0517c52a1f346557d27016b78f48d124ec132f75367904c7c",
       "rewritten": false
     },
     "cpu_nsoc_owner.h": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/cpu_nsoc_owner.h",
+      "origin": "snapshots/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/cpu_nsoc_owner.h",
       "origin_sha256": "52a6fd12ee2dca372c91493aefd2e0df559061a815c228067374f8e63bcbdb36",
       "sha256": "52a6fd12ee2dca372c91493aefd2e0df559061a815c228067374f8e63bcbdb36",
       "rewritten": false
     },
     "cpu_nsoc_rep_intertwiner.inc": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/cpu_nsoc_rep_intertwiner.inc",
+      "origin": "snapshots/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/cpu_nsoc_rep_intertwiner.inc",
       "origin_sha256": "a3cd32185b674c027682ccc12f55fb02752c90f579f5d87ef6b22ec3d469048a",
       "sha256": "a3cd32185b674c027682ccc12f55fb02752c90f579f5d87ef6b22ec3d469048a",
       "rewritten": false
     },
     "cpu_nsoc_sector_parallel.inc": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/cpu_nsoc_sector_parallel.inc",
+      "origin": "snapshots/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/cpu_nsoc_sector_parallel.inc",
       "origin_sha256": "6e247ed3af33954b55397e0ca0817c217035caa774a13b73a4419b845c4c1441",
       "sha256": "6e247ed3af33954b55397e0ca0817c217035caa774a13b73a4419b845c4c1441",
       "rewritten": false
     },
     "cpu_nsoc_elpa_omp_scope.h": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/cpu_nsoc_elpa_omp_scope.h",
+      "origin": "snapshots/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/cpu_nsoc_elpa_omp_scope.h",
       "origin_sha256": "9bfe7d97e077310543675d6ec0ca34555cad8e11b6bb1116cc6cce0e3966b56d",
       "sha256": "9bfe7d97e077310543675d6ec0ca34555cad8e11b6bb1116cc6cce0e3966b56d",
       "rewritten": false
     },
     "cpu_nsoc_sector_layout.h": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/cpu_nsoc_sector_layout.h",
+      "origin": "snapshots/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/cpu_nsoc_sector_layout.h",
       "origin_sha256": "7629a41a3fd143a86f76db467f9043ff0242767cda9f1cacf6f851d3f6aa5dd5",
       "sha256": "7629a41a3fd143a86f76db467f9043ff0242767cda9f1cacf6f851d3f6aa5dd5",
       "rewritten": false
     },
     "native_panel_solver.inc": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/native_panel_solver.inc",
+      "origin": "snapshots/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/native_panel_solver.inc",
       "origin_sha256": "e88bce919a95fd0c11523ab4860ec8a917e5adef5e474e0da0c5ae409677ca09",
       "sha256": "e88bce919a95fd0c11523ab4860ec8a917e5adef5e474e0da0c5ae409677ca09",
       "rewritten": false
     },
     "rep_panel.h": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/rep_panel.h",
+      "origin": "snapshots/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/rep_panel.h",
       "origin_sha256": "2ff05dcaafe7e51ca18e258bc80fdf95cd0f3d9ca4d0e01e0c7eb82374670194",
       "sha256": "2ff05dcaafe7e51ca18e258bc80fdf95cd0f3d9ca4d0e01e0c7eb82374670194",
       "rewritten": false
     },
     "native_panel_metadata.h": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/native_panel_metadata.h",
+      "origin": "snapshots/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/native_panel_metadata.h",
       "origin_sha256": "58aa9d7c4c81becb1cfe7bbbfc304e6b4c3b3a24432a6956360399f9381147ae",
       "sha256": "58aa9d7c4c81becb1cfe7bbbfc304e6b4c3b3a24432a6956360399f9381147ae",
       "rewritten": false
     },
     "native_workspace_proof.inc": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/native_workspace_proof.inc",
+      "origin": "snapshots/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/native_workspace_proof.inc",
       "origin_sha256": "ec9d492bece1e11e6daa4e930d04d88b8268d4235d2accedfa1afd62682eb9d3",
       "sha256": "ec9d492bece1e11e6daa4e930d04d88b8268d4235d2accedfa1afd62682eb9d3",
       "rewritten": false
     },
     "cpu_realspace_d3.panel.c": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/cpu_realspace_d3.panel.c",
+      "origin": "snapshots/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/cpu_realspace_d3.panel.c",
       "origin_sha256": "effe9e89775cdd425a71f57384dca30f4b3503c937fd4ce07c398aad1663f1ed",
       "sha256": "effe9e89775cdd425a71f57384dca30f4b3503c937fd4ce07c398aad1663f1ed",
       "rewritten": false
     },
     "native_panel_metadata.inc": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/native_panel_metadata.inc",
+      "origin": "snapshots/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/native_panel_metadata.inc",
       "origin_sha256": "225fff1ff20ba640ab27c1d7645339077f36ebddeff567158233310e60ac3a48",
       "sha256": "225fff1ff20ba640ab27c1d7645339077f36ebddeff567158233310e60ac3a48",
       "rewritten": false
     },
     "cpu_nsoc_rep_tail.h": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/cpu_nsoc_rep_tail.h",
+      "origin": "snapshots/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/cpu_nsoc_rep_tail.h",
       "origin_sha256": "7b19f4ad5c8ff3310da8be755369a26afe27a928b399011044841740f7f41a07",
       "sha256": "7b19f4ad5c8ff3310da8be755369a26afe27a928b399011044841740f7f41a07",
       "rewritten": false
     },
     "cpu_nsoc_owner.c": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_nsoc_history_owner_20261024_205400/source/cpu_nsoc_owner.c",
+      "origin": "snapshots/results/openmx_nsoc_history_owner_20261024_205400/source/cpu_nsoc_owner.c",
       "origin_sha256": "eb2be4f59621da70e4102986784996b421d4c609e92b1eda58ee335a21989ae5",
       "sha256": "eb2be4f59621da70e4102986784996b421d4c609e92b1eda58ee335a21989ae5",
       "rewritten": false
     },
     "cpu_nsoc_owner_openmx.c": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/cpu_nsoc_owner_openmx.c",
+      "origin": "snapshots/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/cpu_nsoc_owner_openmx.c",
       "origin_sha256": "230dc78fd083514648d8a16a671c5db7a5aa1fa7f7d68b84ad37e8cc4e565592",
       "sha256": "230dc78fd083514648d8a16a671c5db7a5aa1fa7f7d68b84ad37e8cc4e565592",
       "rewritten": false
     },
     "cpu_nsoc_rep_tail.c": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/cpu_nsoc_rep_tail.c",
+      "origin": "snapshots/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/cpu_nsoc_rep_tail.c",
       "origin_sha256": "870ab5a18ef6d1754ce82a4effb9f7427d21fd03387d00848a308954ae617fba",
       "sha256": "870ab5a18ef6d1754ce82a4effb9f7427d21fd03387d00848a308954ae617fba",
       "rewritten": false
     },
     "rep_panel.c": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/rep_panel.c",
+      "origin": "snapshots/results/openmx_time_followup_20261025/nsoc_elpa_omp/source/rep_panel.c",
       "origin_sha256": "ccb09d221398cc301f4a98504995e2cd7ce70a9139cadde16a2c0a4fa37df88a",
       "sha256": "ccb09d221398cc301f4a98504995e2cd7ce70a9139cadde16a2c0a4fa37df88a",
       "rewritten": false
     },
     "selected_left.c": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_fused_return_20261025_190500/selected_left.c",
+      "origin": "snapshots/results/openmx_fused_return_20261025_190500/selected_left.c",
       "origin_sha256": "068f3a523a0bb9ae186ea933817c60a55730ecb765cc53469d063978777ac107",
       "sha256": "ac3bfa3b1f44bb4e58153d1ac31cd234234bb983a8fe7c4569c31ab612260bdf",
       "rewritten": true
     },
     "cpu_nsoc_sparse.frozen.c": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_multinode_solver_20261025_074000/sparse_transform/source/cpu_nsoc_sparse.frozen.c",
+      "origin": "snapshots/results/openmx_multinode_solver_20261025_074000/sparse_transform/source/cpu_nsoc_sparse.frozen.c",
       "origin_sha256": "81ff48455ec813212829f53687060875c7f9b29ae7abc4b2d0ce1436ee69b698",
       "sha256": "81ff48455ec813212829f53687060875c7f9b29ae7abc4b2d0ce1436ee69b698",
       "rewritten": false
     },
     "cpu_nsoc_sparse.c": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_equivalent_blocks_20261022_065042/variants/paired/source/cpu_nsoc_sparse.c",
+      "origin": "snapshots/results/openmx_equivalent_blocks_20261022_065042/variants/paired/source/cpu_nsoc_sparse.c",
       "origin_sha256": "81ff48455ec813212829f53687060875c7f9b29ae7abc4b2d0ce1436ee69b698",
       "sha256": "81ff48455ec813212829f53687060875c7f9b29ae7abc4b2d0ce1436ee69b698",
       "rewritten": false
     },
     "cpu_nsoc_imag.c": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_nsoc_compact_734_20261024_232200/combined/source/cpu_nsoc_imag.c",
+      "origin": "snapshots/results/openmx_nsoc_compact_734_20261024_232200/combined/source/cpu_nsoc_imag.c",
       "origin_sha256": "5a10bd2f7c9e2e06f66dc08036e2b5e78c8777fbcd925903619f8d481d2cfca1",
       "sha256": "5a10bd2f7c9e2e06f66dc08036e2b5e78c8777fbcd925903619f8d481d2cfca1",
       "rewritten": false
     },
     "cpu_nsoc_imag.h": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_nsoc_compact_734_20261024_232200/combined/source/cpu_nsoc_imag.h",
+      "origin": "snapshots/results/openmx_nsoc_compact_734_20261024_232200/combined/source/cpu_nsoc_imag.h",
       "origin_sha256": "67e30606c8c888d1164fb8e8b973afd0cd98826790d18d5117f2f06a1fa8b4b9",
       "sha256": "67e30606c8c888d1164fb8e8b973afd0cd98826790d18d5117f2f06a1fa8b4b9",
       "rewritten": false
     },
     "cpu_symhistory_diis.c": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_nsoc_compact_734_20261024_232200/history/diis_kernel/cpu_symhistory_diis.c",
+      "origin": "snapshots/results/openmx_nsoc_compact_734_20261024_232200/history/diis_kernel/cpu_symhistory_diis.c",
       "origin_sha256": "b2b6536ce90005d972d132a64df7220c90c8054aa03c969a61100b6d957a3f23",
       "sha256": "b2b6536ce90005d972d132a64df7220c90c8054aa03c969a61100b6d957a3f23",
       "rewritten": false
     },
     "cpu_symhistory_diis.h": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_nsoc_compact_734_20261024_232200/history/diis_kernel/cpu_symhistory_diis.h",
+      "origin": "snapshots/results/openmx_nsoc_compact_734_20261024_232200/history/diis_kernel/cpu_symhistory_diis.h",
       "origin_sha256": "f8ef601a59bbf77ac76ce41cb6137ed7656c9549df0f5b7d1ee957569a855fa9",
       "sha256": "f8ef601a59bbf77ac76ce41cb6137ed7656c9549df0f5b7d1ee957569a855fa9",
       "rewritten": false
     },
     "truncation.symhistory.c": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_nsoc_compact_734_20261024_232200/history/sym_source/truncation.symhistory.c",
+      "origin": "snapshots/results/openmx_nsoc_compact_734_20261024_232200/history/sym_source/truncation.symhistory.c",
       "origin_sha256": "0498541009d34420557df06d4c647362f7eb332df071e5cd4dddd42a4b0c85fe",
       "sha256": "0498541009d34420557df06d4c647362f7eb332df071e5cd4dddd42a4b0c85fe",
       "rewritten": false
     },
     "cpu_nsoc_symhistory_guard.h": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_nsoc_compact_734_20261024_232200/history/sym_source/cpu_nsoc_symhistory_guard.h",
+      "origin": "snapshots/results/openmx_nsoc_compact_734_20261024_232200/history/sym_source/cpu_nsoc_symhistory_guard.h",
       "origin_sha256": "1d0f8f629820e3a54c48a3c1e5448ecc0ea1ec274eca1292f9d8e98616131dd0",
       "sha256": "1d0f8f629820e3a54c48a3c1e5448ecc0ea1ec274eca1292f9d8e98616131dd0",
       "rewritten": false
     },
     "cpu_nsoc_history_capacity.h": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_nsoc_compact_734_20261024_232200/combined/source/cpu_nsoc_history_capacity.h",
+      "origin": "snapshots/results/openmx_nsoc_compact_734_20261024_232200/combined/source/cpu_nsoc_history_capacity.h",
       "origin_sha256": "dff3becfeb210db1f6768835f70ec3a6ce077c54126bbb0e90ea8692025bb3fc",
       "sha256": "dff3becfeb210db1f6768835f70ec3a6ce077c54126bbb0e90ea8692025bb3fc",
       "rewritten": false
     },
     "cpu_grid_shared.h": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_multinode_734_20261025_010500/numa/source/cpu_grid_shared.h",
+      "origin": "snapshots/results/openmx_multinode_734_20261025_010500/numa/source/cpu_grid_shared.h",
       "origin_sha256": "787762f40507ccc9abec13767f3815f13fc034841629cb493c3213edc3a1fe31",
       "sha256": "787762f40507ccc9abec13767f3815f13fc034841629cb493c3213edc3a1fe31",
       "rewritten": false
     },
     "cpu_grid_fields_shared.h": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_multinode_734_20261025_010500/fields/nsoc/cpu_grid_fields_shared.h",
+      "origin": "snapshots/results/openmx_multinode_734_20261025_010500/fields/nsoc/cpu_grid_fields_shared.h",
       "origin_sha256": "001162b5d372fba595732596cc84bc85eed13933a78856a932f43f10285e8f64",
       "sha256": "001162b5d372fba595732596cc84bc85eed13933a78856a932f43f10285e8f64",
       "rewritten": false
     },
     "cpu_vna_shared.h": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_nsoc_soc_memory_port_20261024_190300/lifetime/source/cpu_vna_shared.h",
+      "origin": "snapshots/results/openmx_nsoc_soc_memory_port_20261024_190300/lifetime/source/cpu_vna_shared.h",
       "origin_sha256": "0f41b801f646f03f26d3932767de4eb74326c66ba5feeb911f1f1f6bebf2ad66",
       "sha256": "0f41b801f646f03f26d3932767de4eb74326c66ba5feeb911f1f1f6bebf2ad66",
       "rewritten": false,
       "compatible_older_origins": [
-        "snapshots/work/software/2.mp_openmx/results/openmx_multinode_solver_20261025_074000/vna_raw0/source/cpu_vna_shared.h"
+        "snapshots/results/openmx_multinode_solver_20261025_074000/vna_raw0/source/cpu_vna_shared.h"
       ]
     },
     "cpu_nsoc_ghost.h": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_nsoc_soc_memory_port_20261024_190300/lifetime/source/cpu_nsoc_ghost.h",
+      "origin": "snapshots/results/openmx_nsoc_soc_memory_port_20261024_190300/lifetime/source/cpu_nsoc_ghost.h",
       "origin_sha256": "5bd277e4fbc42c44b35c3eb1825cda4f90c240a33bb0cc2476328f62061cc93a",
       "sha256": "5bd277e4fbc42c44b35c3eb1825cda4f90c240a33bb0cc2476328f62061cc93a",
       "rewritten": false
     },
     "Free_Arrays.symhistory.c": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_nsoc_compact_734_20261024_232200/history/sym_source/Free_Arrays.symhistory.c",
+      "origin": "snapshots/results/openmx_nsoc_compact_734_20261024_232200/history/sym_source/Free_Arrays.symhistory.c",
       "origin_sha256": "e1a2bc003d0e0b22f4442e9c15e56cb31b8644028cb1a157d17b072c85dd5f48",
       "sha256": "e1a2bc003d0e0b22f4442e9c15e56cb31b8644028cb1a157d17b072c85dd5f48",
       "rewritten": false
     },
     "DIIS_Mixing_DM.symhistory.c": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_nsoc_compact_734_20261024_232200/history/sym_source/DIIS_Mixing_DM.symhistory.c",
+      "origin": "snapshots/results/openmx_nsoc_compact_734_20261024_232200/history/sym_source/DIIS_Mixing_DM.symhistory.c",
       "origin_sha256": "038f826405df6cded53c823bd19ebe18cdf70547b5dfc20977bf7b43e20ebcb8",
       "sha256": "038f826405df6cded53c823bd19ebe18cdf70547b5dfc20977bf7b43e20ebcb8",
       "rewritten": false
     },
     "cpu_nsoc_symhistory_adapter.inc": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_nsoc_compact_734_20261024_232200/history/sym_source/cpu_nsoc_symhistory_adapter.inc",
+      "origin": "snapshots/results/openmx_nsoc_compact_734_20261024_232200/history/sym_source/cpu_nsoc_symhistory_adapter.inc",
       "origin_sha256": "60ec54312487b23c453b121fd89516ac2fe3fa15cc523508fb9279a9ff9fe7cc",
       "sha256": "60ec54312487b23c453b121fd89516ac2fe3fa15cc523508fb9279a9ff9fe7cc",
       "rewritten": false
     },
     "cpu_nsoc_symhistory_rs.h": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_nsoc_compact_734_20261024_232200/history/sym_source/cpu_nsoc_symhistory_rs.h",
+      "origin": "snapshots/results/openmx_nsoc_compact_734_20261024_232200/history/sym_source/cpu_nsoc_symhistory_rs.h",
       "origin_sha256": "8d6ac5c2511e8107c19f53470d223fb90e58d818c6285894ba175410cd812f02",
       "sha256": "8d6ac5c2511e8107c19f53470d223fb90e58d818c6285894ba175410cd812f02",
       "rewritten": false
     },
     "Mixing_H.compact.c": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_nsoc_compact_734_20261024_232200/combined/source/Mixing_H.compact.c",
+      "origin": "snapshots/results/openmx_nsoc_compact_734_20261024_232200/combined/source/Mixing_H.compact.c",
       "origin_sha256": "62f76d5db1439795cdb879e7c311aa0ed1f95d7f6a0b79164922a028d7db2e04",
       "sha256": "62f76d5db1439795cdb879e7c311aa0ed1f95d7f6a0b79164922a028d7db2e04",
       "rewritten": false
     },
     "Hamiltonian_Cluster_Hs.compact.c": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_nsoc_compact_734_20261024_232200/combined/source/Hamiltonian_Cluster_Hs.compact.c",
+      "origin": "snapshots/results/openmx_nsoc_compact_734_20261024_232200/combined/source/Hamiltonian_Cluster_Hs.compact.c",
       "origin_sha256": "44f8139f64386da2aa8935b77a2740574475fe79848f86772ddc53ff70d5d206",
       "sha256": "44f8139f64386da2aa8935b77a2740574475fe79848f86772ddc53ff70d5d206",
       "rewritten": false
     },
     "Mixing_DM.nsym.c": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_equivalent_blocks_20261022_065042/variants/paired/source/Mixing_DM.nsym.c",
+      "origin": "snapshots/results/openmx_equivalent_blocks_20261022_065042/variants/paired/source/Mixing_DM.nsym.c",
       "origin_sha256": "09b1a2c9a028eb7cd4e7d52250c945c63f4139ee0facc66a9b81b373dc99e5b8",
       "sha256": "09b1a2c9a028eb7cd4e7d52250c945c63f4139ee0facc66a9b81b373dc99e5b8",
       "rewritten": false
     },
     "SCF2File.realspace.c": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_equivalent_blocks_20261022_065042/variants/paired/source/SCF2File.realspace.c",
+      "origin": "snapshots/results/openmx_equivalent_blocks_20261022_065042/variants/paired/source/SCF2File.realspace.c",
       "origin_sha256": "b6c5c2db5e7dae440f6e55166aed3d1ddf1ebd4ebdff74089f32f8b84c618124",
       "sha256": "b6c5c2db5e7dae440f6e55166aed3d1ddf1ebd4ebdff74089f32f8b84c618124",
       "rewritten": false
     },
     "tran_variables.h": {
-      "origin": "snapshots/home/software/openmx4.0/source/tran_variables.h",
+      "origin": "snapshots/openmx4.0/source/tran_variables.h",
       "origin_sha256": "e3cf98ec0b206a3332ca34e8a141bed3c49612c7ff51cdfd2d53be8cd8cf19bd",
       "sha256": "e3cf98ec0b206a3332ca34e8a141bed3c49612c7ff51cdfd2d53be8cd8cf19bd",
       "rewritten": false
     },
     "Force.fields.c": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_nsoc_soc_memory_port_20261024_190300/lifetime/source/Force.fields.c",
+      "origin": "snapshots/results/openmx_nsoc_soc_memory_port_20261024_190300/lifetime/source/Force.fields.c",
       "origin_sha256": "46c3e418220eb2134a1f7e33729fe052d92861a6ca0186fe484e1055661ad5ae",
       "sha256": "46c3e418220eb2134a1f7e33729fe052d92861a6ca0186fe484e1055661ad5ae",
       "rewritten": false
     },
     "Set_Density_Grid.fields.c": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_nsoc_soc_memory_port_20261024_190300/lifetime/source/Set_Density_Grid.fields.c",
+      "origin": "snapshots/results/openmx_nsoc_soc_memory_port_20261024_190300/lifetime/source/Set_Density_Grid.fields.c",
       "origin_sha256": "9dc5eb9a501e450215f32da7fb1754435b09f5529df6ab8e8276858ddf728b00",
       "sha256": "9dc5eb9a501e450215f32da7fb1754435b09f5529df6ab8e8276858ddf728b00",
       "rewritten": false
     },
     "Set_Orbitals_Grid.numa.c": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_nsoc_soc_memory_port_20261024_190300/lifetime/source/Set_Orbitals_Grid.numa.c",
+      "origin": "snapshots/results/openmx_nsoc_soc_memory_port_20261024_190300/lifetime/source/Set_Orbitals_Grid.numa.c",
       "origin_sha256": "0ff1ce6a0fc7424337f4fe7bef3046028693d519c76762da6bea525d0f2d8bdb",
       "sha256": "0ff1ce6a0fc7424337f4fe7bef3046028693d519c76762da6bea525d0f2d8bdb",
       "rewritten": false
     },
     "Set_dOrbitals_Grid.numa.c": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_nsoc_soc_memory_port_20261024_190300/lifetime/source/Set_dOrbitals_Grid.numa.c",
+      "origin": "snapshots/results/openmx_nsoc_soc_memory_port_20261024_190300/lifetime/source/Set_dOrbitals_Grid.numa.c",
       "origin_sha256": "fd2db0641186a492d57ba2f7d6b3b0882d931a7e0e44d33db4937850790a6c4c",
       "sha256": "fd2db0641186a492d57ba2f7d6b3b0882d931a7e0e44d33db4937850790a6c4c",
       "rewritten": false
     },
     "Set_Aden_Grid.fields.c": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_nsoc_soc_memory_port_20261024_190300/lifetime/source/Set_Aden_Grid.fields.c",
+      "origin": "snapshots/results/openmx_nsoc_soc_memory_port_20261024_190300/lifetime/source/Set_Aden_Grid.fields.c",
       "origin_sha256": "9caac21e950d88c7b7b730cafa0a859d2f57e0ac5855c0fd8957efbcf639a049",
       "sha256": "9caac21e950d88c7b7b730cafa0a859d2f57e0ac5855c0fd8957efbcf639a049",
       "rewritten": false
     },
     "Set_ProExpn_VNA.vna_shared.c": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_nsoc_soc_memory_port_20261024_190300/lifetime/source/Set_ProExpn_VNA.vna_shared.c",
+      "origin": "snapshots/results/openmx_nsoc_soc_memory_port_20261024_190300/lifetime/source/Set_ProExpn_VNA.vna_shared.c",
       "origin_sha256": "3c610ccb4e3954af6165b2e5c39624ceb8b275c94027036adb27aa49486060b0",
       "sha256": "3c610ccb4e3954af6165b2e5c39624ceb8b275c94027036adb27aa49486060b0",
       "rewritten": false
     },
     "cpu_workspace_bounds.h": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_nsoc_symmetry_memory_20261024_143800/source/cpu_workspace_bounds.h",
+      "origin": "snapshots/results/openmx_nsoc_symmetry_memory_20261024_143800/source/cpu_workspace_bounds.h",
       "origin_sha256": "1a4158f48c27be6f6807bee40bbc116d073a8f2cd14ccdd48713aea7beabbadc",
       "sha256": "1a4158f48c27be6f6807bee40bbc116d073a8f2cd14ccdd48713aea7beabbadc",
       "rewritten": false
     },
     "Set_OLP_Kin.tight.c": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_nsoc_symmetry_memory_20261024_143800/source/Set_OLP_Kin.tight.c",
+      "origin": "snapshots/results/openmx_nsoc_symmetry_memory_20261024_143800/source/Set_OLP_Kin.tight.c",
       "origin_sha256": "aedd96f35cff67d06ddcd9fd791ed1418cf592757664823356eeec99ac0dbf6b",
       "sha256": "aedd96f35cff67d06ddcd9fd791ed1418cf592757664823356eeec99ac0dbf6b",
       "rewritten": false
     },
     "Set_Hamiltonian.h_blas3.c": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_multinode_efficiency_20261025/realspace_blas3/native_h/Set_Hamiltonian.h_blas3.c",
+      "origin": "snapshots/results/openmx_multinode_efficiency_20261025/realspace_blas3/native_h/Set_Hamiltonian.h_blas3.c",
       "origin_sha256": "2b620e5619500708499a961771ddf01167e6d899592b05149b9961575eb20316",
       "sha256": "2b620e5619500708499a961771ddf01167e6d899592b05149b9961575eb20316",
       "rewritten": false
     },
     "cpu_h_grid_blas3.h": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_multinode_efficiency_20261025/realspace_blas3/native_h/cpu_h_grid_blas3.h",
+      "origin": "snapshots/results/openmx_multinode_efficiency_20261025/realspace_blas3/native_h/cpu_h_grid_blas3.h",
       "origin_sha256": "42d778c484602a4a22ddd9f2155b0ed105930b53c7644fb6175cdb19d65dbfa2",
       "sha256": "42d778c484602a4a22ddd9f2155b0ed105930b53c7644fb6175cdb19d65dbfa2",
       "rewritten": false
     },
     "cpu_h_grid_blas3.c": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_multinode_efficiency_20261025/realspace_blas3/native_h/cpu_h_grid_blas3.c",
+      "origin": "snapshots/results/openmx_multinode_efficiency_20261025/realspace_blas3/native_h/cpu_h_grid_blas3.c",
       "origin_sha256": "165ef97aa095bce86e0464676f9cd496d9c2404d6c5350fffbcbb8f366441a32",
       "sha256": "165ef97aa095bce86e0464676f9cd496d9c2404d6c5350fffbcbb8f366441a32",
       "rewritten": false
     },
     "cpu_grid_shared.c": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_multinode_734_20261025_010500/numa/source/cpu_grid_shared.c",
+      "origin": "snapshots/results/openmx_multinode_734_20261025_010500/numa/source/cpu_grid_shared.c",
       "origin_sha256": "b1f4c4956a4e0199e84dbc5ddc06986f996996fcba3223b224fe299bd07a6c7a",
       "sha256": "b1f4c4956a4e0199e84dbc5ddc06986f996996fcba3223b224fe299bd07a6c7a",
       "rewritten": false
     },
     "cpu_grid_fields_shared.c": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_multinode_734_20261025_010500/fields/nsoc/cpu_grid_fields_shared.c",
+      "origin": "snapshots/results/openmx_multinode_734_20261025_010500/fields/nsoc/cpu_grid_fields_shared.c",
       "origin_sha256": "e9027bac6bfd3a2a4bc333922adf2a276dcef3760d355e534c0bcbab15c3940a",
       "sha256": "e9027bac6bfd3a2a4bc333922adf2a276dcef3760d355e534c0bcbab15c3940a",
       "rewritten": false
     },
     "cpu_vna_shared.c": {
-      "origin": "snapshots/work/software/2.mp_openmx/results/openmx_multinode_solver_20261025_074000/vna_raw0/source/cpu_vna_shared.c",
+      "origin": "snapshots/results/openmx_multinode_solver_20261025_074000/vna_raw0/source/cpu_vna_shared.c",
       "origin_sha256": "61afcd2ba035e85995dc7f056ad03c61f8a3c492de55fbfbd20a69d7c0c9e2d0",
       "sha256": "61afcd2ba035e85995dc7f056ad03c61f8a3c492de55fbfbd20a69d7c0c9e2d0",
       "rewritten": false

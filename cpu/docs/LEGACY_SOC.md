@@ -9,7 +9,7 @@ It does not introduce a new solver, truncate states, or modify coordinates.
 The common preparation entry point selects it explicitly:
 
 ```bash
-snapshots/home/mambaforge/bin/python cpu/geometry/prepare.py \
+"$CONDA_PREFIX/bin/python" cpu/geometry/prepare.py \
  --nsoc-input /absolute/NSOC.dat --soc-input /absolute/SOC.dat \
  --output /absolute/new-metadata --group D3 \
  --soc-route legacy --soc-export-policy symmetrize
@@ -100,11 +100,11 @@ requested subgroup and independently checks the nominal-rotation residual.
 
 ## Verification
 
-On node041 with `snapshots/home/mambaforge` and one BLAS/OpenMP thread:
+On node041 with `$CONDA_PREFIX` and one BLAS/OpenMP thread:
 
 ```bash
 OPENBLAS_NUM_THREADS=1 MKL_NUM_THREADS=1 OMP_NUM_THREADS=1 \
- snapshots/home/mambaforge/bin/python -m unittest discover \
+ "$CONDA_PREFIX/bin/python" -m unittest discover \
  -s cpu/tests -p test_legacy_soc.py -v
 ```
 

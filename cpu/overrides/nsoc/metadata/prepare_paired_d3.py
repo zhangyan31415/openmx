@@ -21,7 +21,7 @@ import sys
 import numpy as np
 from scipy import linalg, sparse
 
-PARENT_TOOLS = Path(__file__).resolve().parents[4]/'local-records/cpu_d3/historical/geometry_tools'
+PARENT_TOOLS = Path(__file__).resolve().parents[3]/'geometry/metadata'
 MAGIC = 0x4e534433
 TOL = 1e-11
 
@@ -217,7 +217,7 @@ def build(input_path, symmetry_json, output, provenance=None):
           'validation':{'group_closed':True,'orbital_representation_checked':True,'canonical_d3_rows_checked':True,
                         'equivalent_E_orientation_checked':True,'h_s_covariance_checked':False},
           'payload':str(out),'payload_sha256':hashlib.sha256(out.read_bytes()).hexdigest(),'payload_bytes':out.stat().st_size,
-          'environment_prefix':'snapshots/home/mambaforge','host':os.uname().nodename,'working_directory':os.getcwd(),
+          'environment_prefix':sys.prefix,'host':os.uname().nodename,'working_directory':os.getcwd(),
           'python_executable':sys.executable,'python_version':sys.version,'numpy_version':np.__version__,
           'command_argv':sys.argv,'process_threads':'one process, BLAS/OMP threads 1',
           'calculation_category':'basis construction and mathematical validation; not an SCF result',

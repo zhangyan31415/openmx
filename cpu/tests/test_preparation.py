@@ -2,11 +2,11 @@ from pathlib import Path
 import importlib.util,tempfile,unittest,json,struct
 import numpy as np
 ROOT=Path(__file__).resolve().parents[2]
-TOOLS=ROOT/'local-records/cpu_d3/historical/geometry_tools'
+TOOLS=ROOT/'cpu/geometry/metadata'
 def module(name):
  p=TOOLS/(name+'.py');s=importlib.util.spec_from_file_location('local_'+name,p);m=importlib.util.module_from_spec(s);s.loader.exec_module(m);return m
 INPUT='''System.Name prep
-DATA.PATH /data/home/apps/openmx/openmx3.9/DFT_DATA19/
+DATA.PATH /path/to/DFT_DATA19/
 scf.SpinPolarization off
 Atoms.UnitVectors.Unit Ang
 <Atoms.UnitVectors

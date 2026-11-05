@@ -17,15 +17,15 @@ profile，然后 `run /ABS/new-config/workflow.json --wait`。无需手动合并
 4. [大角度单／多节点实测](docs/BENCHMARKS_20261031.md)、[验收方法](docs/ACCEPTANCE.zh-CN.md)：查看时间、内存、核时和数值边界。
 
 ```bash
-snapshots/home/mambaforge/bin/python /ABS/REPO/cpu/build.py \
+python /ABS/REPO/cpu/build.py \
   --profile unified --output /ABS/new-build --execute
 
-snapshots/home/mambaforge/bin/python /ABS/REPO/cpu/geometry/prepare.py \
+python /ABS/REPO/cpu/geometry/prepare.py \
   --nsoc-input /ABS/nsoc.dat --soc-input /ABS/soc.dat \
   --output /ABS/new-metadata --group D3
 
-snapshots/home/mambaforge/bin/python /ABS/REPO/cpu/tools/workflow.py plan /ABS/config.json
-snapshots/home/mambaforge/bin/python /ABS/REPO/cpu/tools/workflow.py run /ABS/config.json --wait
+python /ABS/REPO/cpu/tools/workflow.py plan /ABS/config.json
+python /ABS/REPO/cpu/tools/workflow.py run /ABS/config.json --wait
 ```
 
 `prepare` 只生成元数据和环境增量，不会自行启用所有优化或启动计算。完整配置示例在 [`tools/examples/workflow.json`](tools/examples/workflow.json)；四条路径的配置模板及合并方法在 [PROFILE_TEMPLATES.md](tools/examples/PROFILE_TEMPLATES.md)。输入的基组、截断、电子温度、SCF 精度和混合历史不会被入口改写；`DATA.PATH` 必须明确给出。
