@@ -2,5 +2,5 @@
 #include <stdio.h>
 #include "Inputtools.h"
 #include "cpu_band_options.h"
-#define CPU_BAND_USES_SPARSE_HS() (CpuBandOptions.count>0)
+#define CPU_BAND_USES_SPARSE_HS() (CpuBandOptions.band_on)
 #include "../../soc/source/gsoc_runtime_guard.c"

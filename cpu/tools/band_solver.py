@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Internal, standalone SLEPc worker for native OpenMX band dispersion.
+"""Internal native band worker: full-spectrum LAPACK or targeted SLEPc.
 
 No moirekp dependency. Native code supplies owned real-space blocks once; the
-worker constructs matching sparse Bloch H/S and returns only requested states.
+worker constructs matching Bloch H/S and returns the requested spectrum.
 """
 from pathlib import Path
 import argparse
@@ -95,6 +95,44 @@ def libraries():
     return PETSc,SLEPc,factor
 
 
+def solve_dense(H,S,target,count,driver='gvd'):
+    """Full generalized spectrum, with no eigenvectors or identity-S shortcut."""
+    import numpy as np
+    import scipy.linalg as la
+    from scipy.sparse.linalg import eigsh
+    if driver not in ('gvd','evr'):raise ValueError('unsupported dense band driver')
+    H,hdef=native_hermitian(H);S,sdef=native_hermitian(S);n=H.shape[0]
+    if count<0 or count>n:raise ValueError('Band.NumBands exceeds matrix dimension')
+    check_start=time.monotonic();B=S.toarray(order='F')
+    try:L=la.cholesky(B,lower=True,check_finite=False)
+    except la.LinAlgError as error:raise ValueError('overlap requires native regularization') from error
+    inverse,info=la.get_lapack_funcs('trtri',(L,))(L,lower=1,unitdiag=0,overwrite_c=0)
+    if info:raise ValueError('overlap inverse-Cholesky certificate failed')
+    norm2=float(np.vdot(inverse.ravel(order='K'),inverse.ravel(order='K')).real);del inverse
+    if not np.isfinite(norm2) or norm2<=0:raise ValueError('nonfinite overlap certificate')
+    bound=1./norm2;minimum=None
+    # lambda_min(S) >= 1/||L^-1||_F^2. Only ambiguous bases need an extremal solve.
+    if bound<=1e-9:
+        minimum=float(la.eigvalsh(B,subset_by_index=(0,0),check_finite=False)[0]) if n<=2 else float(eigsh(S,k=1,which='SA',return_eigenvectors=False,tol=1e-7)[0])
+        if not np.isfinite(minimum) or minimum<=1e-9:raise ValueError('overlap requires native regularization')
+    check_seconds=time.monotonic()-check_start;start=time.monotonic();A=H.toarray(order='F')
+    if driver=='gvd':
+        del L
+        values=la.eigh(A,B,eigvals_only=True,driver='gvd',lower=True,overwrite_a=True,overwrite_b=True,check_finite=False)
+    else:
+        C,info=la.get_lapack_funcs('hegst',(A,L))(A,L,itype=1,lower=1,overwrite_a=True)
+        if info:raise ValueError('generalized Hermitian transform failed')
+        values=la.eigh(C,eigvals_only=True,driver='evr',lower=True,overwrite_a=True,check_finite=False)
+    seconds=time.monotonic()-start
+    if len(values)!=n or not np.isfinite(values).all() or np.any(np.diff(values)<0):raise ValueError('invalid full band spectrum')
+    selected=values if count==0 else values[nearest_indices(values,target,count)]
+    return selected,dict(solver='LAPACK '+driver.upper(),matrix_dimension=n,requested=len(selected),
+        spectrum_computed=n,full_spectrum=True,eigenvectors_computed=False,overlap_lower_bound=bound,
+        overlap_min=minimum,overlap_certificate='lambda_min(S)>=1/||L^-1||_F^2',overlap_check_seconds=check_seconds,
+        solve_seconds=seconds,H_hermiticity=hdef,S_hermiticity=sdef,S_diagonal_shift=0.,native_triangle='lower',
+        eigenpair_audit='not computed in eigenvalues-only mode; validated by independent spectrum comparisons')
+
+
 def solve(H,S,target,count,tolerance=1e-9):
     import numpy as np
     from scipy.sparse.linalg import eigsh
@@ -147,6 +185,7 @@ def solve(H,S,target,count,tolerance=1e-9):
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--check',action='store_true')
+    parser.add_argument('--solver',choices=('slepc','gvd','evr'),default='slepc')
     parser.add_argument('--directory',type=Path);parser.add_argument('--rank',type=int,default=0)
     parser.add_argument('--workers',type=int,default=1);parser.add_argument('--parts',type=int,default=1)
     parser.add_argument('--count',type=int);parser.add_argument('--target-ha',type=float)
@@ -155,7 +194,10 @@ def main():
     for key in ('OMP_NUM_THREADS','MKL_NUM_THREADS','OPENBLAS_NUM_THREADS','NUMEXPR_NUM_THREADS'):
         os.environ[key]=str(args.threads)
     if args.check:
-        libraries();return 0
+        if args.solver=='slepc':libraries()
+        else:
+            import scipy.linalg
+        return 0
     import numpy as np
     started=time.monotonic();data=load_parts(args.directory,args.parts)
     with (args.directory/'kpoints.bin').open('rb') as stream:
@@ -169,17 +211,20 @@ def main():
         for index in range(args.rank,len(points),args.workers):
             for channel in range(channels):
                 before=time.monotonic();H,S=bloch_matrices(data,points[index],channel)
-                values,audit=solve(H,S,args.target_ha,args.count)
+                values,audit=(solve(H,S,args.target_ha,args.count) if args.solver=='slepc' else
+                              solve_dense(H,S,args.target_ha,args.count,args.solver))
                 out.write(struct.pack('<2i',index,channel));out.write(values.astype('<f8').tobytes())
                 audits.append(dict(kpoint=index,channel=channel,k=points[index].tolist(),total_seconds=time.monotonic()-before,**audit))
     temporary.replace(final)
+    import resource
     (args.directory/f'audit-{args.rank:06d}.json').write_text(json.dumps(dict(status='complete',python=sys.executable,worker=args.rank,
-        threads=args.threads,seconds=time.monotonic()-started,points=audits),indent=2)+'\n')
+        threads=args.threads,seconds=time.monotonic()-started,process_peak_RSS_bytes=resource.getrusage(resource.RUSAGE_SELF).ru_maxrss*1024,
+        memory_scope='one worker lifetime peak RSS, not node physical peak',points=audits),indent=2)+'\n')
     return 0
 
 
 if __name__=='__main__':
     try:raise SystemExit(main())
     except Exception as error:
-        print('OPENMX_TARGET_BANDS_ERROR: '+str(error),file=sys.stderr,flush=True)
+        print('OPENMX_BANDS_ERROR: '+str(error),file=sys.stderr,flush=True)
         raise SystemExit(2)

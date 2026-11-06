@@ -60,18 +60,26 @@ static void bt_write_band(int nkpath,int *n_perk,double ***kpath,char ***kname,i
  if(point!=points||fclose(fp))bt_fail("band output count/close failed");
 }
 static void bt_run_bands(int nkpath,int *n_perk,double ***kpath,char ***kname,int spin,double *****h,double *****im,double ****s){
- if(!CpuBandOptions.count){
+ if(!CpuBandOptions.worker){
   double start=MPI_Wtime();CpuOriginal_Band_DFT_kpath(nkpath,n_perk,kpath,kname,spin,h,im,s);
   double local=MPI_Wtime()-start,maximum;int rank;MPI_Comm_rank(mpi_comm_level1,&rank);
   MPI_Reduce(&local,&maximum,1,MPI_DOUBLE,MPI_MAX,0,mpi_comm_level1);
-  if(!rank){printf("CPU_FULL_BANDS_DONE total_seconds=%.6f full_spectrum=1\n",maximum);fflush(stdout);}return;
+  if(!rank){
+   char path[YOUSO10];int states,spin_header;double mu;
+   snprintf(path,sizeof(path),"%s%s.Band",filepath,filename);FILE *band=fopen(path,"r");
+   if(!band||fscanf(band,"%d %d %lf",&states,&spin_header,&mu)!=3)bt_fail("cannot read legacy band header");fclose(band);
+   snprintf(path,sizeof(path),"%s%s.Band.info",filepath,filename);FILE *info=fopen(path,"w");if(!info)bt_fail("cannot write legacy band provenance");
+   fprintf(info,"Backend: Native legacy LAPACK zheevx\nRequested per k/channel: %d\nFull spectrum: yes\nEigenvalues and chemical potential in .Band: Hartree\nBand stage wall seconds: %.9f\n",states,maximum);if(fclose(info))bt_fail("cannot close legacy provenance");
+   printf("CPU_FULL_BANDS_DONE total_seconds=%.6f full_spectrum=1\n",maximum);fflush(stdout);
+  }return;
  }
  int rank,np;MPI_Comm_rank(mpi_comm_level1,&rank);MPI_Comm_size(mpi_comm_level1,&np);
  if(Cnt_switch||LNO_flag||!(spin==0||spin==1||spin==3)||!h||!s)bt_fail("targeted native bands require an uncontracted ordinary AO basis (no LNO)");
  double started=MPI_Wtime();int n=0,points=0,channels=spin==1?2:1,count=CpuBandOptions.count;
  for(int a=1;a<=atomnum;a++){int na=Spe_Total_CNO[WhatSpecies[a]];if(na>INT_MAX-n)bt_fail("AO count overflow");n+=na;}
  if(n>INT_MAX/2)bt_fail("spinor dimension overflow");
- int dimension=spin==3?2*n:n;if(count>=dimension-1)bt_fail("Band.NumBands must be smaller than matrix dimension minus one");
+ int dimension=spin==3?2*n:n;if(!count)count=dimension;
+ if((CpuBandOptions.solver==CPU_BAND_SLEPC&&count>=dimension-1)||count>dimension)bt_fail("Band.NumBands exceeds the selected solver's matrix dimension limit");
  if(spin==3&&(SO_switch||Hub_U_switch||Constraint_NCS_switch||Zeeman_NCS_switch||Zeeman_NCO_switch)&&!im)bt_fail("missing native SOC imaginary terms");
  for(int p=1;p<=nkpath;p++){if(n_perk[p]<2||n_perk[p]>INT_MAX-points)bt_fail("each Band.kpath segment needs at least two points");points+=n_perk[p];}
  if(!points||points>INT_MAX/channels/count)bt_fail("band result MPI count overflow");
@@ -82,7 +90,7 @@ static void bt_run_bands(int nkpath,int *n_perk,double ***kpath,char ***kname,in
  if(!rank){
   if(!getcwd(directory,sizeof(directory))||strlen(directory)+32>=sizeof(directory))bt_fail("launch path too long");
   strcat(directory,"/.openmx-bands-XXXXXX");if(!mkdtemp(directory))bt_fail("cannot create band work directory");
-  printf("CPU_TARGET_BANDS backend=SLEPc points=%d workers=%d requested=%d dimension=%d reference_Ha=%.12e full_spectrum=0 sparse_native_H_S=1 directory=%s\n",points,workers,count,dimension,target,directory);fflush(stdout);
+  printf("CPU_TARGET_BANDS backend=%s points=%d workers=%d requested=%d dimension=%d reference_Ha=%.12e full_spectrum=%d sparse_native_H_S=1 directory=%s\n",cpu_band_solver_name(),points,workers,count,dimension,target,CpuBandOptions.solver!=CPU_BAND_SLEPC,directory);fflush(stdout);
  }
  MPI_Bcast(directory,sizeof(directory),MPI_CHAR,0,mpi_comm_level1);
  bt_parts(directory,rank,n,spin,h,im,s);
@@ -98,10 +106,10 @@ static void bt_run_bands(int nkpath,int *n_perk,double ***kpath,char ***kname,in
  if(rank<workers){
   char helper_path[PATH_MAX],r[32],w[32],p[32],c[32],t[64],threads[32],log[PATH_MAX];
   const char *helper=cpu_band_helper(helper_path,sizeof(helper_path));if(!helper||!*helper)bt_fail("band backend is not installed");
-  snprintf(r,sizeof(r),"%d",rank);snprintf(w,sizeof(w),"%d",workers);snprintf(p,sizeof(p),"%d",np);snprintf(c,sizeof(c),"%d",count);snprintf(t,sizeof(t),"%.17g",target);snprintf(threads,sizeof(threads),"%d",openmp_threads_num);
+  snprintf(r,sizeof(r),"%d",rank);snprintf(w,sizeof(w),"%d",workers);snprintf(p,sizeof(p),"%d",np);snprintf(c,sizeof(c),"%d",CpuBandOptions.count);snprintf(t,sizeof(t),"%.17g",target);snprintf(threads,sizeof(threads),"%d",openmp_threads_num);
   snprintf(log,sizeof(log),"%s/worker-%06d.log",directory,rank);
-  char *args[]={CpuBandOptions.python,(char*)helper,"--directory",directory,"--rank",r,"--workers",w,"--parts",p,"--count",c,"--target-ha",t,"--threads",threads,NULL};
-  if(cpu_band_spawn(args,log)){fprintf(stderr,"Inspect %s\n",log);bt_fail("SLEPc worker failed; no full-spectrum fallback was performed");}
+  char *args[]={CpuBandOptions.python,(char*)helper,"--directory",directory,"--rank",r,"--workers",w,"--parts",p,"--count",c,"--target-ha",t,"--threads",threads,"--solver",(char*)cpu_band_solver_name(),NULL};
+  if(cpu_band_spawn(args,log)){fprintf(stderr,"Inspect %s\n",log);bt_fail("band worker failed; no solver fallback was performed");}
  }
  size_t total=(size_t)points*channels*count;double *local=bt_mem(total,sizeof(double)),*all=rank?NULL:bt_mem(total,sizeof(double));
  if(rank<workers){
@@ -117,7 +125,7 @@ static void bt_run_bands(int nkpath,int *n_perk,double ***kpath,char ***kname,in
  if(!rank){
   bt_write_band(nkpath,n_perk,kpath,kname,channels,count,points,all);
   char path[YOUSO10];snprintf(path,sizeof(path),"%s%s.Band.info",filepath,filename);FILE *fp=fopen(path,"w");if(!fp)bt_fail("cannot write band provenance");
-  fprintf(fp,"Backend: SLEPc KrylovSchur shift-invert\nRequested per k/channel: %d\nMatrix dimension: %d\nReference (absolute Ha): %.17g\nReference (absolute eV): %.17g\nSelection: nearest reference, energies sorted ascending\nEigenvalues and chemical potential in .Band: Hartree\nFull spectrum: no\nOverlap: native matching S, no diagonal shift\nIndependent k workers: %d\nThreads per worker: %d\nDetailed snapshots and eigenpair audits: %s\nSnapshot wall seconds: %.9f\nBand stage wall seconds: %.9f\n",count,dimension,target,target*27.211386245988,workers,openmp_threads_num,directory,snapshot_time,MPI_Wtime()-started);
+  fprintf(fp,"Backend: %s\nRequested per k/channel: %d\nMatrix dimension: %d\nReference (absolute Ha): %.17g\nReference (absolute eV): %.17g\nSelection: nearest reference, energies sorted ascending\nEigenvalues and chemical potential in .Band: Hartree\nFull spectrum computed: %s\nOverlap: native matching S, no diagonal shift\nIndependent k workers: %d\nThreads per worker: %d\nDetailed snapshots and eigenpair audits: %s\nSnapshot wall seconds: %.9f\nBand stage wall seconds: %.9f\n",cpu_band_solver_name(),count,dimension,target,target*27.211386245988,CpuBandOptions.solver==CPU_BAND_SLEPC?"no":"yes",workers,openmp_threads_num,directory,snapshot_time,MPI_Wtime()-started);
   if(fclose(fp))bt_fail("cannot close band provenance");
   printf("CPU_TARGET_BANDS_DONE requested=%d points=%d snapshot_seconds=%.6f total_seconds=%.6f normal=1\n",count,points,snapshot_time,MPI_Wtime()-started);fflush(stdout);free(all);
  }
@@ -127,7 +135,7 @@ static void bt_run_bands(int nkpath,int *n_perk,double ***kpath,char ***kname,in
 /* Keep SOC's raw H/S intact until all force consumers have finished. */
 static struct {int active,nkpath,spin;int *counts;double ***path;char ***names;double *****h,*****im;double ****s;} bt_pending;
 void Band_DFT_kpath(int nkpath,int *n_perk,double ***kpath,char ***kname,int spin,double *****h,double *****im,double ****s){
- if(CpuBandOptions.count&&spin==3&&CpuSOCNative_Enabled()){
+ if(CpuBandOptions.band_on&&spin==3&&CpuSOCNative_Enabled()){
   if(bt_pending.active)bt_fail("multiple projected SOC band stages are not supported");
   bt_pending.active=1;bt_pending.nkpath=nkpath;bt_pending.spin=spin;bt_pending.counts=n_perk;bt_pending.path=kpath;bt_pending.names=kname;bt_pending.h=h;bt_pending.im=im;bt_pending.s=s;
   int rank;MPI_Comm_rank(mpi_comm_level1,&rank);if(!rank){printf("CPU_TARGET_BANDS_DEFERRED until_after_force=1 operator=matching_projected_H_S\n");fflush(stdout);}return;

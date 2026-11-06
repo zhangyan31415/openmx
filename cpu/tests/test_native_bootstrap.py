@@ -137,10 +137,10 @@ class NativeBootstrap(unittest.TestCase):
         if adapter.count(original) != 1:
             raise AssertionError('native adapter upstream include is not uniquely identifiable')
         adapter = adapter.replace(original, '#include "stock_stub.h"')
-        adapter += '\nint main(int n,char **v){if(n!=2)return 2;const char*t=getenv("TEST_THREADS");if(t)openmp_threads_num=atoi(t);if(getenv("TEST_STRESS"))stress_flag=1;Input_std(v[1]);return 0;}\n'
+        adapter += '\nint main(int n,char **v){if(n!=2)return 2;const char*t=getenv("TEST_THREADS");if(t)openmp_threads_num=atoi(t);if(getenv("TEST_STRESS"))stress_flag=1;Input_std(v[1]);printf("BAND_METHOD %s\\n",cpu_band_solver_name());return 0;}\n'
         (cls.build/'adapter.c').write_text(adapter)
         (cls.build/'protocol.c').write_text(PROTOCOL)
-        (cls.build/'band_backend.py').write_text('import os,sys\nassert sys.argv[1:]==["--check"]\nassert not any(k.startswith(("PMI_","PMIX_","I_MPI_","OMPI_")) for k in os.environ)\nsys.exit(7 if os.environ.get("TEST_BAND_BACKEND_FAIL") else 0)\n')
+        (cls.build/'band_backend.py').write_text('import os,sys\nassert sys.argv[1]=="--check" and sys.argv[2]=="--solver"\nassert not any(k.startswith(("PMI_","PMIX_","I_MPI_","OMPI_")) for k in os.environ)\nsys.exit(7 if os.environ.get("TEST_BAND_BACKEND_FAIL") else 0)\n')
         common = [compiler, '-std=gnu99', '-I', str(SOURCE), '-I', str(UPSTREAM)]
         subprocess.run(common+['-DOPENMX_BAND_HELPER="'+str(cls.build/'band_backend.py')+'"',
                                '-DOPENMX_BAND_PYTHON="'+sys.executable+'"',str(cls.build/'adapter.c'), str(UPSTREAM/'Inputtools.c'),
@@ -220,6 +220,18 @@ class NativeBootstrap(unittest.TestCase):
                 result=self.execute(text)
                 self.assertNotEqual(result.returncode,0)
                 self.assertNotIn('STOCK_PARSER',result.stdout)
+
+    def test_band_method_selection_and_invalid_combinations(self):
+        for solver, expected in (('LAPACK','gvd'),('GVD','gvd'),('EVR','evr'),('Auto','evr'),('Legacy','legacy')):
+            result=self.execute('Band.dispersion on\nBand.Nkpath 1\nBand.Solver '+solver+'\n')
+            self.assertEqual(result.returncode,0,result.stderr)
+            self.assertIn('BAND_METHOD '+expected,result.stdout)
+        for text in ('Band.Solver invalid\n',
+                     'Band.dispersion on\nBand.Nkpath 1\nBand.Solver SLEPc\n',
+                     'Band.dispersion on\nBand.Nkpath 1\nBand.NumBands 20\nBand.Solver Legacy\n'):
+            result=self.execute(text)
+            self.assertNotEqual(result.returncode,0)
+            self.assertNotIn('STOCK_PARSER',result.stdout)
 
     def test_targeted_bands_probe_isolated_backend_before_stock_parser(self):
         text='Band.NumBands 20\nBand.dispersion on\nBand.Nkpath 1\nBand.ReferenceEnergy -4.5\n'

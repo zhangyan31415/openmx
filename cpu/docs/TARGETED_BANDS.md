@@ -1,4 +1,4 @@
-# Targeted native band dispersion / 原生目标能带
+# Native band solvers / 原生能带求解方法
 
 Install and build once using the repository's environment and normal oneAPI
 toolchain. No moirekp package is used or required:
@@ -21,10 +21,31 @@ fallback. Ordinary SCF and the original full-band mode do not require SLEPc.
 
 ## Input / 输入
 
+`Band.Solver` selects the band postprocessor independently of the SCF solver:
+
+| Method | Meaning |
+|---|---|
+| `Auto` | EVR for all bands; SLEPc for a positive target count |
+| `LAPACK` or `GVD` | Generalized LAPACK GVD, eigenvalues only |
+| `EVR` | Cholesky + HEGST + standard LAPACK EVR, eigenvalues only |
+| `SLEPc` | Sparse shift-invert; requires a positive target count |
+| `Legacy` | Original native full-spectrum implementation; count must be zero |
+
+For all bands, use `Band.Solver EVR` and `Band.NumBands 0`. Dense GVD/EVR may
+also return a positive count near the reference, but still compute the full
+spectrum internally; the audit records this. If `Band.Solver` is omitted,
+count0 retains Legacy and positive count retains SLEPc. Explicit Auto uses the
+table above. SLEPc needs PETSc; dense methods only need NumPy/SciPy.
+
+中文：全带推荐显式写 `Band.Solver Auto` 或 `EVR`，并设置 `Band.NumBands 0`。
+少量目标态可选 `SLEPc`。方法只控制能带后处理，不改变 SCF 求解器。
+
+
 Put the controls near the front of the ordinary input:
 
 ```text
 Band.dispersion       on
+Band.Solver           Auto
 Band.NumBands         20
 Band.ReferenceEnergy  Fermi
 Band.Nkpath           1
@@ -37,7 +58,7 @@ Band.kpath>
   channel. They are selected by distance from the reference and sorted by energy.
 - `Band.ReferenceEnergy Fermi` (default): use the current SCF chemical potential.
   A numerical value, for example `-4.85`, is an **absolute energy in eV**.
-- Zero or omitted `Band.NumBands`: original full-spectrum band implementation.
+- Zero or omitted `Band.NumBands`: return the full spectrum with the selected method.
 - Each path segment needs at least two samples. Band count must be less than
   the matrix dimension minus one; a small buffer of extra converged states is
   requested internally to select the nearest states.
@@ -51,7 +72,7 @@ Band.kpath>
 
 ## Operator and parallelism / 算子和并行
 
-The native code snapshots the actual distributed finite-range H/S blocks once,
+The worker methods snapshot the actual distributed finite-range H/S blocks once,
 including periodic translations and all SOC components. Independent workers
 construct sparse Bloch H/S using the same positive Bloch phase and lower-triangle
 Hermitian convention as the native full-band path. SLEPc solves the generalized
@@ -63,6 +84,14 @@ the native `-nt` thread count. Their MPI/loader environment is isolated from the
 parent oneAPI process. Files and the build-time Python must be visible on all
 nodes. This is k-point parallelism, not one eigensolve distributed over all
 OpenMX ranks. LU fill-in can still require substantial memory.
+
+Dense methods retain matching nonorthogonal S and compute no eigenvectors. They
+check S by Cholesky and the rigorous lower bound
+`lambda_min(S) >= 1 / ||inverse(L)||_F^2`; an ambiguous bound uses an extremal
+overlap solve. No full S eigendecomposition is required. Dense audits do not
+claim eigenpair residuals when eigenvectors were not computed. Every concurrent
+k worker holds its own dense matrices and workspace; peak worker RSS is not a
+node physical-memory measurement.
 
 For symmetry-enabled one-step SOC, the supported generic projected solver is
 selected conservatively. Its band stage is deferred until after native force,
@@ -81,8 +110,8 @@ profile is not claimed certified with this new postprocessor.
   selected count, reference energy, parallelism and work directory.
 - `.openmx-bands-*` contains native block snapshots, worker logs and per-k JSON
   audits. It is created by the program; users do not prepare these files.
-- Audits check finite values, raw Hermiticity defects, an extremal overlap
-  eigenvalue, generalized eigenpair residuals and S orthogonality. Bases needing
+- Audits check finite values, raw Hermiticity defects, overlap conditioning. SLEPc additionally checks generalized eigenpair
+  residuals and S orthogonality. Bases needing
   the stock overlap-penalty regularization are explicitly rejected in this mode.
 - The targeted output is an energy window selection, not a guarantee of a fixed
   global band index or continuous subspace when that window changes along k.
@@ -91,3 +120,5 @@ profile is not claimed certified with this new postprocessor.
 只跑固定几步的求解器对照不能当作完整生产 SCF 的性能结果。
 
 See [native checks and timing scope](TARGETED_BANDS_VALIDATION_20261106.md).
+
+See [full-spectrum method comparisons](BAND_METHODS_VALIDATION_20261106.md).

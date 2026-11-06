@@ -21,6 +21,26 @@ def backend():
 
 
 class TargetedBands(unittest.TestCase):
+    def test_full_dense_methods_on_known_nonorthogonal_spectrum(self):
+        m=backend();import scipy.sparse as sp
+        rng=np.random.default_rng(167);n=37
+        L=np.tril((rng.normal(size=(n,n))+1j*rng.normal(size=(n,n)))*.02)+np.eye(n)
+        U,_=np.linalg.qr(rng.normal(size=(n,n))+1j*rng.normal(size=(n,n)))
+        expected=np.linspace(-5,3,n);S=L@L.conj().T;H=L@((U*expected)@U.conj().T)@L.conj().T
+        for driver in ('gvd','evr'):
+            values,audit=m.solve_dense(sp.csr_matrix(H),sp.csr_matrix(S),-.3,0,driver)
+            np.testing.assert_allclose(values,expected,atol=1e-12)
+            self.assertTrue(audit['full_spectrum'])
+            self.assertFalse(audit['eigenvectors_computed'])
+            self.assertGreater(audit['overlap_lower_bound'],1e-9)
+            values,_=m.solve_dense(sp.csr_matrix(H),sp.csr_matrix(S),-.3,5,driver)
+            np.testing.assert_allclose(values,expected[m.nearest_indices(expected,-.3,5)],atol=1e-12)
+
+    def test_full_dense_rejects_native_overlap_regularization_case(self):
+        m=backend();import scipy.sparse as sp
+        with self.assertRaisesRegex(ValueError,'regularization'):
+            m.solve_dense(sp.eye(3,format='csr'),sp.diags([1.,1.,1e-12]),0.,0,'gvd')
+
     def test_reference_energy_and_nearest_selection(self):
         m = backend()
         self.assertAlmostEqual(m.reference_ha('Fermi', -.2), -.2)

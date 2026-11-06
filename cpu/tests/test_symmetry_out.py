@@ -24,7 +24,7 @@ static int MPI_Comm_size(int c,int*n){*n=4;return 0;}
 static int MPI_Comm_rank(int c,int*r){*r=0;return 0;}
 static int MPI_Barrier(int c){return 0;}
 ''')
-            (root/'test.c').write_text('#include "'+str(source)+'"\nCpuBandConfig CpuBandOptions;\nint main(void){if(getenv("TEST_TARGET_BANDS"))CpuBandOptions.count=20;Merge_LogFile("input.dat");return 0;}\n')
+            (root/'test.c').write_text('#include "'+str(source)+'"\nCpuBandConfig CpuBandOptions;\nint main(void){if(getenv("TEST_TARGET_BANDS"))CpuBandOptions.count=20;CpuBandOptions.band_on=getenv("TEST_TARGET_BANDS")!=0;Merge_LogFile("input.dat");return 0;}\n')
             subprocess.run([shutil.which('cc') or 'cc', '-std=gnu99', '-I'+str(root),
                             str(root/'test.c'), '-o', str(root/'test')],
                            check=True, capture_output=True, text=True)
@@ -46,7 +46,7 @@ static int MPI_Barrier(int c){return 0;}
             env['TEST_TARGET_BANDS']='1'
             subprocess.run([str(root/'test')],cwd=root,env=env,check=True)
             merged=(root/'sample.out').read_text()
-            self.assertIn('Targeted band dispersion',merged)
+            self.assertIn('Band dispersion solver',merged)
             self.assertIn('Requested per k/channel: 20',merged)
 
 

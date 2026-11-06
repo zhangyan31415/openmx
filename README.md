@@ -62,11 +62,17 @@ For band dispersion, keep the usual `Band.Nkpath` and `<Band.kpath` definitions 
 
 ```text
 Band.dispersion       on
+Band.Solver           Auto
 Band.NumBands         20
 Band.ReferenceEnergy  Fermi
 ```
 
 This computes the 20 states nearest the reference at each k point using SLEPc, directly from native sparse H/S. `Fermi` is the default reference; a number specifies an absolute energy in **eV**. The normal `.Band` format and its **Hartree** energy units are retained. Zero or omitted `Band.NumBands` keeps the original full-spectrum path. Launch with the same `mpirun` command; no separate export, converter or moirekp installation is required. See the [band guide](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/TARGETED_BANDS.md).
+
+For **all bands**, set `Band.NumBands 0` and choose `Band.Solver EVR` or `Auto`.
+`LAPACK`/`GVD`, `SLEPc` and `Legacy` are also selectable. GVD/EVR compute energies
+without a full wavefunction matrix. An omitted method retains the earlier
+count-dependent behavior; see the band guide for exact selection and limits.
 
 ## 4. Implementation and validation scope
 

@@ -44,10 +44,10 @@ static int cpu_band_spawn(char *const *argv,const char *log){
  do{rc=waitpid(child,&status,0);}while(rc<0&&errno==EINTR);
  return rc<0||!WIFEXITED(status)||WEXITSTATUS(status)!=0;
 }
-static int cpu_band_check_backend(const char *python){
+static int cpu_band_check_backend(const char *python,const char *solver){
  char path[PATH_MAX];const char *helper=cpu_band_helper(path,sizeof(path));
  if(!helper||!*helper)return 1;
- char *args[]={(char*)python,(char*)helper,"--check",NULL};
+ char *args[]={(char*)python,(char*)helper,"--check","--solver",(char*)solver,NULL};
  return cpu_band_spawn(args,NULL);
 }
 #endif

@@ -101,12 +101,12 @@ void Merge_LogFile(char *file)
     /* Keep the prepared symmetry report before the echoed input. */
     if(cpu_symmetry_report_copy(fp1))
       fprintf(fp1,"  ERROR: cannot read the prepared symmetry report.\n\n");
-    if(CpuBandOptions.count){
+    if(CpuBandOptions.band_on){
       snprintf(fname2,sizeof(fname2),"%s%s.Band.info",filepath,filename);
       fp2=fopen(fname2,"r");
       if(fp2){
         fprintf(fp1,"\n============================================================\n"
-                    "  Targeted band dispersion\n"
+                    "  Band dispersion solver\n"
                     "============================================================\n");
         for(c=getc(fp2);c!=EOF;c=getc(fp2))putc(c,fp1);
         fclose(fp2);fprintf(fp1,"\n");

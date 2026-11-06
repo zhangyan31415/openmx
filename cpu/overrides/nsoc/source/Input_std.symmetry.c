@@ -29,7 +29,7 @@ void Input_std(char *file) {
   }
   if(!bad){
     if(cpu_band_read_options()){
-      if(!rank)fprintf(stderr,"CPU_BAND_INPUT_ERROR: Band.NumBands must be nonnegative; targeted bands require Band.dispersion on, Band.Nkpath>0 and a finite eV reference or Fermi\n");
+      if(!rank)fprintf(stderr,"CPU_BAND_INPUT_ERROR: Band.NumBands must be nonnegative; check Band.Solver/count combination, Band.dispersion, Band.Nkpath and finite eV reference or Fermi\n");
       bad=1;
     }
     has_toggle=input_string("scf.Symmetry",toggle,"off");
@@ -146,7 +146,7 @@ void Input_std(char *file) {
         }else if(rs&&strcmp(rs,"off")&&strcmp(rs,"0"))bad=1;
       }
       if(!strcasecmp(policy,"symmetrize") && soc && !legacy &&
-         (!cpu_input_env_equal("OPENMX_CPU_GSOC_EXPORT_SYMMETRIZE",(hs_fileout||CpuBandOptions.count)?"1":"0") ||
+         (!cpu_input_env_equal("OPENMX_CPU_GSOC_EXPORT_SYMMETRIZE",(hs_fileout||CpuBandOptions.band_on)?"1":"0") ||
           !cpu_input_env_equal("OPENMX_CPU_GSOC_PROJECT","1")))bad=1;
       if(!strcasecmp(policy,"raw") && soc && !legacy &&
          !cpu_input_env_equal("OPENMX_CPU_GSOC_EXPORT_SYMMETRIZE","0") &&
@@ -161,11 +161,11 @@ void Input_std(char *file) {
   if(!rank && strcasecmp(mode,"off")){
     printf("CPU_INPUT_SYMMETRY mode=%s selected_group=%s HSExport=%s prepared_profile_consumed=1\n",mode,getenv("OPENMX_CPU_INPUT_SYMMETRY_GROUP"),policy);fflush(stdout);
   }
-  if(CpuBandOptions.count){
+  if(CpuBandOptions.worker){
     int status=0;
     if(!rank){
-      status=cpu_band_check_backend(CpuBandOptions.python);
-      if(status)fprintf(stderr,"CPU_BAND_INPUT_ERROR: complex PETSc/SLEPc with sparse LU is required in the OpenMX dependency environment; backend check failed before SCF\n");
+      status=cpu_band_check_backend(CpuBandOptions.python,cpu_band_solver_name());
+      if(status)fprintf(stderr,"CPU_BAND_INPUT_ERROR: Band.Solver backend dependency check failed before SCF; use the OpenMX dependency environment\n");
     }
     MPI_Bcast(&status,1,MPI_INT,0,mpi_comm_level1);
     if(status){MPI_Abort(mpi_comm_level1,95);exit(95);}
