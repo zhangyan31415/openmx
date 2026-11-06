@@ -5,6 +5,7 @@
 #include "../../../vendor/openmx4.0/source/Input_std.c"
 #undef Input_std
 #include "cpu_input_bootstrap.h"
+#include "cpu_symmetry_report.h"
 
 static int cpu_input_env_equal(const char *key, const char *value) {
   const char *actual=getenv(key);
@@ -148,4 +149,15 @@ void Input_std(char *file) {
     printf("CPU_INPUT_SYMMETRY mode=%s selected_group=%s HSExport=%s prepared_profile_consumed=1\n",mode,getenv("OPENMX_CPU_INPUT_SYMMETRY_GROUP"),policy);fflush(stdout);
   }
   CpuOriginal_Input_std(file);
+  if(enabled){
+    int io_error=0;
+    if(!rank){
+      io_error=cpu_symmetry_report_copy(stdout);
+      if(fflush(stdout))io_error=1;
+      if(cpu_symmetry_report_initial(filepath,filename))io_error=1;
+      if(io_error)fprintf(stderr,"CPU_INPUT_SYMMETRY_REJECT: cannot write symmetry report to native stdout/out\n");
+    }
+    MPI_Bcast(&io_error,1,MPI_INT,0,mpi_comm_level1);
+    if(io_error){MPI_Abort(mpi_comm_level1,95);exit(95);}
+  }
 }

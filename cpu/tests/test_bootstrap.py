@@ -239,6 +239,26 @@ class Bootstrap(unittest.TestCase):
             self.assertTrue(all(' W=' in line and ' t_frac=' in line and ' R_cart=' in line for line in operations))
             self.assertTrue(Path(result['preparation_log']).is_file())
 
+    def test_preparation_writes_readable_out_report_without_changing_metadata(self):
+        m = helper()
+        with tempfile.TemporaryDirectory() as d:
+            path, out = self.fixture(Path(d))
+            result = m.bootstrap(path, out, 'nsoc', out/'environment.txt', runtime_cwd=Path(d))
+            report = Path(result['environment']['OPENMX_CPU_INPUT_SYMMETRY_REPORT']).read_text()
+            self.assertIn('Symmetry analysis -- NSOC', report)
+            self.assertIn('Selected subgroup     : D2', report)
+            self.assertIn('Group operations      : 4', report)
+            self.assertIn('Geometry residual     : 0.000e+00 Ang', report)
+            self.assertEqual(report.count('Operation '), 4)
+            self.assertIn('Cartesian rotation', report)
+
+    def test_readable_numbers_suppress_rotation_noise_and_use_scientific_notation(self):
+        m = helper()
+        self.assertEqual(m.display_number(-3.79558373393e-17), '0')
+        self.assertEqual(m.display_number(1-1e-15), '1')
+        self.assertEqual(m.display_number(-.5), '-5.000e-01')
+        self.assertEqual(m.display_number(2.444914599648e-6), '2.445e-06')
+
     def test_failed_metadata_preparation_leaves_no_success_environment(self):
         m = helper()
         text = INPUT.replace('scf.Symmetry.PointGroup D2', 'scf.Symmetry.PointGroup D3')

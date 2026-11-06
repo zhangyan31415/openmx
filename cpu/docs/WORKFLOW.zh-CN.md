@@ -2,6 +2,35 @@
 
 使用同一个源码构建的 `openmx-cpu`，分别运行普通 NSOC 输入和一步 SOC 输入。两步保持相同 MPI／线程布局；SOC 读取这次 NSOC 自己的收敛检查点，不复用其他布局的重启文件。
 
+## 输入开头的设置
+
+把运行控制和电子结构设置放在坐标、晶胞等长数据块之前。下面是 NSOC 输入的控制区；后面接本体系的完整物种、晶胞和坐标，不要将这些开关追加到坐标末尾：
+
+```text
+System.Name                    openmx
+DATA.PATH                      /path/to/DFT_DATA19
+HS.fileout                     on
+level.of.fileout                0
+MD.Type                        Nomd
+
+scf.XcType                     GGA-PBE
+scf.SpinPolarization           off
+scf.SpinOrbit.Coupling         off
+scf.Symmetry                   on
+scf.restart                    off
+scf.EigenvalueSolver           Cluster
+scf.eigen.lib                  elpa2
+scf.maxIter                    100
+scf.energycutoff               150
+scf.ElectronicTemperature      300
+scf.Mixing.Type                rmm-diis
+scf.Mixing.History             30
+scf.Mixing.StartPulay           15
+scf.criterion                  1.0e-7
+```
+
+一步 SOC 在同一位置使用 `scf.SpinPolarization NC`、`scf.SpinOrbit.Coupling on`、`scf.restart c2n`、`scf.restart.filename openmx` 和 `scf.maxIter 1`，其余物理参数与 NSOC 保持一致。本例控制区的截断和混合参数是示例，实际材料使用自己的设置。
+
 ## 使用顺序
 
 1. 按[构建说明](BUILD.zh-CN.md)编译，保留可执行文件及配套工具。启用对称性需要构建时的 Python 环境及 NumPy、SciPy、spglib。
@@ -22,7 +51,11 @@ mpirun -np 64 /path/to/build/openmx-cpu soc.dat -nt 1 > soc.log 2>&1
 
 ## 输出和错误
 
-程序日志报告实际使用的群、求解路径和协变性检查。启用对称性且 `HS.fileout on` 时导出相应群下的 H/S；导出投影不代表将 DM/EDM 在导出阶段重写。失败的映射或电子算子检查会明确报错。
+启用对称性后，普通 `System.Name.out` 前部和标准输出都有可读的对称性摘要：采用的子群、检测点群、操作数量、几何残差及每个操作的旋转／平移表。残差用三位小数科学计数法；矩阵显示将接近 0、±1 的舍入噪声归整，仅影响显示。完整精度仍保留在元数据中。
+
+`.out` 在输入初始化后先写入对称性信息，并明确标记计算尚在进行；正常日志合并时保留该报告，再加入完整输入和物理结果。计算是否成功仍须检查原生正常结束及收敛状态，不能仅凭 `.out` 已存在判断。
+
+程序详细日志报告求解路径和协变性检查。启用对称性且 `HS.fileout on` 时导出相应群下的 H/S；导出投影不代表将 DM/EDM 在导出阶段重写。失败的映射或电子算子检查会明确报错。
 
 输入物理参数不会因启用对称性被自动放宽。但对称约束可能改变离散算子和 SCF 收敛轨迹，因此正常退出、布局等价和相对未对称参考的物理精度须分别检查。参见[验收方法](ACCEPTANCE.zh-CN.md)。
 

@@ -1,6 +1,7 @@
 {
   "schema": "openmx-unified-cpu-selection-v1",
   "replacements": {
+    "Merge_LogFile.o": "cpu/overrides/nsoc/source/Merge_LogFile.symmetry.c",
     "DFT.compact.o": "cpu/overrides/nsoc/source/DFT.unified.c",
     "Cluster_DFT_Col.o": "cpu/overrides/nsoc/source/Cluster_DFT_Col.unified.c",
     "truncation.generic-soc.o": "cpu/overrides/nsoc/source/truncation.unified.c",

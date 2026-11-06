@@ -34,6 +34,8 @@ class BuildContract(unittest.TestCase):
   selection=json.loads((B.REPO/'cpu/overrides/nsoc/UNIFIED_SELECTION.json').read_text())
   plan=B.source_plan(selection,profile='unified')
   self.assertTrue(plan['capabilities']['nsoc_symmetry'])
+  merger=next(u for u in plan['units']if u['object']=='Merge_LogFile.o')
+  self.assertEqual(merger['source'],'cpu/overrides/nsoc/source/Merge_LogFile.symmetry.c')
  def test_no_binary_vendor_payload(self):
   forbidden={'.o','.mod','.a','.so'}
   self.assertFalse([p for p in (B.REPO/'cpu/vendor').rglob('*')if p.suffix in forbidden])

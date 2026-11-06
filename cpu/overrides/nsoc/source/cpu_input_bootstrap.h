@@ -159,14 +159,8 @@ static int cpu_bootstrap_prepare(const char *input,const char *stage,int threads
   if(cpu_bootstrap_environment(*environment,0,error,error_size)){
     free(*environment);*environment=NULL;return 1;
   }
-  /* The helper's complete stdout/stderr remains in bootstrap.log. Forward only
-   * the concise selected-operation report into rank-zero native stdout. */
-  f=fopen(logfile,"r");
-  if(f){
-    char line[4096];
-    while(fgets(line,sizeof(line),f))if(!strncmp(line,"CPU_SYMMETRY_",13))fputs(line,stdout);
-    fclose(f);fflush(stdout);
-  }
+  /* Detailed machine diagnostics remain in bootstrap.log. The input adapter
+   * prints the readable report after the native filename/path are known. */
   return 0;
 }
 #endif

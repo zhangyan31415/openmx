@@ -208,6 +208,43 @@ def profiles(prepared, q, api, *, threads=1, values=None, ranks_single_cpu_pinne
     return {'nsoc': nenv, 'soc': senv}
 
 
+def display_number(value):
+    """Round display noise only; metadata and solver values remain untouched."""
+    nearest = round(value)
+    if abs(value-nearest) < 5e-12:
+        return str(nearest)
+    return format(value, '.3e')
+
+
+def readable_symmetry_report(prepared, stage, request):
+    metadata = json.loads(Path(prepared['files']['selected_symmetry']).read_text())
+    selected = metadata['selected']
+    operations = selected['operations']
+    separator = '='*76
+    lines = ['', separator, '  Symmetry analysis -- '+stage.upper(), separator,
+             '  Selected subgroup     : '+prepared['selected_group'],
+             '  Detected point group  : '+str(prepared['detected_point_group']['symbol']),
+             '  Group operations      : '+str(len(operations)),
+             '  Atoms                 : '+str(metadata['natoms']),
+             '  Geometry residual     : '+format(selected['max_geometry_residual_Ang'], '.3e')+' Ang',
+             '  H/S solve policy      : '+request['hamiltonian_policy'],
+             '  H/S export policy     : '+request['export_policy'],
+             '', '  Fractional column convention: x\' = W x + t.',
+             '  Matrices below are display-rounded; solver values are unchanged.']
+    for index, operation in enumerate(operations, 1):
+        lines.extend(['', '  Operation '+str(index)+' / '+str(len(operations))+
+                      '    mapping residual = '+format(operation['residual_max_Ang'], '.3e')+' Ang',
+                      '    Fractional rotation W                         Translation t'])
+        for row in range(3):
+            lines.append('    [ '+' '.join(f'{int(v):>3d}' for v in operation['W'][row])+' ]'+
+                         ' '*28+f'{display_number(operation["t"][row]):>12s}')
+        lines.append('    Cartesian rotation R')
+        for row in operation['R_cart_orthogonal']:
+            lines.append('    [ '+' '.join(f'{display_number(v):>12s}' for v in row)+' ]')
+    lines.extend(['', '  Full atom/image maps: metadata/selected.symmetry.json', separator, ''])
+    return '\n'.join(lines)+'\n'
+
+
 def report_symmetry(prepared, stage, request):
     """Report the operations actually selected for this solver, once on rank 0."""
     selected = json.loads(Path(prepared['files']['selected_symmetry']).read_text())['selected']
@@ -215,11 +252,11 @@ def report_symmetry(prepared, stage, request):
     print('CPU_SYMMETRY_SUMMARY stage='+stage+' selected_group='+prepared['selected_group']+
           ' detected_point_group='+str(prepared['detected_point_group']['symbol'])+
           ' operations='+str(len(operations))+
-          ' geometry_max_Ang='+format(selected['max_geometry_residual_Ang'], '.12e')+
+          ' geometry_max_Ang='+format(selected['max_geometry_residual_Ang'], '.3e')+
           ' H_policy='+request['hamiltonian_policy']+' HS_export='+request['export_policy'], flush=True)
 
     def vector(values):
-        return ','.join(format(v, '.12g') for v in values)
+        return ','.join(display_number(v) for v in values)
 
     def matrix(values):
         return '['+';'.join(vector(row) for row in values)+']'
@@ -229,7 +266,7 @@ def report_symmetry(prepared, stage, request):
         print('CPU_SYMMETRY_OPERATION index='+str(index)+'/'+str(len(operations))+
               ' W='+matrix(operation['W'])+' t_frac=['+vector(operation['t'])+']'+
               ' R_cart='+matrix(operation['R_cart_orthogonal'])+
-              ' residual_Ang='+format(operation['residual_max_Ang'], '.12e'), flush=True)
+              ' residual_Ang='+format(operation['residual_max_Ang'], '.3e'), flush=True)
 
 
 def bootstrap(input_path, output, stage, environment_file, *, runtime_cwd=None, threads=1, ranks_single_cpu_pinned=False):
@@ -297,6 +334,9 @@ def bootstrap(input_path, output, stage, environment_file, *, runtime_cwd=None, 
                         soc_route=preferred_soc_route(values) if q['export_policy']=='symmetrize' else 'generic', export_policy=q['export_policy'],
                         detection_mode=q['mode'], operations_file=ops)
         env = profiles(prepared, q, api, threads=threads, values=values, ranks_single_cpu_pinned=ranks_single_cpu_pinned)[stage]
+        report_path = out/'symmetry-report.txt'
+        atomic_text(report_path, readable_symmetry_report(prepared, stage, q))
+        env['OPENMX_CPU_INPUT_SYMMETRY_REPORT'] = str(report_path)
         export_requested=native_logical(values.get('hs.fileout','off'))
         if stage=='soc' and prepared['SOC_route']=='generic' and not export_requested:
             # Preserve the projected solve without activating a file-export
@@ -312,6 +352,7 @@ def bootstrap(input_path, output, stage, environment_file, *, runtime_cwd=None, 
         provenance.update(status='prepared', request=q, selected_group=prepared['selected_group'], SOC_route=prepared['SOC_route'],
                           actual_HS_export_requested=export_requested,
                           environment=env, environment_file=str(envfile),
+                          symmetry_report={'path': str(report_path), 'sha256': sha(report_path)},
                           canonical_inputs={k: {'path': str(p), 'sha256': sha(p)}
                                             for k, p in [('nsoc', npath), ('soc', spath)]},
                           artifacts_sha256=prepared['sha256'],

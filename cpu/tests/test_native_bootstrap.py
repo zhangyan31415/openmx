@@ -31,6 +31,7 @@ STUB = r'''
 #define MPI_MIN 4
 static int mpi_comm_level1=0;
 static int openmp_threads_num=1;
+static char filepath[4096]="./",filename[4096]="native_test";
 static int stress_flag=0,StressConsistency_flag=0;
 static int MPI_Comm_rank(int c,int *r){*r=0;return 0;}
 static int MPI_Allreduce(const void *a,void *b,int n,int t,int op,int c){memcpy(b,a,n*sizeof(int));return 0;}
@@ -96,11 +97,14 @@ if values.get('test.helper')=='oversize':
  raise SystemExit(0)
 basis=Path(a.output)/'basis with spaces'
 basis.write_text('isolated parser fixture')
+report=Path(a.output)/'symmetry-report.txt'
+report.write_text('Symmetry analysis -- '+a.stage.upper()+'\n  Selected subgroup     : C2\n  Group operations      : 2\n')
 env={
  'INPUT_SYMMETRY_MODE':values.get('scf.symmetry.mode','auto').lower(),
  'INPUT_SYMMETRY_GROUP':values.get('scf.symmetry.pointgroup','C2'),
  'INPUT_SYMMETRY_TOL':'5e-5',
  'INPUT_SYMMETRY_EXPORT':'symmetrize',
+ 'INPUT_SYMMETRY_REPORT':str(report),
  'TEST':'/a path=value',
 }
 if a.stage=='nsoc':
@@ -188,9 +192,23 @@ class NativeBootstrap(unittest.TestCase):
     def test_prepared_symmetry_report_reaches_native_stdout_once(self):
         result = self.execute('scf.Symmetry on\n')
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout.count('CPU_SYMMETRY_SUMMARY stage=nsoc'), 1)
-        self.assertEqual(result.stdout.count('CPU_SYMMETRY_OPERATION index=1/2'), 1)
+        self.assertEqual(result.stdout.count('Symmetry analysis -- NSOC'), 1)
+        self.assertEqual(result.stdout.count('Selected subgroup     : C2'), 1)
+        self.assertNotIn('CPU_SYMMETRY_OPERATION', result.stdout)
         self.assertNotIn('BOOTSTRAP_CHILD_ONCE', result.stdout)
+
+    def test_initial_native_out_contains_readable_symmetry(self):
+        result = self.execute('scf.Symmetry on\n')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        out = self.work/'native_test.out'
+        self.assertTrue(out.is_file())
+        self.assertIn('Symmetry analysis -- NSOC', out.read_text())
+        self.assertIn('Group operations      : 2', out.read_text())
+
+    def test_symmetry_off_does_not_create_provisional_out(self):
+        result = self.execute('scf.Symmetry off\n')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse((self.work/'native_test.out').exists())
 
     def test_native_threads_reach_serial_preparation_helper(self):
         result = self.execute('scf.Symmetry on\n', {'TEST_THREADS':'4'})
