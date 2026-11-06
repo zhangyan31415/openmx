@@ -8,7 +8,7 @@ This CPU version of [OpenMX](https://www.openmx-square.org/) adds symmetry-based
 
 ## 1. Get and build
 
-The tested build uses Linux, Intel oneAPI 2022.3 classic compilers, Intel MPI 2021.7.1, MKL 2022.2.1, Python 3.12, NumPy, SciPy and spglib. The builder expects this oneAPI installation layout; see the [build guide](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/BUILD.zh-CN.md) for details.
+The tested build uses Linux, Intel oneAPI 2022.3 classic compilers, Intel MPI 2021.7.1 and MKL 2022.2.1. The supplied Python environment includes NumPy, SciPy, spglib and complex PETSc/SLEPc for targeted bands. The builder expects this oneAPI installation layout; see the [build guide](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/BUILD.zh-CN.md) for details.
 
 Enabling `scf.Symmetry on` requires NumPy, SciPy and spglib in the Python environment. The MPI root process uses spglib during initialization to detect geometric symmetry; it is not called at every SCF iteration or linked into the OpenMX executable. Explicit `scf.Symmetry off` does not invoke these Python tools. The source builder itself still requires Python.
 
@@ -17,7 +17,7 @@ git clone --branch experiments/cpu-d3-20261019 --single-branch \
   https://github.com/zhangyan31415/openmx.git openmx-cpu
 cd openmx-cpu
 
-conda create -n openmx-cpu python=3.12 numpy scipy spglib
+conda env create -f cpu/environment.yml
 conda activate openmx-cpu
 
 # Set the actual oneAPI installation path; compile on a compute node.
@@ -57,6 +57,16 @@ Multi-node runs use the same executable with the site's MPI or scheduler setting
 The tested workflow is **fixed geometry, nonmagnetic, Gamma point: converge NSOC, then run one SOC step from that run's own checkpoint**. Use `Cluster` or Gamma `Band`, with `scf.eigen.lib elpa1` or `elpa2`. Add `scf.Symmetry on` to both inputs. Keep geometry, basis, physical settings and MPI layout consistent, and use native C2N restart for SOC. See the [run guide](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/WORKFLOW.zh-CN.md) for input and restart requirements. One SOC step is not a self-consistent SOC calculation.
 
 Request H/S files with the ordinary `HS.fileout on` setting. Supported symmetry paths export H/S consistent with the selected group projection. OpenMX orbitals are nonorthogonal; post-processing requires the matching S.
+
+For band dispersion, keep the usual `Band.Nkpath` and `<Band.kpath` definitions and add:
+
+```text
+Band.dispersion       on
+Band.NumBands         20
+Band.ReferenceEnergy  Fermi
+```
+
+This computes the 20 states nearest the reference at each k point using SLEPc, directly from native sparse H/S. `Fermi` is the default reference; a number specifies an absolute energy in **eV**. The normal `.Band` format and its **Hartree** energy units are retained. Zero or omitted `Band.NumBands` keeps the original full-spectrum path. Launch with the same `mpirun` command; no separate export, converter or moirekp installation is required. See the [band guide](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/TARGETED_BANDS.md).
 
 ## 4. Implementation and validation scope
 
