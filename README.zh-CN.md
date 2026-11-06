@@ -32,13 +32,17 @@ python cpu/build.py --profile unified \
 
 ## 2. 开启对称性并运行
 
-在现有 OpenMX 输入中加入：
+将对称性开关放在输入前部，与其他 SCF 设置放在一起，位于长坐标块之前。新的 NSOC 计算例如：
 
 ```text
-scf.Symmetry on
+MD.Type                        Nomd
+scf.SpinPolarization           off
+scf.SpinOrbit.Coupling         off
+scf.Symmetry                   on
+scf.restart                    off
 ```
 
-默认关闭，也可显式写 `scf.Symmetry off`。开启后，程序自动识别并验证可用子群、准备对称基，并按输入、线程数和绑核情况启用已验证且兼容的求解与内存优化，无需用户生成 JSON 或单独运行准备工具。日志报告实际采用的群；映射或算子检查失败时明确停止。
+默认关闭，也可显式写 `scf.Symmetry off`。开启后，程序自动识别并验证可用子群、准备对称基，并按输入、线程数和绑核情况启用已验证且兼容的求解与内存优化，无需用户生成 JSON 或单独运行准备工具。初始化时由 rank 0 在普通 `System.Name.out` 前部和标准输出写入对称性表：采用的群、操作数量、几何残差及各操作的旋转和平移。残差使用科学计数法，矩阵数值噪声仅在显示时归整。映射错误或求解检查失败时明确停止；通用 SOC 显式投影 H/S 时，原始空间协变残差仅作诊断。
 
 在已加载上述 oneAPI 运行库和 Python 环境的计算节点上，照常运行，例如 **64 MPI × 1 线程**：
 

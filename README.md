@@ -32,13 +32,17 @@ The output directory must not already exist. It will contain `openmx-cpu`, its c
 
 ## 2. Enable symmetry and run
 
-Add to your OpenMX input:
+Place the symmetry setting beside the other SCF controls, before long coordinate blocks. For a fresh NSOC calculation:
 
 ```text
-scf.Symmetry on
+MD.Type                        Nomd
+scf.SpinPolarization           off
+scf.SpinOrbit.Coupling         off
+scf.Symmetry                   on
+scf.restart                    off
 ```
 
-Symmetry is off by default; `scf.Symmetry off` disables it explicitly. When enabled, the program detects and validates a supported subgroup, prepares its symmetry basis, and automatically enables the verified solver and memory optimizations compatible with the input, thread count and rank binding. No separate preparation command or user-written JSON is needed. Logs report the selected group; failed mapping or operator checks stop the run.
+Symmetry is off by default; `scf.Symmetry off` disables it explicitly. When enabled, the program detects and validates a supported subgroup, prepares its symmetry basis, and automatically enables the verified solver and memory optimizations compatible with the input, thread count and rank binding. No separate preparation command or user-written JSON is needed. At startup, rank zero writes a readable symmetry table to standard output and the front of `System.Name.out`: selected group, operation count, geometry residual and each rotation/translation. Residuals use scientific notation; rounding matrix noise affects display only. Invalid mappings or failed solver checks stop the run; raw spatial covariance defects are diagnostic when the general SOC solver explicitly projects H/S.
 
 With the matching oneAPI runtime and Python environment available on the compute node, launch normally, for example **64 MPI ranks × 1 thread**:
 
