@@ -87,6 +87,8 @@ for line in Path(a.input).read_text().splitlines():
  words=line.split()
  if len(words)>1:values[words[0].lower()]=words[1]
 print('BOOTSTRAP_CHILD_ONCE',flush=True)
+print('CPU_SYMMETRY_SUMMARY stage='+a.stage+' selected_group=C2 operations=2',flush=True)
+print('CPU_SYMMETRY_OPERATION index=1/2 W=[1,0,0;0,1,0;0,0,1] t_frac=[0,0,0]',flush=True)
 if values.get('test.helper')=='fail':
  raise SystemExit(7)
 if values.get('test.helper')=='oversize':
@@ -182,6 +184,13 @@ class NativeBootstrap(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn('NSOC_SYM=unset GSOC=1', result.stdout)
         self.assertIn('PROJECT=1 EXPORT=1', result.stdout)
+
+    def test_prepared_symmetry_report_reaches_native_stdout_once(self):
+        result = self.execute('scf.Symmetry on\n')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.count('CPU_SYMMETRY_SUMMARY stage=nsoc'), 1)
+        self.assertEqual(result.stdout.count('CPU_SYMMETRY_OPERATION index=1/2'), 1)
+        self.assertNotIn('BOOTSTRAP_CHILD_ONCE', result.stdout)
 
     def test_native_threads_reach_serial_preparation_helper(self):
         result = self.execute('scf.Symmetry on\n', {'TEST_THREADS':'4'})

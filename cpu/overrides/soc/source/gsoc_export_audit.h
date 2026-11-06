@@ -30,4 +30,10 @@ static int gsoc_export_projected_apply(const GsocAuditOperator*o,const int*partn
  if((rc=o->forward(o->ctx,ho,h)))goto done;rc=o->forward(o->ctx,so,s);
  done:free(v);return rc;
 }
+typedef struct {const GsocAuditOperator*raw;const int*partner;} GsocProjectedAudit;
+static int gsoc_export_projected_callback(void*ctx,const GsocAuditComplex*x,
+ GsocAuditComplex*h,GsocAuditComplex*s){
+ GsocProjectedAudit*p=(GsocProjectedAudit*)ctx;
+ return gsoc_export_projected_apply(p->raw,p->partner,x,h,s);
+}
 #endif

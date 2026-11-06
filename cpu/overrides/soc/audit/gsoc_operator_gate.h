@@ -3,7 +3,8 @@
 /* Independent C99, allocation-bounded audit for a distributed native SOC solver.
  * Callbacks are collective. Complex layout is two consecutive doubles r,i.
  * This is a sampled operator guard, NOT an entrywise covariance proof.
- * apply must use RAW directed-neighbor H and matching S, not projected blocks.
+ * For raw covariance/Hermiticity diagnostics, apply uses RAW directed-neighbor
+ * H and matching S. Eigenpair audits may instead use the solved projection.
  * forward/inverse apply the complete unitary CSC U/U^dagger in native spin order.
  * Runtime memory O(nspin) plus O(nspin * sampled_bands) for final eigen checks.
  */
@@ -24,6 +25,18 @@ typedef struct {
  double comm_abs[2],comm_rel[2],tr_abs[2],tr_rel[2],real_abs[2],real_rel[2];
  int probes,nonfinite; uint64_t seed;
 } GsocAuditGateResult;
+/* Spatial sector/real-gauge defects measure the explicitly requested projection.
+ * Nonmagnetic time reversal is still required; spatial grid discretization is
+ * not a reason to discard a magnetic term. Nonfinite measurements always fail. */
+static int gsoc_audit_gate_status(const GsocAuditGateResult*r,int projected,double tolerance){
+ if(!r||r->nonfinite||!isfinite(tolerance)||tolerance<=0)return -1;
+ for(int field=0;field<2;field++){
+  if(!isfinite(r->comm_rel[field])||!isfinite(r->tr_rel[field])||!isfinite(r->real_rel[field]))return -1;
+  if(r->tr_rel[field]>tolerance || (!projected &&
+     (r->comm_rel[field]>tolerance||r->real_rel[field]>tolerance)))return 1;
+ }
+ return 0;
+}
 typedef struct {double raw_abs,raw_relative,Sorth;int count,nonfinite;} GsocAuditEigenResult;
 static GsocAuditComplex gsoc_audit_c(double r,double i){GsocAuditComplex z;z.r=r;z.i=i;return z;}
 static GsocAuditComplex gsoc_audit_mul(GsocAuditComplex a,GsocAuditComplex b){return gsoc_audit_c(a.r*b.r-a.i*b.i,a.r*b.i+a.i*b.r);}
@@ -63,8 +76,10 @@ static int gsoc_audit_operator_gate(const GsocAuditOperator*o,int probes,uint64_
  }
  done:free(v);return rc? -2:0;
 }
-/* Residual checks ALWAYS use raw H/S. S orthogonality includes distinct sampled
- * Kramers partners; getvec must return native physical spinors, not sector data.
+/* Residual checks use the operator supplied by the caller: raw for diagnostics,
+ * or exactly the solved projected H/S for projected-solver acceptance. The raw_*
+ * result member names are retained for API compatibility. S orthogonality
+ * includes distinct sampled Kramers partners; getvec returns physical spinors.
  */
 static int gsoc_audit_eigenpairs(const GsocAuditOperator*o,GsocAuditEigenvector getvec,const int*bands,int count,GsocAuditEigenResult*r){
  int a,b,i,n=o->n,rc=0;double e;GsocAuditComplex *c,*sc,*hc,*tmp;

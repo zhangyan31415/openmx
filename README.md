@@ -38,7 +38,7 @@ Add to your OpenMX input:
 scf.Symmetry on
 ```
 
-Symmetry is off by default; `scf.Symmetry off` disables it explicitly. When enabled, the program detects and validates a supported subgroup, prepares its symmetry basis, and automatically enables the verified solver and memory optimizations compatible with the input, thread count and rank binding. No separate preparation command or user-written JSON is needed. Logs report the selected group; failed mapping or operator checks stop the run.
+Symmetry is off by default; `scf.Symmetry off` disables it explicitly. When enabled, the program detects and validates a supported subgroup, prepares its symmetry basis, and automatically enables the verified solver and memory optimizations compatible with the input, thread count and rank binding. No separate preparation command or user-written JSON is needed. At startup, rank zero reports the selected group, operation count, geometry residual and each operation's rotation and translation. Invalid mappings or failed solver checks stop the run; raw spatial covariance defects are diagnostic when the general SOC solver explicitly projects H/S.
 
 With the matching oneAPI runtime and Python environment available on the compute node, launch normally, for example **64 MPI ranks × 1 thread**:
 

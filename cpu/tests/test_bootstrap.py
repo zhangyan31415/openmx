@@ -218,7 +218,7 @@ class Bootstrap(unittest.TestCase):
             self.assertEqual(env['OPENMX_CPU_GSOC_EXPORT_SYMMETRIZE'], '1')
             self.assertTrue(Path(env['OPENMX_CPU_SOC_NATIVE_MAP']).is_file())
 
-    def test_simple_on_selects_automatically_and_logs_only_summary(self):
+    def test_simple_on_reports_selected_operations_and_geometry(self):
         m = helper()
         text = INPUT.replace('scf.Symmetry.Mode User\nscf.Symmetry.PointGroup D2\n', '')
         with tempfile.TemporaryDirectory() as d:
@@ -229,8 +229,14 @@ class Bootstrap(unittest.TestCase):
                 result = m.bootstrap(path, out, 'nsoc', out/'environment.txt', runtime_cwd=root)
             self.assertEqual(result['request']['mode'], 'auto')
             self.assertEqual(result['selected_group'], 'D2')
-            self.assertLess(len(captured.getvalue()), 1024)
-            self.assertEqual(len(captured.getvalue().splitlines()), 1)
+            report = captured.getvalue()
+            selected = json.loads((out/'metadata/selected.symmetry.json').read_text())['selected']
+            self.assertIn('CPU_SYMMETRY_SUMMARY stage=nsoc selected_group=D2', report)
+            self.assertIn('operations=4', report)
+            self.assertIn('geometry_max_Ang=', report)
+            operations = [line for line in report.splitlines() if line.startswith('CPU_SYMMETRY_OPERATION ')]
+            self.assertEqual(len(operations), selected['operation_count'])
+            self.assertTrue(all(' W=' in line and ' t_frac=' in line and ' R_cart=' in line for line in operations))
             self.assertTrue(Path(result['preparation_log']).is_file())
 
     def test_failed_metadata_preparation_leaves_no_success_environment(self):

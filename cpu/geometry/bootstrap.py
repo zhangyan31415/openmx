@@ -140,7 +140,8 @@ def fast_memory_scope(values):
 
 
 def preferred_soc_route(values):
-    # Explicit advanced covariance requests retain the generic raw-H/S gate.
+    # Explicit advanced covariance requests retain the generic route and its
+    # declared diagnostics/guards rather than switching to the legacy route.
     if (values.get('scf.eigenvaluesolver', '').lower() != 'cluster' or not fast_memory_scope(values) or
             'scf.symmetry.covariancetolerance' in values):
         return 'generic'
@@ -205,6 +206,30 @@ def profiles(prepared, q, api, *, threads=1, values=None, ranks_single_cpu_pinne
     if int(values.get('scf.mixing.startpulay','6')) < 4:
         senv['OPENMX_CPU_ONESTEP_HISTORY'] = '0'
     return {'nsoc': nenv, 'soc': senv}
+
+
+def report_symmetry(prepared, stage, request):
+    """Report the operations actually selected for this solver, once on rank 0."""
+    selected = json.loads(Path(prepared['files']['selected_symmetry']).read_text())['selected']
+    operations = selected['operations']
+    print('CPU_SYMMETRY_SUMMARY stage='+stage+' selected_group='+prepared['selected_group']+
+          ' detected_point_group='+str(prepared['detected_point_group']['symbol'])+
+          ' operations='+str(len(operations))+
+          ' geometry_max_Ang='+format(selected['max_geometry_residual_Ang'], '.12e')+
+          ' H_policy='+request['hamiltonian_policy']+' HS_export='+request['export_policy'], flush=True)
+
+    def vector(values):
+        return ','.join(format(v, '.12g') for v in values)
+
+    def matrix(values):
+        return '['+';'.join(vector(row) for row in values)+']'
+
+    print('CPU_SYMMETRY_CONVENTION fractional_column x_prime=W*x+t; R_cart acts on Cartesian columns; atom_maps_in=metadata/selected.symmetry.json', flush=True)
+    for index, operation in enumerate(operations, 1):
+        print('CPU_SYMMETRY_OPERATION index='+str(index)+'/'+str(len(operations))+
+              ' W='+matrix(operation['W'])+' t_frac=['+vector(operation['t'])+']'+
+              ' R_cart='+matrix(operation['R_cart_orthogonal'])+
+              ' residual_Ang='+format(operation['residual_max_Ang'], '.12e'), flush=True)
 
 
 def bootstrap(input_path, output, stage, environment_file, *, runtime_cwd=None, threads=1, ranks_single_cpu_pinned=False):
@@ -293,6 +318,7 @@ def bootstrap(input_path, output, stage, environment_file, *, runtime_cwd=None, 
                           preparation_log=str(preparation_log),
                           prepared_manifest=str(out/'metadata/PREPARED.json'))
         atomic_text(out/'BOOTSTRAP.json', json.dumps(provenance, indent=2)+'\n')
+        report_symmetry(prepared, stage, q)
         # This is deliberately the last successful write. C reads only this
         # final file after a successful helper exit; partial metadata is inert.
         atomic_text(envfile, ''.join(key+'='+env[key]+'\n' for key in sorted(env)))
