@@ -76,6 +76,18 @@ class Bootstrap(unittest.TestCase):
     def test_native_zeeman_key_keeps_specialized_soc_disabled(self):
         m=helper()
         self.assertEqual(m.preferred_soc_route({'scf.eigenvaluesolver':'cluster','scf.mixing.type':'rmm-diis','scf.nc.zeeman.spin':'on'}),'generic')
+
+    def test_targeted_soc_bands_use_safe_generic_profile_even_without_hs_file(self):
+        m=helper()
+        text=INPUT.replace('PointGroup D2','PointGroup D3').replace('0 14 0','-6 10.392304845413264 0')
+        text=text.replace('scf.SpinPolarization off','scf.SpinPolarization nc\nscf.SpinOrbit.Coupling on\nscf.restart c2n').replace('scf.maxIter 40','scf.maxIter 1')
+        text+='\nBand.dispersion on\nBand.NumBands 20\n'
+        with tempfile.TemporaryDirectory()as d:
+            path,out=self.fixture(Path(d),text)
+            result=m.bootstrap(path,out,'soc',out/'environment.txt',runtime_cwd=Path(d))
+            self.assertEqual(result['SOC_route'],'generic')
+            self.assertEqual(result['environment']['OPENMX_CPU_GSOC_EXPORT_SYMMETRIZE'],'1')
+            self.assertNotEqual(result['environment'].get('OPENMX_CPU_SOC_RELEASE_DENSE'),'1')
     def test_memory_optimizations_are_automatic_for_scalar_cluster(self):
         m = helper()
         with tempfile.TemporaryDirectory() as d:

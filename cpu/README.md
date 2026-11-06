@@ -11,6 +11,7 @@ Detailed guides are currently in Chinese:
 - [Build and dependencies](docs/BUILD.zh-CN.md).
 - [Input settings and H/S export](docs/INPUT_SYMMETRY.zh-CN.md).
 - [Execution, restart and multi-node layouts](docs/WORKFLOW.zh-CN.md).
+- [Native targeted band dispersion](docs/TARGETED_BANDS.md) and [validation](docs/TARGETED_BANDS_VALIDATION_20261106.md).
 - [Native switch validation and SOC limitations](docs/NATIVE_SYMMETRY_VALIDATION_20261106.md).
 - [Fresh reference vs latest benchmark](docs/benchmarks/20261106/README.md), including figures and saved data.
 - [Timing and memory benchmarks](docs/BENCHMARKS_20261031.md), [acceptance criteria](docs/ACCEPTANCE.zh-CN.md).

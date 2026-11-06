@@ -8,6 +8,9 @@
 #include <math.h>
 #include <errno.h>
 #include "gsoc_runtime_guard.h"
+#ifndef CPU_BAND_USES_SPARSE_HS
+#define CPU_BAND_USES_SPARSE_HS() 0
+#endif
 #ifndef GSOC_RUNTIME_GUARD_STANDALONE
 #include "openmx_common.h"
 extern int flag_export_DM,flag_energy_range_DM;
@@ -174,7 +177,7 @@ void CpuGSOC_ValidateRuntime(void){
  in.cwf=CWF_Calc;in.export_dm=flag_export_DM;in.energy_window_dm=flag_energy_range_DM;
  in.level_fileout=level_fileout;in.partial_charge=cal_partial_charge;
  in.atomic_analysis=LNAO_calc_flag||LNBO_calc_flag||NBO_switch;
- in.dense_postprocessing=Band_disp_switch||Wannier_Func_Calc||Wannier90_fileout||CWF_fileout_flag
+ in.dense_postprocessing=(Band_disp_switch&&!CPU_BAND_USES_SPARSE_HS())||Wannier_Func_Calc||Wannier90_fileout||CWF_fileout_flag
   ||pop_anal_aow_flag||unfold_electronic_band||Polarization_ABC_flag||xanes_gs_fileout||xanes_calc;
  in.dos=Dos_fileout;in.dos_gauss=DosGauss_fileout;in.optical=CDDF_on;in.mo=MO_fileout;in.atoms=atomnum;
  int status=gsoc_runtime_capture(&c,&in,error,sizeof(error));

@@ -6,6 +6,15 @@
 
 在已授权计算节点上执行：
 
+首次安装先创建本项目自己的依赖环境，不需要 moirekp：
+
+```bash
+conda env create -f cpu/environment.yml
+conda activate openmx-cpu
+```
+
+这个环境同时提供对称性准备所需的 NumPy/SciPy/spglib 和目标能带所需的复数 PETSc/SLEPc、稀疏 LU 后端。然后按普通 OpenMX 的方式加载 oneAPI 并编译。PETSc 不链接到原生 OpenMX；程序内部在隔离的进程中自动调用它，避免与 oneAPI MPI 的 ABI 混合。构建时的 Python 路径写入安装清单，运行仍使用普通 `mpirun` 命令。
+
 ```bash
 "$CONDA_PREFIX/bin/python" /ABS/openmx-dev/cpu/build.py \
   --profile unified --output /ABS/new-empty-build --jobs 15 --execute
@@ -42,6 +51,6 @@
 
 统一构建还输出 `resources/cpu/`，包含程序自动调用的几何准备工具，并在清单中
 记录这些文件的 SHA256 和 Python 解释器。移动构建产物时将 `openmx-cpu` 与
-旁边的 `resources/` 一起移动；只复制二进制不足以保证开启对称性后可运行。
+旁边的 `resources/` 一起移动；只复制二进制不足以保证开启对称性或目标能带后可运行。
 不同计算节点须可访问相同的配套文件和 Python 环境。关闭对称性的普通路径
 不调用该准备工具。

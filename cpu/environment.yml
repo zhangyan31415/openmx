@@ -1,0 +1,12 @@
+name: openmx-cpu
+channels:
+  - conda-forge
+dependencies:
+  - python=3.11
+  - numpy
+  - scipy
+  - spglib
+  - petsc=*=*complex*
+  - slepc=*=*complex*
+  - petsc4py
+  - slepc4py

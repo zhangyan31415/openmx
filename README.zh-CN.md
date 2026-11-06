@@ -8,7 +8,7 @@
 
 ## 1. 获取与安装
 
-已验证的构建环境：Linux、Intel oneAPI 2022.3 classic 编译器、Intel MPI 2021.7.1、MKL 2022.2.1，以及 Python 3.12、NumPy、SciPy、spglib。构建器要求对应的 oneAPI 目录布局，详见[构建说明](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/BUILD.zh-CN.md)。
+已验证的构建环境：Linux、Intel oneAPI 2022.3 classic 编译器、Intel MPI 2021.7.1、MKL 2022.2.1。随包的 Python 依赖环境包含 NumPy、SciPy、spglib，以及用于目标能带的复数 PETSc/SLEPc。构建器要求对应的 oneAPI 目录布局，详见[构建说明](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/BUILD.zh-CN.md)。
 
 开启 `scf.Symmetry on` 需要 Python 环境中的 NumPy、SciPy 和 spglib。spglib 由 MPI 主进程在启动阶段调用，用于识别几何对称性，不参与逐步 SCF，也无需链接进 OpenMX 二进制。显式设置 `scf.Symmetry off` 时不调用这套 Python 工具；源码构建本身仍需要 Python。
 
@@ -17,7 +17,7 @@ git clone --branch experiments/cpu-d3-20261019 --single-branch \
   https://github.com/zhangyan31415/openmx.git openmx-cpu
 cd openmx-cpu
 
-conda create -n openmx-cpu python=3.12 numpy scipy spglib
+conda env create -f cpu/environment.yml
 conda activate openmx-cpu
 
 # 改为实际的 oneAPI 安装路径；在计算节点上编译。
@@ -57,6 +57,16 @@ mpirun -np 64 ./build/cpu/openmx-cpu input.dat -nt 1
 目前验证的工作流是**固定结构、非磁性、Gamma 点：NSOC 收敛后，从其自身检查点接一步 SOC**。输入使用 `Cluster` 或 Gamma `Band`，以及 `scf.eigen.lib elpa1` 或 `elpa2`。NSOC 和 SOC 输入均加入 `scf.Symmetry on`，保持结构、基组、物理参数及 MPI 布局一致；SOC 使用原生 C2N 重启。具体输入及重启要求见[运行说明](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/WORKFLOW.zh-CN.md)。一步 SOC 不等于 SOC 自洽收敛。
 
 需要 H/S 时另设普通参数 `HS.fileout on`。开启对称性后，受支持路径导出与所选群投影一致的 H/S。OpenMX 基组非正交，后处理必须使用匹配的 S。
+
+计算能带时，保留普通的 `Band.Nkpath` 和 `<Band.kpath` 路径设置，再写：
+
+```text
+Band.dispersion       on
+Band.NumBands         20
+Band.ReferenceEnergy  Fermi
+```
+
+程序通过 SLEPc 直接求原生稀疏 H/S 在参考能量附近的20条带。默认参考为本次费米能；也可填数值，表示 **eV 单位的绝对能量**。仍输出普通 `.Band` 文件，其中能量单位保持 **Hartree**。不写 `Band.NumBands` 或设为0，沿用原来的完整谱路径。启动命令不变，不需要单独导出、转换或安装 moirekp，详见[目标能带说明](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/TARGETED_BANDS.md)。
 
 ## 4. 实现与验证范围
 

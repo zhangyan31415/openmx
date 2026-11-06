@@ -1,6 +1,10 @@
 {
   "schema": "openmx-unified-cpu-selection-v1",
   "replacements": {
+    "OutData.o": "cpu/overrides/nsoc/source/OutData.bands.c",
+    "cpu_soc_native.tr.o": "cpu/overrides/nsoc/source/cpu_soc_native.bands.c",
+    "gsoc_runtime_guard.o": "cpu/overrides/nsoc/source/gsoc_runtime_guard.bands.c",
+    "Band_DFT_kpath.o": "cpu/overrides/nsoc/source/Band_DFT_kpath.target.c",
     "Merge_LogFile.o": "cpu/overrides/nsoc/source/Merge_LogFile.symmetry.c",
     "DFT.compact.o": "cpu/overrides/nsoc/source/DFT.unified.c",
     "Cluster_DFT_Col.o": "cpu/overrides/nsoc/source/Cluster_DFT_Col.unified.c",

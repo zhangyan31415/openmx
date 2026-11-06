@@ -142,7 +142,8 @@ def fast_memory_scope(values):
 def preferred_soc_route(values):
     # Explicit advanced covariance requests retain the generic route and its
     # declared diagnostics/guards rather than switching to the legacy route.
-    if (values.get('scf.eigenvaluesolver', '').lower() != 'cluster' or not fast_memory_scope(values) or
+    if (int(values.get('band.numbands','0')) > 0 or
+            values.get('scf.eigenvaluesolver', '').lower() != 'cluster' or not fast_memory_scope(values) or
             'scf.symmetry.covariancetolerance' in values):
         return 'generic'
     return 'auto'
@@ -205,6 +206,14 @@ def profiles(prepared, q, api, *, threads=1, values=None, ranks_single_cpu_pinne
                 'OPENMX_CPU_GSOC_GEOMETRY_TOL_ANG': format(q['tolerance'], '.17g')}
     if int(values.get('scf.mixing.startpulay','6')) < 4:
         senv['OPENMX_CPU_ONESTEP_HISTORY'] = '0'
+    if int(values.get('band.numbands','0')) > 0:
+        # The H/S-only path is evaluated after forces from the final projected
+        # tensors. Keep conservative generic storage until these caches are
+        # separately certified with native band postprocessing.
+        senv = {**prepared['SOC_environment_additions'], **common,
+                'OPENMX_CPU_GSOC_PROJECT':'1' if q['export_policy']=='symmetrize' else '0',
+                'OPENMX_CPU_GSOC_COV_TOL':format(q['covariance_tolerance'],'.17g'),
+                'OPENMX_CPU_GSOC_GEOMETRY_TOL_ANG':format(q['tolerance'],'.17g')}
     return {'nsoc': nenv, 'soc': senv}
 
 
@@ -338,7 +347,8 @@ def bootstrap(input_path, output, stage, environment_file, *, runtime_cwd=None, 
         atomic_text(report_path, readable_symmetry_report(prepared, stage, q))
         env['OPENMX_CPU_INPUT_SYMMETRY_REPORT'] = str(report_path)
         export_requested=native_logical(values.get('hs.fileout','off'))
-        if stage=='soc' and prepared['SOC_route']=='generic' and not export_requested:
+        if (stage=='soc' and prepared['SOC_route']=='generic' and not export_requested
+                and int(values.get('band.numbands','0')) <= 0):
             # Preserve the projected solve without activating a file-export
             # hook when the native input did not request an H/S file.
             env['OPENMX_CPU_GSOC_EXPORT_SYMMETRIZE']='0'

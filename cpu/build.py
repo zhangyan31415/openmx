@@ -10,7 +10,7 @@ def runtime_resource_files():
  files=[]
  for directory in ('cpu/geometry','cpu/overrides/nsoc/metadata'):
   files.extend(p for p in (REPO/directory).rglob('*')if p.is_file()and p.suffix in ('.py','.json'))
- files.extend(REPO/'cpu/tools'/name for name in ('workflow.py','workflow_node.py','input_symmetry.py'))
+ files.extend(REPO/'cpu/tools'/name for name in ('workflow.py','workflow_node.py','input_symmetry.py','band_solver.py'))
  files.append(REPO/'cpu/tools/examples/profile_templates.json')
  return sorted(set(files))
 
@@ -80,6 +80,9 @@ def command_plan(plan,out,oneapi,cpu_target):
   if u['source']=='cpu/overrides/nsoc/source/Input_std.symmetry.c':
    cmd[1:1]=['-DOPENMX_SYMMETRY_BOOTSTRAP="'+str(out/'resources/cpu/geometry/bootstrap.py')+'"',
              '-DOPENMX_SYMMETRY_PYTHON="'+sys.executable+'"']
+  if u['source']in ('cpu/overrides/nsoc/source/Input_std.symmetry.c','cpu/overrides/nsoc/source/Band_DFT_kpath.target.c'):
+   cmd[1:1]=['-DOPENMX_BAND_HELPER="'+str(out/'resources/cpu/tools/band_solver.py')+'"',
+             '-DOPENMX_BAND_PYTHON="'+sys.executable+'"']
   commands.append({'label':u['object'],'language':u['language'],'command':cmd})
  libs=['-L'+str(mkl/'lib/intel64'),'-lmkl_scalapack_lp64','-lmkl_intel_lp64','-lmkl_intel_thread','-lmkl_core','-lifcore','-lmkl_blacs_intelmpi_lp64','-liomp5','-lpthread','-lm','-ldl']
  link=[str(mpi/'mpiicc'),*common,*[str(out/'objects'/u['object'])for u in plan['units']],*libs,'-o',str(out/'openmx-cpu')]

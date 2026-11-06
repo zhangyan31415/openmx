@@ -5,4 +5,5 @@ void CpuSOCNative_RestartState(int ok);
 void CpuSOCNative_MarkSolve(int step,double *****h,double *****im,double ****olp);
 void CpuSOCNative_MarkSolved(int step);
 void CpuSOCNative_BeforeExport(void);
+void CpuSOCNative_PrepareBands(void);
 #endif

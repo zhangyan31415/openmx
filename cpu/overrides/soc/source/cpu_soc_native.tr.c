@@ -15,6 +15,9 @@
 #include "cpu_c3.h"
 #include "soc_spin.h"
 #include "cpu_soc_tr_guard.h"
+#ifndef CPU_BAND_USES_SPARSE_HS
+#define CPU_BAND_USES_SPARSE_HS() 0
+#endif
 
 typedef struct { int a,b,r[3],h,na,nb,owner; } RSBlock;
 typedef struct {
@@ -39,6 +42,8 @@ static int rs_last_step=-1,rs_solved=0,rs_exported=0,rs_restart_ok=0;
 static double rs_spin[RS_MAX_OPS][8],rs_spin_t[RS_MAX_OPS][64];
 static double *****rs_hptr,*****rs_iptr;
 static uint64_t rs_solve_hash;
+static int rs_band_prepared=0,rs_band_export_handoff=0;
+static uint64_t rs_band_hash;
 static double *rs_soc_raw[8],*rs_soc_projected[8];
 
 static void rs_die(const char *msg) {
@@ -108,9 +113,9 @@ int CpuSOCNative_Enabled(void) {
  if(rs_ng!=-1&&rs_ng!=ng)rs_die("native group changed after activation");
  rs_ng=ng;
  if(SpinP_switch!=3||SO_switch!=1||Cnt_switch||Hub_U_switch||Solver!=2||MD_switch!=0||SCF_Control_Temp||DFTSCF_loop!=1)rs_die("requires uncontracted fixed-geometry Cluster SOC, Hubbard off, exactly one step");
- if(Band_disp_switch||MO_fileout||Dos_fileout||unfold_electronic_band||Wannier_Func_Calc||Wannier90_fileout||CWF_fileout_flag||pop_anal_aow_flag)rs_die("auxiliary raw-matrix postprocessing must be disabled; use native scfout H/S");
+ if((Band_disp_switch&&!CPU_BAND_USES_SPARSE_HS())||MO_fileout||Dos_fileout||unfold_electronic_band||Wannier_Func_Calc||Wannier90_fileout||CWF_fileout_flag||pop_anal_aow_flag)rs_die("auxiliary raw-matrix postprocessing must be disabled; use native scfout H/S");
  if(Constraint_NCS_switch||Zeeman_NCS_switch||Zeeman_NCO_switch)rs_die("magnetic constraints/fields not supported");
- if((rs_generic?CpuC3_Mode()!=0:CpuC3_Mode()!=3)||!HS_fileout)rs_die("native-export requires C3/D3 projected-block solver mode3 and HS.fileout on");
+ if((rs_generic?CpuC3_Mode()!=0:CpuC3_Mode()!=3)||(!HS_fileout&&!CPU_BAND_USES_SPARSE_HS()))rs_die("native-export requires a projected solver and H/S output or targeted bands");
  rs_mode=rs_generic?2:1;return 1;
 }
 static void rs_geometry_guard(void) {
@@ -402,8 +407,23 @@ static void rs_spin_project(void){
 }
 void CpuSOCNative_BeforeExport(void){
  if(!CpuSOCNative_Enabled())return;
+ if(rs_band_prepared){
+  rs_geometry_guard();
+  if(!rs_exported||rs_band_export_handoff||H!=rs_hptr||iHNL!=rs_iptr||OLP[0]!=rs_overlap||rs_field_hash(H,iHNL,OLP[0])!=rs_band_hash)rs_die("projected H/S changed after targeted bands or export was repeated");
+  rs_band_export_handoff=1;
+  if(rs_rank==Host_ID){printf("CPU_SOC_BAND_EXPORT_HANDOFF projected_operator_hash_verified=1 unique_native_export=1\n");fflush(stdout);}return;
+ }
  if(rs_last_step!=1||!rs_solved||rs_exported||H!=rs_hptr||iHNL!=rs_iptr||OLP[0]!=rs_overlap)rs_die("export is not the unique completed projected solve");
  rs_geometry_guard();if(rs_field_hash(H,iHNL,OLP[0])!=rs_solve_hash)rs_die("raw H/iHNL/S changed between projected solve and native export");
  rs_project(OLP[0],1,"scalar_S_export",1);rs_spin_project();if(rs_generic)CpuGSOC_ValidateExport();rs_exported=1;
  if(rs_rank==Host_ID){printf("CPU_SOC_RS_EXPORT step=1 representation=PROJECTED_REALSPACE_SPINOR_H_S spin_representation=SU2 operations=%d solver=%s_projected_blocks raw_checksum_unchanged=1 postprocess_external=0 canonical_UD_imag=H3 imNL2=0 derivatives_untouched_until_after_force=1\n",rs_ng,rs_generic?"GSOC":(rs_ng==6?"D3":"C3"));fflush(stdout);}
+}
+/* Called only by the deferred native band stage, after OutData and therefore
+ * after all force/total-energy consumers of raw tensors. This is the same
+ * one-shot projection/check that SCF2File would perform at this point. */
+void CpuSOCNative_PrepareBands(void){
+ if(!CpuSOCNative_Enabled())return;
+ if(!CPU_BAND_USES_SPARSE_HS()||rs_band_prepared||rs_exported)rs_die("invalid targeted-band projection order");
+ CpuSOCNative_BeforeExport();rs_band_hash=rs_field_hash(H,iHNL,OLP[0]);rs_band_prepared=1;
+ if(rs_rank==Host_ID){printf("CPU_SOC_BAND_OPERATOR representation=PROJECTED_REALSPACE_SPINOR_H_S after_force=1 matching_native_export=1\n");fflush(stdout);}
 }

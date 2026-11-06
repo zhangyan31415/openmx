@@ -140,8 +140,10 @@ class NativeBootstrap(unittest.TestCase):
         adapter += '\nint main(int n,char **v){if(n!=2)return 2;const char*t=getenv("TEST_THREADS");if(t)openmp_threads_num=atoi(t);if(getenv("TEST_STRESS"))stress_flag=1;Input_std(v[1]);return 0;}\n'
         (cls.build/'adapter.c').write_text(adapter)
         (cls.build/'protocol.c').write_text(PROTOCOL)
+        (cls.build/'band_backend.py').write_text('import os,sys\nassert sys.argv[1:]==["--check"]\nassert not any(k.startswith(("PMI_","PMIX_","I_MPI_","OMPI_")) for k in os.environ)\nsys.exit(7 if os.environ.get("TEST_BAND_BACKEND_FAIL") else 0)\n')
         common = [compiler, '-std=gnu99', '-I', str(SOURCE), '-I', str(UPSTREAM)]
-        subprocess.run(common+[str(cls.build/'adapter.c'), str(UPSTREAM/'Inputtools.c'),
+        subprocess.run(common+['-DOPENMX_BAND_HELPER="'+str(cls.build/'band_backend.py')+'"',
+                               '-DOPENMX_BAND_PYTHON="'+sys.executable+'"',str(cls.build/'adapter.c'), str(UPSTREAM/'Inputtools.c'),
                                '-lm', '-o', str(cls.build/'adapter')], check=True,
                        capture_output=True, text=True)
         subprocess.run(common+[str(cls.build/'protocol.c'), '-o', str(cls.build/'protocol')],
@@ -209,6 +211,24 @@ class NativeBootstrap(unittest.TestCase):
         result = self.execute('scf.Symmetry off\n')
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertFalse((self.work/'native_test.out').exists())
+
+    def test_invalid_targeted_band_request_fails_before_stock_parser(self):
+        for text in ('Band.NumBands -1\n', 'Band.NumBands garbage\n',
+                     'Band.NumBands 20\nBand.dispersion off\n',
+                     'Band.NumBands 20\nBand.dispersion on\nBand.ReferenceEnergy nan\n'):
+            with self.subTest(text=text):
+                result=self.execute(text)
+                self.assertNotEqual(result.returncode,0)
+                self.assertNotIn('STOCK_PARSER',result.stdout)
+
+    def test_targeted_bands_probe_isolated_backend_before_stock_parser(self):
+        text='Band.NumBands 20\nBand.dispersion on\nBand.Nkpath 1\nBand.ReferenceEnergy -4.5\n'
+        result=self.execute(text,{'PMI_RANK':'17','I_MPI_FABRICS':'shm'})
+        self.assertEqual(result.returncode,0,result.stderr)
+        self.assertIn('STOCK_PARSER',result.stdout)
+        result=self.execute(text,{'TEST_BAND_BACKEND_FAIL':'1'})
+        self.assertNotEqual(result.returncode,0)
+        self.assertNotIn('STOCK_PARSER',result.stdout)
 
     def test_native_threads_reach_serial_preparation_helper(self):
         result = self.execute('scf.Symmetry on\n', {'TEST_THREADS':'4'})

@@ -6,6 +6,10 @@
 #undef Input_std
 #include "cpu_input_bootstrap.h"
 #include "cpu_symmetry_report.h"
+#define CPU_BAND_INPUT_IMPLEMENTATION
+#include "cpu_band_options.h"
+#include "cpu_band_bridge.h"
+CpuBandConfig CpuBandOptions;
 
 static int cpu_input_env_equal(const char *key, const char *value) {
   const char *actual=getenv(key);
@@ -24,6 +28,10 @@ void Input_std(char *file) {
     MPI_Abort(mpi_comm_level1,95);exit(95);
   }
   if(!bad){
+    if(cpu_band_read_options()){
+      if(!rank)fprintf(stderr,"CPU_BAND_INPUT_ERROR: Band.NumBands must be nonnegative; targeted bands require Band.dispersion on, Band.Nkpath>0 and a finite eV reference or Fermi\n");
+      bad=1;
+    }
     has_toggle=input_string("scf.Symmetry",toggle,"off");
     enabled=!strcasecmp(toggle,"on");
     if(enabled && (stress_flag || StressConsistency_flag)){
@@ -52,6 +60,11 @@ void Input_std(char *file) {
     input_string("scf.Symmetry.DensityPolicy",option,"Free");if(strcasecmp(option,"Free"))bad=1;
     input_string("scf.Symmetry.ForcePolicy",option,"Free");if(strcasecmp(option,"Free"))bad=1;
     input_close();
+    {
+      CpuBandConfig agreed=CpuBandOptions;
+      MPI_Bcast(&agreed,sizeof(agreed),MPI_CHAR,0,mpi_comm_level1);
+      if(memcmp(&agreed,&CpuBandOptions,sizeof(agreed)))bad=1;
+    }
     {
       int selection=enabled+2*soc,minimum,maximum;
       MPI_Allreduce(&selection,&minimum,1,MPI_INT,MPI_MIN,mpi_comm_level1);
@@ -133,7 +146,7 @@ void Input_std(char *file) {
         }else if(rs&&strcmp(rs,"off")&&strcmp(rs,"0"))bad=1;
       }
       if(!strcasecmp(policy,"symmetrize") && soc && !legacy &&
-         (!cpu_input_env_equal("OPENMX_CPU_GSOC_EXPORT_SYMMETRIZE",hs_fileout?"1":"0") ||
+         (!cpu_input_env_equal("OPENMX_CPU_GSOC_EXPORT_SYMMETRIZE",(hs_fileout||CpuBandOptions.count)?"1":"0") ||
           !cpu_input_env_equal("OPENMX_CPU_GSOC_PROJECT","1")))bad=1;
       if(!strcasecmp(policy,"raw") && soc && !legacy &&
          !cpu_input_env_equal("OPENMX_CPU_GSOC_EXPORT_SYMMETRIZE","0") &&
@@ -147,6 +160,15 @@ void Input_std(char *file) {
   }
   if(!rank && strcasecmp(mode,"off")){
     printf("CPU_INPUT_SYMMETRY mode=%s selected_group=%s HSExport=%s prepared_profile_consumed=1\n",mode,getenv("OPENMX_CPU_INPUT_SYMMETRY_GROUP"),policy);fflush(stdout);
+  }
+  if(CpuBandOptions.count){
+    int status=0;
+    if(!rank){
+      status=cpu_band_check_backend(CpuBandOptions.python);
+      if(status)fprintf(stderr,"CPU_BAND_INPUT_ERROR: complex PETSc/SLEPc with sparse LU is required in the OpenMX dependency environment; backend check failed before SCF\n");
+    }
+    MPI_Bcast(&status,1,MPI_INT,0,mpi_comm_level1);
+    if(status){MPI_Abort(mpi_comm_level1,95);exit(95);}
   }
   CpuOriginal_Input_std(file);
   if(enabled){
