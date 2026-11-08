@@ -1,0 +1,3 @@
+material,angle_deg,atoms,spin,source_AO,kpoints,states_requested,valence_states_compared,global_shift_new_minus_old_meV,aligned_RMS_difference_meV,aligned_max_difference_meV
+MoTe2,2.13393,4326,NSOC,74984,13,20,8,27.476206088557667,0.1487097827522804,0.3591467014422207
+WSe2,2.13393,4326,NSOC,67774,13,20,8,12.827602799903826,0.17958684238921682,0.43659363990375866
