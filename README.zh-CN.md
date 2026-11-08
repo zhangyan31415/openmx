@@ -115,14 +115,3 @@ Band.ReferenceEnergy  Fermi
 [CPU 文档入口](https://github.com/zhangyan31415/openmx/blob/develop/cpu/README.md)。OpenMX 和 ELPA 的原作者版权与许可保留在源码及 `cpu/vendor/` 中；来源记录见 `cpu/vendor/ORIGINS.json`。
 
 GPU 部分源自他人的 [dc1394/openmx4.0_gpu](https://github.com/dc1394/openmx4.0_gpu)，相关说明请参阅原项目。
-
-## Cutoff 与价带对比
-
-MoTe2、WSe2 均为 **2.13393 度、4326 原子，NSOC**。记录中的 80/150 Ry
-配置在扣除整体能量偏移后，最高 8 条价带最大差分别为 **0.359 / 0.437 meV**。
-两组的 SCF 阈值和历史二进制也不同，因此不是只改 cutoff 的收敛测试；
-总能量和力差没有通过此前物理门限，不据此修改默认 cutoff。
-
-![Cutoff and valence-band comparison](cpu/docs/benchmarks/20261109-cutoff/cutoff_comparison.png)
-
-[设置、数值数据及适用范围](cpu/docs/benchmarks/20261109-cutoff/README.md)。

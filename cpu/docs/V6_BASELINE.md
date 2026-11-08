@@ -67,15 +67,3 @@ These controls do not replace the complete input, runtime binding or eligibility
 checks. Do not infer that `scf.Symmetry on` alone reproduces a particular measured
 memory peak. See [SCF lifetimes](SCF_MEMORY_LIFETIME.md),
 [NUMA replicas](NUMA_GRID_MEMORY.md), and [direct assembly](DIRECT_PANEL_MEMORY.md).
-
-Recent 2.13393-degree, 4326-atom MoTe2/WSe2 tests with 80 Ry and criterion 1e-6
-matched the sampled, globally aligned TAPW valence shapes to below 0.5 meV.
-Their total-energy and force differences against the historical 150 Ry inputs
-failed the user's 0.1 meV/atom and 1 meV/angstrom gates. These input experiments
-therefore do not justify changing defaults or claiming structural-force accuracy.
-Two-step z-grid-halving tests saved only about 6 percent of the measured physical
-peak; they did not establish converged physical accuracy.
-
-80 Ry 与 1e-6 的 2.13 度固定结构能带比较只验证了采样价带形状；总能量与力未
-通过原门限。z 网格减半仅做两步试算，峰值内存收益约 6%，未验证收敛精度。
-因此均不作为默认生产配置。计时、配置效应与代码收益分别记录。

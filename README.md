@@ -103,18 +103,6 @@ Fresh same-node measurements: **node040, 64 MPI × 1**, same compiler options an
 
 The reference is the bundled CPU4.0 source snapshot, built without optimized replacements. Symmetry constraints and SCF trajectories change together with the implementation; this is not a claim of identical raw operators. See the [full report](https://github.com/zhangyan31415/openmx/blob/develop/cpu/docs/benchmarks/20261106/README.md), [data](https://github.com/zhangyan31415/openmx/blob/develop/cpu/docs/benchmarks/20261106/measurements.csv) and [physical differences](https://github.com/zhangyan31415/openmx/blob/develop/cpu/docs/benchmarks/20261106/physical_differences.json), including force errors exceeding the earlier physical gate. The two-point lines are not an extrapolated scaling law.
 
-## Cutoff and valence-band comparison
-
-MoTe2 and WSe2, **2.13393 degrees, 4326 atoms each**, NSOC: the aligned highest
-8 valence bands differ by at most **0.359 / 0.437 meV** between the recorded
-80 Ry and 150 Ry configurations. These runs also differ in SCF criterion and
-historical binary; this is not a controlled cutoff-only convergence test.
-Total-energy/force differences fail the earlier physical thresholds.
-
-![Cutoff and valence-band comparison](cpu/docs/benchmarks/20261109-cutoff/cutoff_comparison.png)
-
-[Settings, numerical data and limitations](cpu/docs/benchmarks/20261109-cutoff/README.md).
-
 ## Source layout and credits
 
 | Directory | Contents |
