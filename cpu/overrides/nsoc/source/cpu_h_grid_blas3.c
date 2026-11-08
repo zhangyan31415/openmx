@@ -19,12 +19,13 @@ void CpuHGridSingleThreadEnd(int old){mkl_set_num_threads_local(old);}
 int CpuHGridAccumulate(const CpuHGridView*v,CpuHGridWorkspace*w,double*h,CpuHGridTiming*tm){
  if(!v||!w||!w->left||!w->right||!h||v->m<1||v->n<1||v->m>w->ao||v->n>w->ao||v->ldh<v->n||v->count<0||w->tile<1||(v->b_per_overlap!=0&&v->b_per_overlap!=1))return -1;
  if(!v->count)return 0;
- if(!v->a||!v->b||!v->nc||!v->nh||!v->legacy_grid||!v->global_grid||!v->potential||!v->index)return -1;
+ if(!v->a||(!v->b&&!v->overlap_row)||((!v->nc||!v->nh)&&!v->overlap_index)||!v->legacy_grid||!v->global_grid||!v->potential||!v->index)return -1;
  for(int base=0;base<v->count;){
   int k=CpuHGridTileLength(v->count,base,w->tile);double t=tm?stamp():0;
   for(int q=0;q<k;q++){
-   int l=base+q,c=v->nc[l];size_t p=v->index((size_t)v->legacy_grid[c],(unsigned long long)v->global_grid[c]);
-   const float*a=v->a[c],*b=v->b[v->b_per_overlap?l:v->nh[l]];double gv=v->gridvol*v->potential[p];
+   int l=base+q,c=v->overlap_index?v->overlap_index(0,v->center,v->neighbor,l):v->nc[l];size_t p=v->index((size_t)v->legacy_grid[c],(unsigned long long)v->global_grid[c]);
+   int nh=v->overlap_index?v->overlap_index(1,v->center,v->neighbor,l):v->nh[l];
+   const float*a=v->a[c],*b=(v->b_per_overlap&&v->overlap_row)?v->overlap_row(v->center,v->neighbor,l):v->b[v->b_per_overlap?l:nh];double gv=v->gridvol*v->potential[p];
    for(int i=0;i<v->m;i++)w->left[(size_t)q*v->m+i]=gv*(double)a[i];
    for(int j=0;j<v->n;j++)w->right[(size_t)q*v->n+j]=(double)b[j];
   }

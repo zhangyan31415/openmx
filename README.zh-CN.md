@@ -4,16 +4,23 @@
 
 这是基于 [OpenMX](https://www.openmx-square.org/) 的 CPU 优化版本，主要改进对称性分块求解、密度矩阵计算及内存使用。同一个可执行文件包含 NSOC 和 SOC 路径，使用普通 OpenMX 输入文件和 MPI 启动方式。
 
-**CPU 源码目前在 `experiments/cpu-d3-20261019` 分支。请按下面命令克隆；只克隆默认分支不会取得 `cpu/` 目录。**
+**CPU 源码目前在 `release/cpu-v6-clean` 分支。请按下面命令克隆；只克隆默认分支不会取得 `cpu/` 目录。**
+
+## 当前 CPU 基线
+
+当前候选版本保留已验证的 **v6-clean** 原生 SCF 基线。近期缩短真空层、减半 z 网格的实验没有得到值得通用替换的收益，因此不作为本次默认配置；程序不会自动降低积分网格截断或放宽 SCF 收敛阈值。实验性密度初猜保持关闭。
+
+下文已有的 bench 图对应标注日期的历史对照，不代表新的 v6 对原版测量。保留的内存路径、验证范围和精度边界见 [v6 基线说明](cpu/docs/V6_BASELINE.md)。
+
 
 ## 1. 获取与安装
 
-已验证的构建环境：Linux、Intel oneAPI 2022.3 classic 编译器、Intel MPI 2021.7.1、MKL 2022.2.1。随包的 Python 依赖环境包含 NumPy、SciPy、spglib，以及用于目标能带的复数 PETSc/SLEPc。构建器要求对应的 oneAPI 目录布局，详见[构建说明](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/BUILD.zh-CN.md)。
+已验证的构建环境：Linux、Intel oneAPI 2022.3 classic 编译器、Intel MPI 2021.7.1、MKL 2022.2.1。随包的 Python 依赖环境包含 NumPy、SciPy、spglib，以及用于目标能带的复数 PETSc/SLEPc。构建器要求对应的 oneAPI 目录布局，详见[构建说明](https://github.com/zhangyan31415/openmx/blob/release/cpu-v6-clean/cpu/docs/BUILD.zh-CN.md)。
 
 开启 `scf.Symmetry on` 需要 Python 环境中的 NumPy、SciPy 和 spglib。spglib 由 MPI 主进程在启动阶段调用，用于识别几何对称性，不参与逐步 SCF，也无需链接进 OpenMX 二进制。显式设置 `scf.Symmetry off` 时不调用这套 Python 工具；源码构建本身仍需要 Python。
 
 ```bash
-git clone --branch experiments/cpu-d3-20261019 --single-branch \
+git clone --branch release/cpu-v6-clean --single-branch \
   https://github.com/zhangyan31415/openmx.git openmx-cpu
 cd openmx-cpu
 
@@ -54,7 +61,7 @@ mpirun -np 64 ./build/cpu/openmx-cpu input.dat -nt 1
 
 ## 3. NSOC、一步 SOC 与 H/S 输出
 
-目前验证的工作流是**固定结构、非磁性、Gamma 点：NSOC 收敛后，从其自身检查点接一步 SOC**。输入使用 `Cluster` 或 Gamma `Band`，以及 `scf.eigen.lib elpa1` 或 `elpa2`。NSOC 和 SOC 输入均加入 `scf.Symmetry on`，保持结构、基组、物理参数及 MPI 布局一致；SOC 使用原生 C2N 重启。具体输入及重启要求见[运行说明](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/WORKFLOW.zh-CN.md)。一步 SOC 不等于 SOC 自洽收敛。
+目前验证的工作流是**固定结构、非磁性、Gamma 点：NSOC 收敛后，从其自身检查点接一步 SOC**。输入使用 `Cluster` 或 Gamma `Band`，以及 `scf.eigen.lib elpa1` 或 `elpa2`。NSOC 和 SOC 输入均加入 `scf.Symmetry on`，保持结构、基组、物理参数及 MPI 布局一致；SOC 使用原生 C2N 重启。具体输入及重启要求见[运行说明](https://github.com/zhangyan31415/openmx/blob/release/cpu-v6-clean/cpu/docs/WORKFLOW.zh-CN.md)。一步 SOC 不等于 SOC 自洽收敛。
 
 需要 H/S 时另设普通参数 `HS.fileout on`。开启对称性后，受支持路径导出与所选群投影一致的 H/S。OpenMX 基组非正交，后处理必须使用匹配的 S。
 
@@ -67,7 +74,7 @@ Band.NumBands         20
 Band.ReferenceEnergy  Fermi
 ```
 
-程序通过 SLEPc 直接求原生稀疏 H/S 在参考能量附近的20条带。默认参考为本次费米能；也可填数值，表示 **eV 单位的绝对能量**。仍输出普通 `.Band` 文件，其中能量单位保持 **Hartree**。不写 `Band.NumBands` 或设为0，沿用原来的完整谱路径。启动命令不变，不需要单独导出、转换或安装 moirekp，详见[目标能带说明](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/TARGETED_BANDS.md)。
+程序通过 SLEPc 直接求原生稀疏 H/S 在参考能量附近的20条带。默认参考为本次费米能；也可填数值，表示 **eV 单位的绝对能量**。仍输出普通 `.Band` 文件，其中能量单位保持 **Hartree**。不写 `Band.NumBands` 或设为0，沿用原来的完整谱路径。启动命令不变，不需要单独导出、转换或安装 moirekp，详见[目标能带说明](https://github.com/zhangyan31415/openmx/blob/release/cpu-v6-clean/cpu/docs/TARGETED_BANDS.md)。
 
 求**全带**时，写 `Band.NumBands 0`，方法可选 `Band.Solver EVR` 或 `Auto`。
 也可手动指定 `LAPACK`／`GVD`、`SLEPc`、`Legacy`。GVD/EVR 只求能量，省去整套波函数。
@@ -80,20 +87,20 @@ Band.ReferenceEnergy  Fermi
 - 当前默认配置已通过 MoTe₂ 9.43°（222 原子）和 7.34°（366 原子）的完整 NSOC＋自身一步 SOC。标准定向的 C3/D3 层状结构自动选择已验证专用 SOC 路径；其他受支持情况使用通用路径及其算子检查。
 - 历史加速和内存数据属于各自配置，不能当作当前入口的普遍保证。多节点也不保证核时下降或总内存不变。
 
-[原生开关验收](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/NATIVE_SYMMETRY_VALIDATION_20261106.md) · [时间与内存基准](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/BENCHMARKS_20261031.md) · [数值验收标准](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/ACCEPTANCE.zh-CN.md)
+[原生开关验收](https://github.com/zhangyan31415/openmx/blob/release/cpu-v6-clean/cpu/docs/NATIVE_SYMMETRY_VALIDATION_20261106.md) · [时间与内存基准](https://github.com/zhangyan31415/openmx/blob/release/cpu-v6-clean/cpu/docs/BENCHMARKS_20261031.md) · [数值验收标准](https://github.com/zhangyan31415/openmx/blob/release/cpu-v6-clean/cpu/docs/ACCEPTANCE.zh-CN.md)
 
 ## 5. 原代码参考与最新版对比
 
 本次重新进行同节点实测：**node040，64 MPI × 1**，两版使用相同编译选项和物理输入，均完成 NSOC 后从自身检查点接一步 SOC。每个版本、每种原子数各测一次。
 
-![原代码参考与最新版的原子数、耗时和物理内存对比](https://raw.githubusercontent.com/zhangyan31415/openmx/experiments/cpu-d3-20261019/cpu/docs/benchmarks/20261106/latest_vs_reference.png)
+![原代码参考与最新版的原子数、耗时和物理内存对比](https://raw.githubusercontent.com/zhangyan31415/openmx/release/cpu-v6-clean/cpu/docs/benchmarks/20261106/latest_vs_reference.png)
 
 | MoTe₂ | 参考版 → 最新版总耗时 | 参考版 → 最新版物理峰值内存 |
 |---|---:|---:|
 | 9.43°，222 原子 | 184.86 → **86.42 秒** | 73.59 → **25.22 GiB** |
 | 7.34°，366 原子 | 552.02 → **147.25 秒** | 110.99 → **35.35 GiB** |
 
-参考版为仓库保留的 CPU4.0 源码快照，不使用优化替换。该对比包含对称约束及 SCF 轨迹变化，不代表原始算子逐项相同。完整设置、分阶段时间／内存和物理误差见[报告](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/benchmarks/20261106/README.md)、[数据](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/benchmarks/20261106/measurements.csv)及[物理差异](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/benchmarks/20261106/physical_differences.json)，其中力差超过此前的物理门限。两点连线不是规模律拟合或外推。
+参考版为仓库保留的 CPU4.0 源码快照，不使用优化替换。该对比包含对称约束及 SCF 轨迹变化，不代表原始算子逐项相同。完整设置、分阶段时间／内存和物理误差见[报告](https://github.com/zhangyan31415/openmx/blob/release/cpu-v6-clean/cpu/docs/benchmarks/20261106/README.md)、[数据](https://github.com/zhangyan31415/openmx/blob/release/cpu-v6-clean/cpu/docs/benchmarks/20261106/measurements.csv)及[物理差异](https://github.com/zhangyan31415/openmx/blob/release/cpu-v6-clean/cpu/docs/benchmarks/20261106/physical_differences.json)，其中力差超过此前的物理门限。两点连线不是规模律拟合或外推。
 
 ## 代码目录与来源
 
@@ -105,6 +112,6 @@ Band.ReferenceEnergy  Fermi
 | `cpu/tools/` | 运行、对照与基准工具 |
 | `cpu/tests/`, `cpu/docs/` | 测试与详细文档 |
 
-[CPU 文档入口](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/README.md)。OpenMX 和 ELPA 的原作者版权与许可保留在源码及 `cpu/vendor/` 中；来源记录见 `cpu/vendor/ORIGINS.json`。
+[CPU 文档入口](https://github.com/zhangyan31415/openmx/blob/release/cpu-v6-clean/cpu/README.md)。OpenMX 和 ELPA 的原作者版权与许可保留在源码及 `cpu/vendor/` 中；来源记录见 `cpu/vendor/ORIGINS.json`。
 
 GPU 部分源自他人的 [dc1394/openmx4.0_gpu](https://github.com/dc1394/openmx4.0_gpu)，相关说明请参阅原项目。

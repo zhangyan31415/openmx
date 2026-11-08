@@ -4,6 +4,7 @@
 #include <complex.h>
 #include "cpu_nsoc_imag.h"
 #include "openmx_common.h"
+#include "cpu_overlap_index.h"
 #include "mpi.h"
 #include "cpu_nsoc_symhistory_guard.h"
 extern void CpuNSocSymHistoryDestroy(void);
@@ -18,6 +19,83 @@ extern void CpuNSocSymHistoryDestroy(void);
 double complex ******CWF_Coef_NC;
 double complex ***CWF_Guiding_MOs_NC;
 
+
+/* End a fixed-geometry orbital-grid lifetime after the final consumer.
+ * Free pointer facades while the shared-atom ownership map still exists.
+ * Destroying that map first would misclassify shared rows as malloc rows. */
+void CpuGridLifetime_Release(void)
+{
+  int Mc_AN,Gc_AN,Nc,num,h_AN,Gh_AN,Mh_AN,Hwan,NO1,myid;
+  MPI_Comm_rank(mpi_comm_level1,&myid);
+  if(Orbs_Grid){
+    /* AITUNE */
+    /* Orbs_Grid */
+    for (Mc_AN=0; Mc_AN<=Matomnum; Mc_AN++){
+      if (Mc_AN==0){
+        Gc_AN = 0;
+        num = 1;
+      }
+      else{
+        Gc_AN = F_M2G[Mc_AN];
+        num = GridN_Atom[Gc_AN];
+      }
+
+      if (Mc_AN==0 || !CpuGridShared_IsAtom(Gc_AN)){
+      for (Nc=0; Nc<num; Nc++){
+        free(Orbs_Grid[Mc_AN][Nc]);
+      }
+      }
+      free(Orbs_Grid[Mc_AN]); 
+    }
+    free(Orbs_Grid); 
+
+    Orbs_Grid=NULL;
+  }
+  if(Orbs_Grid_FNAN){
+    /* Orbs_Grid_FNAN */
+
+    for (Mc_AN=0; Mc_AN<=Matomnum; Mc_AN++){
+
+      if (Mc_AN==0){
+        free(Orbs_Grid_FNAN[0][0][0]);
+        free(Orbs_Grid_FNAN[0][0]);
+      }
+      else{
+
+	Gc_AN = M2G[Mc_AN];    
+
+	for (h_AN=0; h_AN<=FNAN[Gc_AN]; h_AN++){
+
+	  Gh_AN = natn[Gc_AN][h_AN];
+
+	  if (G2ID[Gh_AN]!=myid){
+
+	    Mh_AN = F_G2M[Gh_AN];
+	    Hwan = WhatSpecies[Gh_AN];
+	    NO1 = Spe_Total_NO[Hwan];
+            num = NumOLG[Mc_AN][h_AN] + 1; /*AITUNE fix memory leak*/
+	  }
+	  else {
+            num = 1;
+	  }
+          if (G2ID[Gh_AN]==myid || !CpuGridShared_IsAtom(Gh_AN)){
+
+	  for (Nc=0; Nc<num; Nc++){  
+	    free(Orbs_Grid_FNAN[Mc_AN][h_AN][Nc]);
+	  }
+          }
+	  free(Orbs_Grid_FNAN[Mc_AN][h_AN]);
+
+	} /* h_AN */
+      } /* else */
+
+      free(Orbs_Grid_FNAN[Mc_AN]);
+    }
+    free(Orbs_Grid_FNAN);
+    Orbs_Grid_FNAN=NULL;
+  }
+  CpuGridShared_Destroy();
+}
 
 void array0();
 void array1();
@@ -70,6 +148,7 @@ void array0()
     }
     free(GListTAtoms2);
     free(GListTAtoms1);
+    CpuOverlapDestroy();
   }
 
   if (alloc_first[1]==0){
@@ -275,27 +354,6 @@ void array0()
       free(Vxc_Grid_D);
     }
 
-    /* AITUNE */
-    /* Orbs_Grid */
-    for (Mc_AN=0; Mc_AN<=Matomnum; Mc_AN++){
-      if (Mc_AN==0){
-        Gc_AN = 0;
-        num = 1;
-      }
-      else{
-        Gc_AN = F_M2G[Mc_AN];
-        num = GridN_Atom[Gc_AN];
-      }
-
-      if (Mc_AN==0 || !CpuGridShared_IsAtom(Gc_AN)){
-      for (Nc=0; Nc<num; Nc++){
-        free(Orbs_Grid[Mc_AN][Nc]);
-      }
-      }
-      free(Orbs_Grid[Mc_AN]); 
-    }
-    free(Orbs_Grid); 
-
     /* COrbs_Grid */
     if (Cnt_switch!=0){
       for (Mc_AN=0; Mc_AN<=(Matomnum+MatomnumF); Mc_AN++){
@@ -317,47 +375,7 @@ void array0()
       free(COrbs_Grid);
     }
 
-    /* Orbs_Grid_FNAN */
-
-    for (Mc_AN=0; Mc_AN<=Matomnum; Mc_AN++){
-
-      if (Mc_AN==0){
-        free(Orbs_Grid_FNAN[0][0][0]);
-        free(Orbs_Grid_FNAN[0][0]);
-      }
-      else{
-
-	Gc_AN = M2G[Mc_AN];    
-
-	for (h_AN=0; h_AN<=FNAN[Gc_AN]; h_AN++){
-
-	  Gh_AN = natn[Gc_AN][h_AN];
-
-	  if (G2ID[Gh_AN]!=myid){
-
-	    Mh_AN = F_G2M[Gh_AN];
-	    Hwan = WhatSpecies[Gh_AN];
-	    NO1 = Spe_Total_NO[Hwan];
-            num = NumOLG[Mc_AN][h_AN] + 1; /*AITUNE fix memory leak*/
-	  }
-	  else {
-            num = 1;
-	  }
-          if (G2ID[Gh_AN]==myid || !CpuGridShared_IsAtom(Gh_AN)){
-
-	  for (Nc=0; Nc<num; Nc++){  
-	    free(Orbs_Grid_FNAN[Mc_AN][h_AN][Nc]);
-	  }
-          }
-	  free(Orbs_Grid_FNAN[Mc_AN][h_AN]);
-
-	} /* h_AN */
-      } /* else */
-
-      free(Orbs_Grid_FNAN[Mc_AN]);
-    }
-    free(Orbs_Grid_FNAN);
-    CpuGridShared_Destroy();
+    CpuGridLifetime_Release();
   }
 
   /****************************************************
@@ -1121,6 +1139,7 @@ void array0()
       /* HisH1 */
 
       for (m=0; m<List_YOUSO[39]; m++){
+        if(!HisH1[m])continue;
 	for (k=0; k<=SpinP_switch; k++){
 	  FNAN[0] = 0;
 	  for (Mc_AN=0; Mc_AN<=Matomnum; Mc_AN++){
@@ -1164,6 +1183,7 @@ void array0()
       if (SpinP_switch==3){
 
 	for (m=0; m<List_YOUSO[39]; m++){
+	  if(!HisH2[m])continue;
 	  for (k=0; k<SpinP_switch; k++){
 	    FNAN[0] = 0;
 	    for (Mc_AN=0; Mc_AN<=Matomnum; Mc_AN++){
@@ -1299,6 +1319,7 @@ void array0()
       /* HisH1 */
 
       for (m=0; m<CpuNSocHamiltonianHistorySlots(); m++){
+        if(!HisH1[m])continue;
 	for (k=0; k<=SpinP_switch; k++){
 	  FNAN[0] = 0;
 	  for (Mc_AN=0; Mc_AN<=Matomnum; Mc_AN++){
@@ -1342,6 +1363,7 @@ void array0()
       if (SpinP_switch==3){
 
 	for (m=0; m<List_YOUSO[39]; m++){
+	  if(!HisH2[m])continue;
 	  for (k=0; k<SpinP_switch; k++){
 	    FNAN[0] = 0;
 	    for (Mc_AN=0; Mc_AN<=Matomnum; Mc_AN++){
@@ -1389,6 +1411,7 @@ void array0()
   
 
     for (m=0; m<List_YOUSO[16]; m++){
+      if(!DM[m])continue;
       if(CpuNSocSymHistoryEnabled() && m>=3)continue;
       for (k=0; k<=SpinP_switch; k++){
 	FNAN[0] = 0;
@@ -1664,6 +1687,7 @@ void array0()
     if ( Mixing_switch==0 || Mixing_switch==1 || Mixing_switch==2 || Mixing_switch==6 ){
 
       for (m=0; m<List_YOUSO[16]; m++){
+        if(!ResidualDM[m])continue;
       if(CpuNSocSymHistoryEnabled() && m>=3)continue;
 	for (k=0; k<=SpinP_switch; k++){
 	  FNAN[0] = 0;
@@ -1712,6 +1736,7 @@ void array0()
         || Zeeman_NCS_switch==1 || Zeeman_NCO_switch==1) ){
 
       for (m=0; m<List_YOUSO[16]; m++){
+        if(!iResidualDM[m])continue;
         for (k=0; k<2; k++){
 	  FNAN[0] = 0;
 	  for (Mc_AN=0; Mc_AN<=Matomnum; Mc_AN++){
@@ -1839,6 +1864,7 @@ void array0()
     /* iDM */
 
     for (m=0; m<CpuNSOCImagSlots(); m++){
+      if(!iDM[m])continue;
       for (k=0; k<2; k++){
 
 	FNAN[0] = 0;

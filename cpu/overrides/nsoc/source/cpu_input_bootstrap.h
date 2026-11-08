@@ -23,13 +23,21 @@
 extern char **environ;
 
 /* Automatic native preparation supplies a complete profile. A stale developer
- * selector inherited from an earlier run must not silently add another path. */
+ * selector inherited from an earlier run must not silently add another path.
+ * Preserve explicit memory budgets and the two memory-experiment controls so
+ * automatic preparation cannot silently discard a cap or defeat an A/B run.
+ * Those controls still validate their own runtime eligibility collectively. */
 static int cpu_bootstrap_clear_profile(char *error,size_t error_size) {
   int i=0;
   while(environ[i]){
     if(!strncmp(environ[i],"OPENMX_CPU_",11) &&
        strncmp(environ[i],"OPENMX_CPU_SYMMETRY_HELPER=",27) &&
-       strncmp(environ[i],"OPENMX_CPU_SYMMETRY_PYTHON=",27)){
+       strncmp(environ[i],"OPENMX_CPU_SYMMETRY_PYTHON=",27) &&
+       strncmp(environ[i],"OPENMX_CPU_NSOC_NATIVE_RETURN=",sizeof("OPENMX_CPU_NSOC_NATIVE_RETURN=")-1) &&
+       strncmp(environ[i],"OPENMX_CPU_VNA_FORCE_STREAM=",sizeof("OPENMX_CPU_VNA_FORCE_STREAM=")-1) &&
+       strncmp(environ[i],"OPENMX_CPU_GRID_RECOMPUTE=",sizeof("OPENMX_CPU_GRID_RECOMPUTE=")-1) &&
+       strncmp(environ[i],"OPENMX_CPU_NSOC_PANEL_BUFFER_BYTES=",sizeof("OPENMX_CPU_NSOC_PANEL_BUFFER_BYTES=")-1) &&
+       strncmp(environ[i],"OPENMX_CPU_NSOC_PANEL_BUDGET_BYTES=",sizeof("OPENMX_CPU_NSOC_PANEL_BUDGET_BYTES=")-1)){
       char *key=strdup(environ[i]),*end;
       if(!key){snprintf(error,error_size,"profile cleanup allocation failed");return 1;}
       end=strchr(key,'=');if(end)*end='\0';

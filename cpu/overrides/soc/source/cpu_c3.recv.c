@@ -14,6 +14,7 @@
 #include "openmx_common.h"
 #include "cpu_c3.h"
 #include "cpu_soc_band_exchange.h"
+#include "cpu_soc_memory_reclaim.h"
 extern int numroc_(int*,int*,int*,int*,int*);
 extern void descinit_(int*,int*,int*,int*,int*,int*,int*,int*,int*,int*);
 extern void pzpotrf_(char*,int*,dcomplex*,int*,int*,int*,int*);
@@ -364,7 +365,7 @@ void CpuC3_CompactRelease(void){
  for(int k=0;k<4;k++){free(C.rowptr[k]);free(C.column[k]);free(C.value[k]);if(!(B.d3&&(k==1||(AU.tr&&k==3)))){free(C.q[k]);free(C.qr[k]);}}
  free(C.logical_sector);free(C.logical_band);free(C.sorted);memset(&C,0,sizeof(C));
 }
-int CpuC3_CompactLocalBands(void){return C.ready?C.local_bands:0;}
+int CpuC3_CompactLocalBands(void){if(!C.ready)die("compact coefficients requested before solve or after retirement");return C.local_bands;}
 size_t CpuC3_CompactBytes(void){
  size_t n=0;for(int k=0;k<B.nsec;k++)if(!(B.d3&&(k==1||(AU.tr&&k==3)))){if(C.q[k])n+=(size_t)C.count[k]*B.sec[k].n*sizeof(dcomplex);if(C.qr[k])n+=(size_t)C.count[k]*B.sec[k].n*sizeof(double);}
  return n;
@@ -667,12 +668,12 @@ void CpuC3_Solve(int step,int maxn,double*ko,double*****nh,double*****im,double*
  }
  const char*au_check=getenv("OPENMX_CPU_C3_CHECK");AU.check=au_check&&atoi(au_check);
  active_config=config;last_step=step;MPI_Bcast(&mode,1,MPI_INT,0,mpi_comm_level1);if(mode==4)full_steps++;else full_steps=0;
- int rebuild=(step==1||!B.loaded||B.mode!=mode);MPI_Comm_rank(mpi_comm_level1,&r);MPI_Comm_size(mpi_comm_level1,&p);double start=MPI_Wtime();c3_init(mode);bounds(B.ns,r,p,&lo,&hi);CpuMemoryPhase("before_vector_init");if(compact)compact_begin();else memset(ev,0,(size_t)(hi-lo)*B.ns*sizeof(dcomplex));CpuMemoryPhase("after_vector_init");double*eval=mem(B.ns,sizeof(double));int rows,cols,world;
+ int rebuild=(step==1||!B.loaded||B.mode!=mode);MPI_Comm_rank(mpi_comm_level1,&r);MPI_Comm_size(mpi_comm_level1,&p);double start=MPI_Wtime();c3_init(mode);bounds(B.ns,r,p,&lo,&hi);CpuSOCMemoryReclaim("before_sector_workspace");CpuMemoryPhase("before_vector_init");if(compact)compact_begin();else memset(ev,0,(size_t)(hi-lo)*B.ns*sizeof(dcomplex));CpuMemoryPhase("after_vector_init");double*eval=mem(B.ns,sizeof(double));int rows,cols,world;
  MPI_Comm rowcomm,colcomm;
  MPI_Comm_split(mpi_comm_level1,my_pcol2,my_prow2,&rowcomm);MPI_Comm_split(mpi_comm_level1,my_prow2,my_pcol2,&colcomm);rows=MPI_Comm_c2f(rowcomm);cols=MPI_Comm_c2f(colcomm);world=MPI_Comm_c2f(mpi_comm_level1);
  for(int k=0;k<B.nsec;k++){
   if(B.d3&&mode==3&&(k==1||(AU.tr&&k==3)))continue; /* Logical partners retain distinct states. */
-  if(AU.real&&k==0){antiunitary_solve_real(B.sec,step,eval,nh,im,overlap,rows,cols,world);memcpy(eval+B.sec[1].ofs,eval,(size_t)B.sec[0].n*sizeof(double));continue;}
+  if(AU.real&&k==0){antiunitary_solve_real(B.sec,step,eval,nh,im,overlap,rows,cols,world);memcpy(eval+B.sec[1].ofs,eval,(size_t)B.sec[0].n*sizeof(double));CpuSOCMemoryReclaim("after_real_sector");continue;}
   Sector*t=B.sec+k;dcomplex*savedH=H,*savedQ=Q;
   if(AU.real){if(t->nr<1||t->nc<1)die("typed SOC requires nonempty local ELPA layout");H=mem((size_t)t->nr*t->nc,sizeof(dcomplex));Q=mem((size_t)t->nr*t->nc,sizeof(dcomplex));}
   dcomplex*S=AU.real?mem((size_t)t->nr*t->nc,sizeof(dcomplex)):sf+t->soff;double a0=MPI_Wtime();assemble(t,rebuild,nh,im,overlap,H,S);double a1=MPI_Wtime();dump_small(t,H,S,step);
@@ -691,6 +692,7 @@ void CpuC3_Solve(int step,int maxn,double*ko,double*****nh,double*****im,double*
   }
   if(AU.tr&&k==2){memcpy(eval+B.sec[3].ofs,eval+t->ofs,(size_t)t->n*sizeof(double));C.q[3]=C.q[2];if(!r){printf("CPU_TR_REUSE step=%d sector=3 source=2 distinct_eigenstates_retained=1 coefficients=conjugate_alias\n",step);fflush(stdout);}}
   if(AU.real){free(S);free(H);free(Q);H=savedH;Q=savedQ;}
+  CpuSOCMemoryReclaim("after_complex_sector");
   char memory_stage[80];snprintf(memory_stage,sizeof(memory_stage),"after_sector_%d",k);CpuMemoryPhase(memory_stage);
   double a4=MPI_Wtime();
   printf("CPU_C3_PHASE rank=%d step=%d sector=%d n=%d nev=%d assemble=%.6f transform=%.6f eigen=%.6f reconstruct=%.6f\n",r,step,k,t->n,wanted,a1-a0,a2-a1,a3-a2,a4-a3);fflush(stdout);

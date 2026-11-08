@@ -17,6 +17,7 @@
 #include <string.h>
 #include <time.h>
 #include "openmx_common.h"
+#include "cpu_overlap_index.h"
 #include "cpu_realspace_d3.h"
 #include "cpu_soc_native.h"
 #include "tran_variables.h"
@@ -43,6 +44,7 @@ static void free_Position_all_matrix_elements();
 
 /* Added by N. Yamaguchi ***/
 int order_max=1;
+#include "cpu_scf_operator_cache.inc"
 /* ***/
 
 void SCF2File(char *mode, char *inputfile)
@@ -68,91 +70,9 @@ void SCF2File(char *mode, char *inputfile)
   if (strcasecmp(mode,"write")==0) CpuRSym_BeforeExport();
   if (strcasecmp(mode,"write")==0) CpuSOCNative_BeforeExport();
 
-  /* allocation of array */
-
-  /* Modified by N. Yamaguchi ***/
-  /* OLPpo: matrix for position operator */
-
-  int direction, order;
-  OLPpo=(double******)malloc(sizeof(double*****)*3);
-  for (direction=0; direction<3; direction++){
-    OLPpo[direction]=(double*****)malloc(sizeof(double****)*order_max);
-    for (order=0; order<order_max; order++){
-      OLPpo[direction][order]=(double****)malloc(sizeof(double***)*(Matomnum+1));
-      FNAN[0] = 0;
-      for (Mc_AN=0; Mc_AN<=Matomnum; Mc_AN++){
-
-	if (Mc_AN==0){
-	  Gc_AN = 0;
-	  tno0 = 1;
-	}
-	else{
-	  Gc_AN = M2G[Mc_AN];
-	  Cwan = WhatSpecies[Gc_AN];
-	  tno0 = Spe_Total_CNO[Cwan];
-	}
-
-	OLPpo[direction][order][Mc_AN] = (double***)malloc(sizeof(double**)*(FNAN[Gc_AN]+1));
-	for (h_AN=0; h_AN<=FNAN[Gc_AN]; h_AN++){
-
-	  if (Mc_AN==0){
-	    tno1 = 1;
-	  }
-	  else{
-	    Gh_AN = natn[Gc_AN][h_AN];
-	    Hwan = WhatSpecies[Gh_AN];
-	    tno1 = Spe_Total_CNO[Hwan];
-	  }
-
-	  OLPpo[direction][order][Mc_AN][h_AN] = (double**)malloc(sizeof(double*)*tno0);
-	  for (i=0; i<tno0; i++){
-	    OLPpo[direction][order][Mc_AN][h_AN][i] = (double*)malloc(sizeof(double)*tno1);
-	  }
-	}
-      }
-    }
-  }
-
-  /* OLPmo: matrix for momentum operator */
-
-  OLPmo=(double*****)malloc(sizeof(double****)*3);
-  for (direction=0; direction<3; direction++){
-
-    OLPmo[direction]=(double****)malloc(sizeof(double***)*(Matomnum+1));
-    FNAN[0] = 0;
-    for (Mc_AN=0; Mc_AN<=Matomnum; Mc_AN++){
-
-      if (Mc_AN==0){
-	Gc_AN = 0;
-	tno0 = 1;
-      }
-      else{
-	Gc_AN = M2G[Mc_AN];
-	Cwan = WhatSpecies[Gc_AN];
-	tno0 = Spe_Total_CNO[Cwan];
-      }
-
-      OLPmo[direction][Mc_AN] = (double***)malloc(sizeof(double**)*(FNAN[Gc_AN]+1));
-      for (h_AN=0; h_AN<=FNAN[Gc_AN]; h_AN++){
-
-	if (Mc_AN==0){
-	  tno1 = 1;
-	}
-	else{
-	  Gh_AN = natn[Gc_AN][h_AN];
-	  Hwan = WhatSpecies[Gh_AN];
-	  tno1 = Spe_Total_CNO[Hwan];
-	}
-
-	OLPmo[direction][Mc_AN][h_AN] = (double**)malloc(sizeof(double*)*tno0);
-	for (i=0; i<tno0; i++){
-	  OLPmo[direction][Mc_AN][h_AN][i] = (double*)malloc(sizeof(double)*tno1);
-	}
-      }
-    }
-  }
-
-  /* end of allocation of OLPpo and OLPp */
+  int direction,order;
+  int cached=strcasecmp(mode,"write")==0 && CpuSCFFileCacheTake(&OLPpo,&OLPmo);
+  if(!cached)CpuSCFFileAllocateOperators(&OLPpo,&OLPmo);
 
   /* write a file */
 
@@ -178,10 +98,10 @@ void SCF2File(char *mode, char *inputfile)
       if (myid==Host_ID) printf("Save the scfout file (%s)\n",fname);
 
       /* matrix elements for position operator */
-      Calc_OLPpo(OLPpo);
+      if(!cached)Calc_OLPpo(OLPpo);
 
       /* matrix elements for momentum operator */
-      Calc_OLPmo(OLPmo);
+      if(!cached)Calc_OLPmo(OLPmo);
 
       Output( fp, inputfile, OLPpo, OLPmo );
 
@@ -1018,8 +938,8 @@ void Calc_OLPpo( double ******OLPpo )
 
 	for (Nog=0; Nog<NumOLG[Mc_AN][h_AN]; Nog++){
 
-	  Nc = GListTAtoms1[Mc_AN][h_AN][Nog];
-	  Nh = GListTAtoms2[Mc_AN][h_AN][Nog];
+	  Nc = CpuOverlapIndex1(Mc_AN,h_AN,Nog);
+	  Nh = CpuOverlapIndex2(Mc_AN,h_AN,Nog);
 
 	  /* store ChiVx,y,z in tmp_ChiVx,y,z */
 
@@ -1037,9 +957,10 @@ void Calc_OLPpo( double ******OLPpo )
 	    }
 	  }
 	  else{
-	    for (j=0; j<NO1; j++){
-	      tmp_Orbs_Grid[j] = Orbs_Grid_FNAN[Mc_AN][h_AN][Nog][j];/* AITUNE */
-	    }
+	    {const Type_Orbs_Grid *cpu_orbital_row_0=CpuOverlapRow(Mc_AN,h_AN,Nog);
+for (j=0; j<NO1; j++){
+	      tmp_Orbs_Grid[j] = cpu_orbital_row_0[j];/* AITUNE */
+	    }}
 	  }
 
 	  /* integration */
@@ -1254,8 +1175,8 @@ void Calc_OLPmo( double *****OLPmo )
 
       for (Nog=0; Nog<NumOLG[Mc_AN][h_AN]; Nog++){
 
-        Nc = GListTAtoms1[Mc_AN][h_AN][Nog];
-        Nh = GListTAtoms2[Mc_AN][h_AN][Nog];
+        Nc = CpuOverlapIndex1(Mc_AN,h_AN,Nog);
+        Nh = CpuOverlapIndex2(Mc_AN,h_AN,Nog);
 
         /* store ChiVx,y,z in tmp_ChiVx,y,z */
 
@@ -1273,9 +1194,10 @@ void Calc_OLPmo( double *****OLPmo )
 	  }
 	}
         else{
-	  for (j=0; j<NO1; j++){
-	    tmp_Orbs_Grid[j] = Orbs_Grid_FNAN[Mc_AN][h_AN][Nog][j];/* AITUNE */ 
-	  }
+	  {const Type_Orbs_Grid *cpu_orbital_row_0=CpuOverlapRow(Mc_AN,h_AN,Nog);
+for (j=0; j<NO1; j++){
+	    tmp_Orbs_Grid[j] = cpu_orbital_row_0[j];/* AITUNE */ 
+	  }}
         }
 
         /* integration */
@@ -1487,8 +1409,8 @@ void Calc_OLPpo2()
 
       for (Nog=0; Nog<NumOLG[Mc_AN][h_AN]; Nog++){
 
-        Nc = GListTAtoms1[Mc_AN][h_AN][Nog];
-        Nh = GListTAtoms2[Mc_AN][h_AN][Nog];
+        Nc = CpuOverlapIndex1(Mc_AN,h_AN,Nog);
+        Nh = CpuOverlapIndex2(Mc_AN,h_AN,Nog);
 
         /* store ChiVx,y,z in tmp_ChiVx,y,z */
 
@@ -1506,9 +1428,10 @@ void Calc_OLPpo2()
 	  }
 	}
         else{
-	  for (j=0; j<NO1; j++){
-	    tmp_Orbs_Grid[j] = Orbs_Grid_FNAN[Mc_AN][h_AN][Nog][j];/* AITUNE */ 
-	  }
+	  {const Type_Orbs_Grid *cpu_orbital_row_0=CpuOverlapRow(Mc_AN,h_AN,Nog);
+for (j=0; j<NO1; j++){
+	    tmp_Orbs_Grid[j] = cpu_orbital_row_0[j];/* AITUNE */ 
+	  }}
         }
 
         /* integration */

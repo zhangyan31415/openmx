@@ -8,6 +8,11 @@ typedef struct {
  const double *potential;
  double gridvol;
  size_t (*index)(size_t,unsigned long long);
+ /* Optional exact-index/row accessors avoid materializing O(overlap) pointer
+    and index arrays. Old positional initializers leave these fields zero. */
+ int (*overlap_index)(int axis,int center,int neighbor,int point);
+ const float *(*overlap_row)(int center,int neighbor,int point);
+ int center,neighbor;
 } CpuHGridView;
 typedef struct {int ao,tile;size_t bytes;double *left,*right;} CpuHGridWorkspace;
 typedef struct {double pack_seconds,gemm_seconds;} CpuHGridTiming;

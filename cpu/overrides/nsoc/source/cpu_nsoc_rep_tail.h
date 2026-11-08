@@ -7,6 +7,11 @@ typedef struct {int admitted,cut_states,covered_states,invalid;double density_bo
 int CpuRepTailAdmit(MPI_Comm comm,int nao,int first,int last,const double*coeff,
  const double*f,const double*energy,int cut_count,const int*cut_ids,
  double amplification,double tolerance,CpuRepTailEvidence*out);
+/* Same admission arithmetic, with explicit AO norms of actual cut states
+ * supplied by the compressed coefficient provider. Non-cut slots may be NaN. */
+int CpuRepTailAdmitNorms(MPI_Comm comm,int nao,int first,int last,const long double*ao_norms,
+ const double*f,const double*energy,int cut_count,const int*cut_ids,
+ double amplification,double tolerance,CpuRepTailEvidence*out);
 /* Upper bound for actual stored AO block transforms, including finite
  * row-sum/product roundoff; independent of ideal orthogonality. */
 double CpuRepTailAmplification(int operations,int species,const int*norb,

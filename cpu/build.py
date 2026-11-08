@@ -76,7 +76,12 @@ def command_plan(plan,out,oneapi,cpu_target):
    elif f.startswith('-I'):flags += ['-I'+str(local(f[2:]))]
    else:flags.append(f)
    i+=1
-  cmd=[str(mpi/('mpiifort'if u['language']=='fortran'else'mpiicc')),*common,*incs,*flags,'-c',str(local(u['source'])),'-o',str(out/'objects'/u['object'])]
+  # OpenMP makes ELPA's automatic Fortran work arrays use the process stack.
+  # Their size grows with the sector order and can exceed a normal 8 MiB
+  # shell stack even when ample physical memory is available. Allocate those
+  # arrays on the heap so large solves do not depend on a user's ulimit.
+  language_flags=['-heap-arrays']if u['language']=='fortran'else[]
+  cmd=[str(mpi/('mpiifort'if u['language']=='fortran'else'mpiicc')),*common,*language_flags,*incs,*flags,'-c',str(local(u['source'])),'-o',str(out/'objects'/u['object'])]
   if u['source']=='cpu/overrides/nsoc/source/Input_std.symmetry.c':
    cmd[1:1]=['-DOPENMX_SYMMETRY_BOOTSTRAP="'+str(out/'resources/cpu/geometry/bootstrap.py')+'"',
              '-DOPENMX_SYMMETRY_PYTHON="'+sys.executable+'"']

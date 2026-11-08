@@ -64,7 +64,17 @@ int main(void){
  setenv("OPENMX_CPU_STALE","1",1);
  setenv("OPENMX_CPU_SYMMETRY_HELPER","helper with spaces",1);
  setenv("OPENMX_CPU_SYMMETRY_PYTHON","python",1);
+ setenv("OPENMX_CPU_NSOC_PANEL_BUFFER_BYTES","65536",1);
+ setenv("OPENMX_CPU_NSOC_PANEL_BUDGET_BYTES","0",1);
+ setenv("OPENMX_CPU_NSOC_NATIVE_RETURN","4",1);
+ setenv("OPENMX_CPU_VNA_FORCE_STREAM","2",1);
  assert(cpu_bootstrap_clear_profile(error,sizeof(error))==0);
+ assert(getenv("OPENMX_CPU_NSOC_PANEL_BUFFER_BYTES"));
+ assert(!strcmp(getenv("OPENMX_CPU_NSOC_PANEL_BUFFER_BYTES"),"65536"));
+ assert(getenv("OPENMX_CPU_NSOC_PANEL_BUDGET_BYTES"));
+ assert(!strcmp(getenv("OPENMX_CPU_NSOC_PANEL_BUDGET_BYTES"),"0"));
+ assert(!strcmp(getenv("OPENMX_CPU_NSOC_NATIVE_RETURN"),"4"));
+ assert(!strcmp(getenv("OPENMX_CPU_VNA_FORCE_STREAM"),"2"));
  assert(!getenv("OPENMX_CPU_STALE"));
  assert(!strcmp(getenv("OPENMX_CPU_SYMMETRY_HELPER"),"helper with spaces"));
  assert(!strcmp(getenv("OPENMX_CPU_SYMMETRY_PYTHON"),"python"));

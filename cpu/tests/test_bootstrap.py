@@ -6,6 +6,7 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+from unittest.mock import patch
 
 CPU = Path(__file__).resolve().parents[1]
 
@@ -55,6 +56,19 @@ Atoms.SpeciesAndCoordinates>
 
 
 class Bootstrap(unittest.TestCase):
+    def test_recomputed_grid_memory_policy_can_disable_numa_replicas(self):
+        m=helper();api=m.module('grid_memory_api',CPU/'tools/input_symmetry.py')
+        q=api.request({'scf.symmetry':'on'})
+        prepared={'selected_group':'D3','SOC_route':'legacy',
+                  'NSOC_environment_additions':{'OPENMX_CPU_REALSPACE_D3':'scf'},
+                  'SOC_environment_additions':{}}
+        values={'scf.eigenvaluesolver':'Cluster','scf.mixing.type':'rmm-diis',
+                'scf.mixing.history':'30'}
+        for mode,expected in [('0','1'),('1','1'),('2','0')]:
+            with patch.dict(m.os.environ,{'OPENMX_CPU_GRID_RECOMPUTE':mode}):
+                env=m.profiles(prepared,q,api,threads=1,values=values,
+                               ranks_single_cpu_pinned=True)['nsoc']
+            self.assertEqual(env['OPENMX_CPU_GRID_NUMA'],expected)
     def test_simple_mixing_does_not_activate_incompatible_memory_paths(self):
         m=helper()
         for text in (INPUT.replace('RMM-DIIS','Simple'), INPUT.replace('scf.Mixing.Type RMM-DIIS\n','')):

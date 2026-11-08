@@ -80,6 +80,18 @@
       "object": "cpu_h_grid_blas3.o",
       "source": "cpu/overrides/nsoc/source/cpu_h_grid_blas3.c",
       "language": "c"
+    },
+    {
+      "object": "cpu_overlap_index.o",
+      "source": "cpu/overrides/nsoc/source/cpu_overlap_index.c",
+      "language": "c",
+      "flags": []
+    },
+    {
+      "object": "cpu_vna_force_stream.o",
+      "source": "cpu/overrides/nsoc/source/cpu_vna_force_stream.c",
+      "language": "c",
+      "flags": []
     }
   ],
   "include_dirs": [

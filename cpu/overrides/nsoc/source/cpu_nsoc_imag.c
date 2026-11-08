@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "openmx_common.h"
+#include "cpu_rhok_scope.h"
 #include "flpq_dm.h"
 #include "cpu_nsoc_owner_openmx.h"
 #include "cpu_nsoc_imag.h"
@@ -19,7 +20,7 @@ int CpuNSOCImagSlots(void)
   if(s && strcmp(s,"0")) {if(strcmp(s,"1")) reject("flag must be 0 or 1"); requested=1;}
   int owner=CpuNSOCOwnerMode();
   int eligible=MD_switch==0 && Solver==2 && SpinP_switch==0 && SO_switch==0 &&
-    Cnt_switch==0 && Mixing_switch==1 && SCF_Control_Temp==0 && LNO_flag==0 &&
+    Cnt_switch==0 && CpuNSocMemoryMixingAccepted() && SCF_Control_Temp==0 && LNO_flag==0 &&
     cal_partial_charge==0 && xanes_calc==0 && CWF_Calc==0 && flag_export_DM==0 &&
     MO_fileout==0 && CDDF_on==0 && LNAO_calc_flag==0 && LNBO_calc_flag==0 &&
     NBO_switch==0 && Dos_fileout==0 && DosGauss_fileout==0 && Hub_U_switch==0 &&

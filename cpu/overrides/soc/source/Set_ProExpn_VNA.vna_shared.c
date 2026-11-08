@@ -26,9 +26,31 @@
 #include "cpu_workspace_bounds.h"
 #include "mpi.h"
 #include "cpu_vna_shared.h"
+#include "cpu_vna_stream.h"
 #include <omp.h>
 
 static double Set_ProExpn(double ****HVNA, Type_DS_VNA *****DS_VNA);
+static double Set_ProExpn_Masked(double ****HVNA,Type_DS_VNA *****DS_VNA,int mode,CpuVnaPairGradient consume,void *context);
+double CpuVnaDeferred_Complete(float *****view){
+ if(!CpuVnaShared_Deferred())return 0.;
+ double start=MPI_Wtime();int restore=CpuVnaShared_Raw0Dropped();
+ /* Mode3 rebuilds the discarded values alongside the already-required native
+  * derivatives. It skips HVNA assembly and the initial epoch0 publication. */
+ Set_ProExpn_Masked(NULL,view,restore?3:2,NULL,NULL);
+ if(restore)CpuVnaShared_RestoreRaw0();
+ CpuVnaShared_DerivativesReady();return MPI_Wtime()-start;
+}
+double CpuVnaDeferred_Stream(float *****view,CpuVnaPairGradient consume,void *context){
+ if(!CpuVnaShared_Deferred()||!consume){fprintf(stderr,"CPU_VNA_STREAM invalid deferred/callback contract\n");MPI_Abort(mpi_comm_level1,96);abort();}
+ double start=MPI_Wtime();
+ if(CpuVnaShared_Raw0Dropped()){
+  Set_ProExpn_Masked(NULL,view,4,NULL,NULL);CpuVnaShared_RestoreRaw0();
+ }
+ Set_ProExpn_Masked(NULL,view,5,consume,context);
+ /* Global derivative storage is intentionally absent. Do not advertise the
+  * native weighted-gradient epoch as available; the caller skips Force4B. */
+ return MPI_Wtime()-start;
+}
 static double Set_VNA2(double ****HVNA, double *****HVNA2);
 static double Set_VNA3(double *****HVNA3);
 
@@ -55,6 +77,10 @@ double Set_ProExpn_VNA(double ****HVNA, double *****HVNA2, Type_DS_VNA *****DS_V
 
   time3 = Set_VNA3(HVNA3);
 
+  if(CpuVnaShared_Deferred()&&(!CpuVnaForceStream_Mode||CpuVnaForceStream_Mode()!=1)){
+    double start=MPI_Wtime();CpuVnaShared_DropRaw0();time1+=MPI_Wtime()-start;
+  }
+
   if (measure_time){
     printf("Time Set_ProExpn=%7.3f Set_VNA2=%7.3f Set_VNA3=%7.3f\n",time1,time2,time3);
   }
@@ -64,8 +90,13 @@ double Set_ProExpn_VNA(double ****HVNA, double *****HVNA2, Type_DS_VNA *****DS_V
 
 
 
-double Set_ProExpn(double ****HVNA, Type_DS_VNA *****DS_VNA)
+double Set_ProExpn(double ****HVNA, Type_DS_VNA *****DS_VNA){return Set_ProExpn_Masked(HVNA,DS_VNA,CpuVnaShared_Deferred()?1:0,NULL,NULL);}
+
+static double Set_ProExpn_Masked(double ****HVNA,Type_DS_VNA *****DS_VNA,int mode,CpuVnaPairGradient consume,void *context)
 {
+  const int values=mode!=2&&mode!=5,gradients=mode!=1&&mode!=4;
+  int max_stream_orbitals=1,num_projectors=(List_YOUSO[35]+1)*(List_YOUSO[35]+1)*List_YOUSO[34];
+  if(mode==5)for(int s=0;s<SpeciesNum;s++)if(max_stream_orbitals<Spe_Total_NO[s])max_stream_orbitals=Spe_Total_NO[s];
   /****************************************************
    evaluate matrix elements of neutral atom potential
    in the KB or Blochl separable form in momentum space.
@@ -255,7 +286,7 @@ double Set_ProExpn(double ****HVNA, Type_DS_VNA *****DS_VNA)
     }
   }
 
-#pragma omp parallel shared(time_per_atom,DS_VNA,Comp2Real,Spe_VNA_Bessel,Bessel_Pro01,Bessel_Pro00,GL_NormK,List_YOUSO,VNA_List,Num_RVNA,Spe_Num_Basis,Spe_MaxL_Basis,PAO_Nkmax,atv,Gxyz,ncn,natn,Spe_Atom_Cut1,WhatSpecies,M2G,OneD2h_AN,OneD2Mc_AN,OneD_Nloop,time1,time2,time3) 
+#pragma omp parallel shared(time_per_atom,DS_VNA,Comp2Real,Spe_VNA_Bessel,Bessel_Pro01,Bessel_Pro00,GL_NormK,List_YOUSO,VNA_List,Num_RVNA,Spe_Num_Basis,Spe_MaxL_Basis,PAO_Nkmax,atv,Gxyz,ncn,natn,Spe_Atom_Cut1,WhatSpecies,M2G,OneD2h_AN,OneD2Mc_AN,OneD_Nloop,time1,time2,time3,values,gradients,mode,consume,context,max_stream_orbitals,num_projectors) 
 
   {
     int i,j,k,l,m,num0,num1;
@@ -293,6 +324,13 @@ double Set_ProExpn(double ****HVNA, Type_DS_VNA *****DS_VNA)
     dcomplex **CmatNLr;
     dcomplex **CmatNLt;
     dcomplex **CmatNLp;
+    float *stream_gradient=NULL;
+    Type_DS_VNA **stream_saved=NULL;
+    if(mode==5){
+      stream_gradient=(float*)malloc((size_t)3*max_stream_orbitals*num_projectors*sizeof(float));
+      stream_saved=(Type_DS_VNA**)malloc((size_t)3*max_stream_orbitals*sizeof(*stream_saved));
+      if(!stream_gradient||!stream_saved){fprintf(stderr,"CPU_VNA_STREAM pair allocation failed\n");MPI_Abort(mpi_comm_level1,96);abort();}
+    }
 
     /* allocation of arrays */
 
@@ -413,6 +451,13 @@ double Set_ProExpn(double ****HVNA, Type_DS_VNA *****DS_VNA)
       Gc_AN = M2G[Mc_AN];
       Cwan = WhatSpecies[Gc_AN];
       rcutA = Spe_Atom_Cut1[Cwan];
+      if(mode==5){
+        int ni=Spe_Total_NO[Cwan];size_t plane=(size_t)ni*num_projectors;
+        for(int axis=0;axis<3;axis++)for(int orb=0;orb<ni;orb++){
+          stream_saved[axis*max_stream_orbitals+orb]=DS_VNA[axis+1][Mc_AN][h_AN][orb];
+          DS_VNA[axis+1][Mc_AN][h_AN][orb]=stream_gradient+(size_t)axis*plane+(size_t)orb*num_projectors;
+        }
+      }
 
       /* set data on h_AN */
 
@@ -461,10 +506,10 @@ double Set_ProExpn(double ****HVNA, Type_DS_VNA *****DS_VNA)
             L1 = VNA_List[L];
             for (M0=-L0; M0<=L0; M0++){
 	      for (M1=-L1; M1<=L1; M1++){
-		TmpNL[L0][Mul0][L0+M0][L][L1+M1] = Complex(0.0,0.0); 
-		TmpNLr[L0][Mul0][L0+M0][L][L1+M1] = Complex(0.0,0.0); 
+		if(values)TmpNL[L0][Mul0][L0+M0][L][L1+M1] = Complex(0.0,0.0); 
+		if(gradients){TmpNLr[L0][Mul0][L0+M0][L][L1+M1] = Complex(0.0,0.0); 
 		TmpNLt[L0][Mul0][L0+M0][L][L1+M1] = Complex(0.0,0.0); 
-		TmpNLp[L0][Mul0][L0+M0][L][L1+M1] = Complex(0.0,0.0); 
+		TmpNLp[L0][Mul0][L0+M0][L][L1+M1] = Complex(0.0,0.0);} 
 	      }
 	    }
 	  } 
@@ -516,7 +561,7 @@ double Set_ProExpn(double ****HVNA, Type_DS_VNA *****DS_VNA)
 
             for (i=0; i<GL_Mesh; i++){
               Bes00[i] = Bessel_Pro00[Cwan][L0][Mul0][i]*SphB[LL][i]; 
-              Bes01[i] = Bessel_Pro01[Cwan][L0][Mul0][i]*SphBp[LL][i]; 
+              if(gradients)Bes01[i] = Bessel_Pro01[Cwan][L0][Mul0][i]*SphBp[LL][i]; 
             }
 
             L = 0;
@@ -528,7 +573,7 @@ double Set_ProExpn(double ****HVNA, Type_DS_VNA *****DS_VNA)
 
                 for (i=0; i<GL_Mesh; i++){
                   tmp1 += Bes00[i]*Spe_VNA_Bessel[Hwan][L1][Mul1][i];
-                  tmp2 += Bes01[i]*Spe_VNA_Bessel[Hwan][L1][Mul1][i];
+                  if(gradients)tmp2 += Bes01[i]*Spe_VNA_Bessel[Hwan][L1][Mul1][i];
 		}
 
 		SumNL0[L0][Mul0][L]  = tmp1;
@@ -603,12 +648,12 @@ double Set_ProExpn(double ****HVNA, Type_DS_VNA *****DS_VNA)
 
 		      /* S */ 
 
-		      TmpNL[L0][Mul0][L0+M0][L][L1+M1].r += CY1.r*tmp2;
-		      TmpNL[L0][Mul0][L0+M0][L][L1+M1].i += CY1.i*tmp2;
+		      if(values){TmpNL[L0][Mul0][L0+M0][L][L1+M1].r += CY1.r*tmp2;
+		      TmpNL[L0][Mul0][L0+M0][L][L1+M1].i += CY1.i*tmp2;}
 
 		      /* dS/dr */ 
 
-		      tmp0 = gant*SumNLr0[L0][Mul0][L];
+		      if(gradients){tmp0 = gant*SumNLr0[L0][Mul0][L];
 
 		      TmpNLr[L0][Mul0][L0+M0][L][L1+M1].r += CY1.r*tmp0;
 		      TmpNLr[L0][Mul0][L0+M0][L][L1+M1].i += CY1.i*tmp0;
@@ -621,7 +666,7 @@ double Set_ProExpn(double ****HVNA, Type_DS_VNA *****DS_VNA)
 		      /* dS/dp */ 
 
 		      TmpNLp[L0][Mul0][L0+M0][L][L1+M1].r += CYp1.r*tmp2;
-		      TmpNLp[L0][Mul0][L0+M0][L][L1+M1].i += CYp1.i*tmp2;
+		      TmpNLp[L0][Mul0][L0+M0][L][L1+M1].i += CYp1.i*tmp2;}
 
 		    }
 		  }
@@ -667,13 +712,13 @@ double Set_ProExpn(double ****HVNA, Type_DS_VNA *****DS_VNA)
 
 		  /* S */
 
-		  Ctmp0 = TmpNL[L0][Mul0][L0+k][L][L1+M1];
+		  if(values){Ctmp0 = TmpNL[L0][Mul0][L0+k][L][L1+M1];
 		  Ctmp2 = Cmul(Ctmp1,Ctmp0);
-		  CsumNL0 = Cadd(CsumNL0,Ctmp2);
+		  CsumNL0 = Cadd(CsumNL0,Ctmp2);}
 
 		  /* dS/dr */
 
-		  Ctmp0 = TmpNLr[L0][Mul0][L0+k][L][L1+M1];
+		  if(gradients){Ctmp0 = TmpNLr[L0][Mul0][L0+k][L][L1+M1];
 		  Ctmp2 = Cmul(Ctmp1,Ctmp0);
 		  CsumNLr = Cadd(CsumNLr,Ctmp2);
 
@@ -687,7 +732,7 @@ double Set_ProExpn(double ****HVNA, Type_DS_VNA *****DS_VNA)
 
 		  Ctmp0 = TmpNLp[L0][Mul0][L0+k][L][L1+M1];
 		  Ctmp2 = Cmul(Ctmp1,Ctmp0);
-		  CsumNLp = Cadd(CsumNLp,Ctmp2);
+		  CsumNLp = Cadd(CsumNLp,Ctmp2);}
 
 		}
 
@@ -711,15 +756,15 @@ double Set_ProExpn(double ****HVNA, Type_DS_VNA *****DS_VNA)
 
 		  /* S */ 
 
-		  CsumNL0.r += (CmatNL0[L0+M0][L1+k].r*Comp2Real[L1][L1+M1][L1+k].r
+		  if(values){CsumNL0.r += (CmatNL0[L0+M0][L1+k].r*Comp2Real[L1][L1+M1][L1+k].r
 				- CmatNL0[L0+M0][L1+k].i*Comp2Real[L1][L1+M1][L1+k].i);
 
 		  CsumNL0.i += (CmatNL0[L0+M0][L1+k].r*Comp2Real[L1][L1+M1][L1+k].i
-				+ CmatNL0[L0+M0][L1+k].i*Comp2Real[L1][L1+M1][L1+k].r);
+				+ CmatNL0[L0+M0][L1+k].i*Comp2Real[L1][L1+M1][L1+k].r);}
 
 		  /* dS/dr */ 
 
-		  CsumNLr.r += (CmatNLr[L0+M0][L1+k].r*Comp2Real[L1][L1+M1][L1+k].r
+		  if(gradients){CsumNLr.r += (CmatNLr[L0+M0][L1+k].r*Comp2Real[L1][L1+M1][L1+k].r
 				- CmatNLr[L0+M0][L1+k].i*Comp2Real[L1][L1+M1][L1+k].i);
 
 		  CsumNLr.i += (CmatNLr[L0+M0][L1+k].r*Comp2Real[L1][L1+M1][L1+k].i
@@ -739,13 +784,13 @@ double Set_ProExpn(double ****HVNA, Type_DS_VNA *****DS_VNA)
 				- CmatNLp[L0+M0][L1+k].i*Comp2Real[L1][L1+M1][L1+k].i);
 
 		  CsumNLp.i += (CmatNLp[L0+M0][L1+k].r*Comp2Real[L1][L1+M1][L1+k].i
-				+ CmatNLp[L0+M0][L1+k].i*Comp2Real[L1][L1+M1][L1+k].r);
+				+ CmatNLp[L0+M0][L1+k].i*Comp2Real[L1][L1+M1][L1+k].r);}
 
 		}
 
-		DS_VNA[0][Mc_AN][h_AN][num0+L0+M0][num1+L1+M1] = 8.0*(Type_DS_VNA)CsumNL0.r;
+		if(values)DS_VNA[0][Mc_AN][h_AN][num0+L0+M0][num1+L1+M1] = 8.0*(Type_DS_VNA)CsumNL0.r;
 
-		if (h_AN!=0){
+		if(gradients){if (h_AN!=0){
 
 		  if (fabs(siT)<10e-14){
 
@@ -778,7 +823,7 @@ double Set_ProExpn(double ****HVNA, Type_DS_VNA *****DS_VNA)
 		else{
 		  DS_VNA[1][Mc_AN][h_AN][num0+L0+M0][num1+L1+M1] = 0.0;
 		  DS_VNA[2][Mc_AN][h_AN][num0+L0+M0][num1+L1+M1] = 0.0;
-		  DS_VNA[3][Mc_AN][h_AN][num0+L0+M0][num1+L1+M1] = 0.0;
+		  DS_VNA[3][Mc_AN][h_AN][num0+L0+M0][num1+L1+M1] = 0.0;}
 		} 
 
 	      }
@@ -796,12 +841,17 @@ double Set_ProExpn(double ****HVNA, Type_DS_VNA *****DS_VNA)
 	time3 += etime - stime;
       }
 
+      if(mode==5){
+        int ni=Spe_Total_NO[Cwan];consume(context,Mc_AN,h_AN,stream_gradient,ni,num_projectors);
+        for(int axis=0;axis<3;axis++)for(int orb=0;orb<ni;orb++)DS_VNA[axis+1][Mc_AN][h_AN][orb]=stream_saved[axis*max_stream_orbitals+orb];
+      }
       dtime(&Etime_atom);
       time_per_atom[Gc_AN] += Etime_atom - Stime_atom;
 
     } /* Mc_AN */
 
     /* freeing of arrays */
+    free(stream_gradient);free(stream_saved);
 
     for (i=0; i<(2*(List_YOUSO[25]+1)+1); i++){
       free(CmatNL0[i]);
@@ -911,6 +961,7 @@ double Set_ProExpn(double ****HVNA, Type_DS_VNA *****DS_VNA)
   *******************************************************
   *******************************************************/
 
+  if(mode>=2)goto projector_cleanup;
   if(CpuVnaShared_Active())CpuVnaShared_Publish(0);else MPI_Barrier(mpi_comm_level1);
   if (measure_time) dtime(&stime);
 
@@ -1360,6 +1411,7 @@ size2 = Rcv_DS_VNA_Size[IDR];
                    freeing of arrays:
   ****************************************************/
 
+projector_cleanup:
   free(Snd_DS_VNA_Size);
   free(Rcv_DS_VNA_Size);
 

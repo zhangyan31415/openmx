@@ -64,25 +64,60 @@ def bloch_matrices(data, k, channel):
     import numpy as np
     import scipy.sparse as sp
     n=data['n'];v=data['values'];phase=np.exp(2j*np.pi*(data['R']@k))
-    def matrix(values):
-        a=sp.coo_matrix((values*phase,(data['rows'],data['cols'])),shape=(n,n)).tocsr()
+    rows=data['rows'];cols=data['cols'];keep=rows>=cols
+    lower_rows=rows[keep];lower_cols=cols[keep]
+    lower_phase=phase[keep]
+    def matrix(values,hermitian=True):
+        if hermitian:
+            # Sum periodic duplicates once in the lower half, then mirror that
+            # sum so conjugate entries cannot acquire different roundoff.
+            lower=sp.coo_matrix((values[keep]*lower_phase,(lower_rows,lower_cols)),shape=(n,n)).tocsr()
+            lower.setdiag(.5*lower.diagonal().real)
+            a=(lower+lower.getH()).tocsr()
+        else:
+            # A spin-up/down off-diagonal block is not individually Hermitian.
+            a=sp.coo_matrix((values*phase,(rows,cols)),shape=(n,n)).tocsr()
         a.sum_duplicates();a.eliminate_zeros();return a
     S=matrix(v[-1])
     if data['spin']!=3:return matrix(v[channel]),S
-    up=matrix(v[0]+1j*v[4]);down=matrix(v[1]+1j*v[5]);ud=matrix(v[2]+1j*(v[3]+v[6]))
+    up=matrix(v[0]+1j*v[4]);down=matrix(v[1]+1j*v[5]);ud=matrix(v[2]+1j*(v[3]+v[6]),hermitian=False)
     return sp.bmat([[up,ud],[ud.getH(),down]],format='csr'),sp.block_diag((S,S),format='csr')
 
 
-def native_hermitian(matrix):
+def hermiticity_defect(matrix):
     import numpy as np
-    import scipy.sparse as sp
     from scipy.sparse.linalg import norm
     if not np.isfinite(matrix.data).all():raise ValueError('nonfinite Bloch matrix')
     defect=float(norm(matrix-matrix.getH())/max(float(norm(matrix)),1e-300))
     if not np.isfinite(defect) or defect>5e-7:raise ValueError('native Bloch matrix is not Hermitian: '+str(defect))
+    return defect
+
+
+def native_hermitian(matrix):
+    """Explicit legacy lower-triangle conversion, not a default solver step."""
+    import scipy.sparse as sp
+    defect=hermiticity_defect(matrix)
     # The original zheevx UPLO=L reads the lower triangle, including real diag.
     lower=sp.tril(matrix,k=-1,format='csr')
     return (lower+lower.getH()+sp.diags(matrix.diagonal().real)).tocsr(),defect
+
+
+def csr_pair(H,S):
+    """Keep canonical caller-owned CSR storage; convert only other formats."""
+    H=H.tocsr(copy=False);S=S.tocsr(copy=False)
+    if len(H.shape)!=2 or H.shape[0]!=H.shape[1] or H.shape!=S.shape or H.shape[0]<1:
+        raise ValueError('incompatible native H/S dimensions')
+    return H,S
+
+
+def petsc_csr_buffers(matrix,int_type,scalar_type):
+    """Borrow compatible contiguous arrays; convert only incompatible dtypes."""
+    import numpy as np
+    capacity=np.iinfo(int_type).max
+    if matrix.nnz>capacity or max(matrix.shape)>capacity:raise ValueError('sparse index capacity exceeded')
+    return (np.asarray(matrix.indptr,dtype=int_type,order='C'),
+            np.asarray(matrix.indices,dtype=int_type,order='C'),
+            np.asarray(matrix.data,dtype=scalar_type,order='C'))
 
 
 def libraries():
@@ -95,13 +130,35 @@ def libraries():
     return PETSc,SLEPc,factor
 
 
-def solve_dense(H,S,target,count,driver='gvd'):
+def check_overlap(S):
+    """Check sparse input without a separate overlap eigenproblem.
+
+    GHEP requires positive-definite S as an input contract. These inexpensive
+    necessary checks do not certify its global spectrum; report that explicitly.
+    The solve also checks every returned generalized eigenpair and S-orthogonality.
+    """
+    import numpy as np
+    start=time.monotonic()
+    if len(S.shape)!=2 or S.shape[0]!=S.shape[1] or S.shape[0]<1:
+        raise ValueError('invalid overlap dimensions')
+    if not np.isfinite(S.data).all():raise ValueError('nonfinite overlap')
+    diagonal=np.asarray(S.diagonal())
+    if np.any(diagonal.real<=1e-9):raise ValueError('overlap requires native regularization')
+    if np.any(diagonal.imag!=0):raise ValueError('overlap diagonal is not real')
+    return dict(overlap_lower_bound=None,overlap_min=None,
+                overlap_diagonal_min=float(diagonal.real.min()),
+                overlap_positive_definite_certified=False,
+                overlap_check_method='sparse input checks',overlap_check_seconds=time.monotonic()-start)
+
+
+def solve_dense(H,S,target,count,driver='gvd',audit=False):
     """Full generalized spectrum, with no eigenvectors or identity-S shortcut."""
     import numpy as np
     import scipy.linalg as la
-    from scipy.sparse.linalg import eigsh
     if driver not in ('gvd','evr'):raise ValueError('unsupported dense band driver')
-    H,hdef=native_hermitian(H);S,sdef=native_hermitian(S);n=H.shape[0]
+    H,S=csr_pair(H,S);n=H.shape[0]
+    if not np.isfinite(H.data).all() or not np.isfinite(S.data).all():raise ValueError('nonfinite Bloch matrix')
+    hdef=hermiticity_defect(H) if audit else None;sdef=hermiticity_defect(S) if audit else None
     if count<0 or count>n:raise ValueError('Band.NumBands exceeds matrix dimension')
     check_start=time.monotonic();B=S.toarray(order='F')
     try:L=la.cholesky(B,lower=True,check_finite=False)
@@ -113,7 +170,7 @@ def solve_dense(H,S,target,count,driver='gvd'):
     bound=1./norm2;minimum=None
     # lambda_min(S) >= 1/||L^-1||_F^2. Only ambiguous bases need an extremal solve.
     if bound<=1e-9:
-        minimum=float(la.eigvalsh(B,subset_by_index=(0,0),check_finite=False)[0]) if n<=2 else float(eigsh(S,k=1,which='SA',return_eigenvectors=False,tol=1e-7)[0])
+        minimum=float(la.eigvalsh(B,subset_by_index=(0,0),check_finite=False)[0])
         if not np.isfinite(minimum) or minimum<=1e-9:raise ValueError('overlap requires native regularization')
     check_seconds=time.monotonic()-check_start;start=time.monotonic();A=H.toarray(order='F')
     if driver=='gvd':
@@ -129,54 +186,76 @@ def solve_dense(H,S,target,count,driver='gvd'):
     return selected,dict(solver='LAPACK '+driver.upper(),matrix_dimension=n,requested=len(selected),
         spectrum_computed=n,full_spectrum=True,eigenvectors_computed=False,overlap_lower_bound=bound,
         overlap_min=minimum,overlap_certificate='lambda_min(S)>=1/||L^-1||_F^2',overlap_check_seconds=check_seconds,
-        solve_seconds=seconds,H_hermiticity=hdef,S_hermiticity=sdef,S_diagonal_shift=0.,native_triangle='lower',
+        solve_seconds=seconds,H_hermiticity=hdef,S_hermiticity=sdef,matrix_hermiticity_checked=bool(audit),
+        solve_time_matrix_reconstruction=False,S_diagonal_shift=0.,native_triangle='lower',
         eigenpair_audit='not computed in eigenvalues-only mode; validated by independent spectrum comparisons')
 
 
-def solve(H,S,target,count,tolerance=1e-9):
+def solve(H,S,target,count,tolerance=1e-9,audit=False):
     import numpy as np
-    from scipy.sparse.linalg import eigsh
     PETSc,SLEPc,factor=libraries()
-    H,hdef=native_hermitian(H);S,sdef=native_hermitian(S);n=H.shape[0]
+    prepare_start=time.monotonic();H,S=csr_pair(H,S);n=H.shape[0]
+    if not np.isfinite(H.data).all():raise ValueError('nonfinite Bloch matrix')
+    hdef=hermiticity_defect(H) if audit else None;sdef=hermiticity_defect(S) if audit else None
     if not 0<count<n-1:raise ValueError('Band.NumBands must be smaller than matrix dimension minus one')
-    start=time.monotonic()
-    # Reject bases for which stock OpenMX would invoke its overlap penalty.
-    # This is one extremal overlap eigenvalue, not a full S eigendecomposition.
-    smin=float(eigsh(S,k=1,which='SA',return_eigenvectors=False,tol=1e-7)[0])
-    if not np.isfinite(smin) or smin<=1e-9:raise ValueError('overlap requires native regularization; targeted bands reject this basis')
-    overlap_seconds=time.monotonic()-start
-    def petsc_matrix(a):
-        if a.nnz>np.iinfo(PETSc.IntType).max:raise ValueError('sparse index capacity exceeded')
-        m=PETSc.Mat().createAIJ(size=a.shape,csr=(a.indptr.astype(PETSc.IntType),a.indices.astype(PETSc.IntType),a.data.astype(PETSc.ScalarType)),comm=PETSc.COMM_SELF)
+    overlap=check_overlap(S)
+    prepare_seconds=time.monotonic()-prepare_start
+    csr_keepalive=[];shared={}
+    def petsc_matrix(a,name):
+        buffers=petsc_csr_buffers(a,PETSc.IntType,PETSc.ScalarType);csr_keepalive.append(buffers)
+        shared[name]=[bool(np.shares_memory(x,y)) for x,y in zip(buffers,(a.indptr,a.indices,a.data))]
+        m=PETSc.Mat().createAIJ(size=a.shape,csr=buffers,comm=PETSc.COMM_SELF)
         m.assemble();m.setOption(PETSc.Mat.Option.HERMITIAN,True);return m
     A=B=eps=vr=vi=None
     try:
-        A=petsc_matrix(H);B=petsc_matrix(S);B.setOption(PETSc.Mat.Option.SPD,True)
+        setup_start=time.monotonic()
+        A=petsc_matrix(H,'H');B=petsc_matrix(S,'S');B.setOption(PETSc.Mat.Option.SPD,True)
         eps=SLEPc.EPS().create(PETSc.COMM_SELF);eps.setOperators(A,B);eps.setProblemType(SLEPc.EPS.ProblemType.GHEP)
-        eps.setType('krylovschur');wanted=min(n-2,count+max(4,count//4))
-        eps.setDimensions(wanted,min(n,max(2*wanted+12,40)))
+        # Request exactly Band.NumBands states; leave the Krylov subspace size
+        # to SLEPc rather than silently padding the requested spectrum.
+        eps.setType('krylovschur');wanted=count
+        # A wider working subspace retains near-degenerate partners without
+        # increasing the requested or returned eigenstate count.
+        eps.setDimensions(wanted,min(n,max(4*wanted,20)))
         eps.setWhichEigenpairs(SLEPc.EPS.Which.TARGET_REAL);eps.setTarget(target)
         st=eps.getST();st.setType('sinvert');st.setShift(target)
         ksp=st.getKSP();ksp.setType('preonly');pc=ksp.getPC();pc.setType('lu');pc.setFactorSolverType(factor)
         eps.setTolerances(tolerance,10000)
-        solve_start=time.monotonic();eps.solve();solve_seconds=time.monotonic()-solve_start
+        setup_seconds=time.monotonic()-setup_start
+        solve_start=time.monotonic()
+        if factor == 'mumps':
+            # Keep tree-parallel analysis/factorization, but use the conventional
+            # solve path: the installed MUMPS tree-parallel backsolve can return
+            # wrong vectors without an error status on complex SOC matrices.
+            eps.setUp()
+            ksp.setUp()
+            pc.getFactorMatrix().setMumpsIcntl(48,0)
+        eps.solve();solve_seconds=time.monotonic()-solve_start
         converged=eps.getConverged()
+        ncv=int(eps.getDimensions()[1])
         if eps.getConvergedReason()<=0 or converged<count:raise ValueError('SLEPc did not converge all requested bands')
         values=np.array([complex(eps.getEigenvalue(i)) for i in range(converged)])
         if not np.isfinite(values).all() or max(abs(values.imag))>1e-10:raise ValueError('nonreal/nonfinite eigenvalues')
-        selected=nearest_indices(values.real,target,count);vectors=[];residual=0.
-        vr=A.createVecRight();vi=A.createVecRight()
-        for index in selected:
-            eps.getEigenpair(int(index),vr,vi);x=vr.getArray(readonly=True).copy();e=values[index].real
-            hx=H@x;sx=S@x;den=np.linalg.norm(hx)+abs(e)*np.linalg.norm(sx)
-            residual=max(residual,float(np.linalg.norm(hx-e*sx)/max(den,1e-300)))
-            vectors.append(x)
-        C=np.column_stack(vectors);orth=float(abs(C.conj().T@(S@C)-np.eye(count)).max())
-        if not np.isfinite(residual+orth) or residual>1e-8 or orth>1e-8:raise ValueError(f'generalized eigenpair audit failed: residual={residual} Sorth={orth}')
-        return values.real[selected],dict(residual=residual,Sorth=orth,overlap_min=smin,H_hermiticity=hdef,S_hermiticity=sdef,
+        selected=nearest_indices(values.real,target,count);residual=orth=None;audit_seconds=0.
+        if audit:
+            audit_start=time.monotonic();vectors=[];residual=0.
+            vr=A.createVecRight();vi=A.createVecRight()
+            for index in selected:
+                eps.getEigenpair(int(index),vr,vi);x=vr.getArray(readonly=True).copy();e=values[index].real
+                hx=H@x;sx=S@x;den=np.linalg.norm(hx)+abs(e)*np.linalg.norm(sx)
+                residual=max(residual,float(np.linalg.norm(hx-e*sx)/max(den,1e-300)))
+                vectors.append(x)
+            C=np.column_stack(vectors);orth=float(abs(C.conj().T@(S@C)-np.eye(count)).max())
+            if not np.isfinite(residual+orth) or residual>1e-8 or orth>1e-8:raise ValueError(f'generalized eigenpair audit failed: residual={residual} Sorth={orth}')
+            audit_seconds=time.monotonic()-audit_start
+        return values.real[selected],dict(residual=residual,Sorth=orth,**overlap,H_hermiticity=hdef,S_hermiticity=sdef,
+            matrix_hermiticity_checked=bool(audit),solve_time_matrix_reconstruction=False,
+            matrix_prepare_seconds=prepare_seconds,petsc_setup_seconds=setup_seconds,csr_python_buffers_shared=shared,
+            eigenpair_audit_enabled=bool(audit),eigenvectors_extracted=bool(audit),eigenpair_audit_seconds=audit_seconds,
             solver='SLEPc KrylovSchur shift-invert',factor=factor,PETSc=PETSc.Sys.getVersion(),SLEPc=SLEPc.Sys.getVersion(),
-            matrix_dimension=n,requested=count,converged=converged,overlap_check_seconds=overlap_seconds,solve_seconds=solve_seconds,
-            S_diagonal_shift=0.,native_triangle='lower',full_spectrum=False)
+            matrix_dimension=n,requested=count,search_nev=wanted,search_ncv=ncv,search_ncv_policy='min(N,max(4*nev,20))',
+            converged=converged,solve_seconds=solve_seconds,worker_MKL_DYNAMIC=os.environ.get('MKL_DYNAMIC'),
+            S_diagonal_shift=0.,native_triangle='assembled Hermitian CSR; no solve-time rewrite',full_spectrum=False)
     finally:
         for value in (vi,vr,eps,B,A):
             if value is not None:value.destroy()
@@ -190,9 +269,13 @@ def main():
     parser.add_argument('--workers',type=int,default=1);parser.add_argument('--parts',type=int,default=1)
     parser.add_argument('--count',type=int);parser.add_argument('--target-ha',type=float)
     parser.add_argument('--threads',type=int,default=1)
+    parser.add_argument('--audit',action='store_true',default=os.environ.get('OPENMX_BAND_AUDIT','').strip().lower() in ('1','on','true','yes'),
+                        help='extract eigenvectors and check generalized residuals and S-orthogonality (default off)')
     args=parser.parse_args()
     for key in ('OMP_NUM_THREADS','MKL_NUM_THREADS','OPENBLAS_NUM_THREADS','NUMEXPR_NUM_THREADS'):
         os.environ[key]=str(args.threads)
+    # Match the isolated native worker even when invoked directly.
+    os.environ['MKL_DYNAMIC']='TRUE'
     if args.check:
         if args.solver=='slepc':libraries()
         else:
@@ -211,8 +294,8 @@ def main():
         for index in range(args.rank,len(points),args.workers):
             for channel in range(channels):
                 before=time.monotonic();H,S=bloch_matrices(data,points[index],channel)
-                values,audit=(solve(H,S,args.target_ha,args.count) if args.solver=='slepc' else
-                              solve_dense(H,S,args.target_ha,args.count,args.solver))
+                values,audit=(solve(H,S,args.target_ha,args.count,audit=args.audit) if args.solver=='slepc' else
+                              solve_dense(H,S,args.target_ha,args.count,args.solver,audit=args.audit))
                 out.write(struct.pack('<2i',index,channel));out.write(values.astype('<f8').tobytes())
                 audits.append(dict(kpoint=index,channel=channel,k=points[index].tolist(),total_seconds=time.monotonic()-before,**audit))
     temporary.replace(final)

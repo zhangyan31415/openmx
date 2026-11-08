@@ -45,3 +45,4 @@ int CfsSelectedLeft(CfsSelectedPlan*p,const double*A,int lda,double*W,int ldw,co
  }
  if(t)*t=tt;return 0;
 }
+#include "selected_native.inc"

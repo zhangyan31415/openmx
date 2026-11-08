@@ -2,16 +2,29 @@
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+#include <math.h>
 #include "openmx_common.h"
+#include "cpu_rhok_scope.h"
 #include "flpq_dm.h"
 #include "cpu_nsoc_owner.h"
 #include "cpu_nsoc_owner_openmx.h"
 #include "cpu_hassembly_workspace.h"
+#include "cpu_nsoc_sym.h"
 static CpuNOPlan*plan=NULL;static int cached_n=0,reported=0;
 static void die(const char*why){fprintf(stderr,"CPU_NSOC_OWNER_DM_REJECT %s\n",why);MPI_Abort(mpi_comm_level1,98);abort();}
+static int owner_compute(CpuNOPlan*p,int n,int first,int last,const double*coeff,const double*f,const double*energy){
+ int nk=last>=first?last-first+1:0;CpuNORowProvider provider;
+ int supplied=CpuNSym_StateProvider(n,first,last,&provider);
+ int rc=supplied?CpuNOComputeProvided(p,nk,&provider,f,energy):CpuNOCompute(p,nk,coeff,f,energy);
+ double local_error=0.;if(CpuNSym_StateProviderAudit(&local_error)){
+  double error;MPI_Allreduce(&local_error,&error,1,MPI_DOUBLE,MPI_MAX,mpi_comm_level1);
+  int rank;MPI_Comm_rank(mpi_comm_level1,&rank);if(!rank){printf("CPU_NSOC_STATE_PROVIDER_AUDIT max_abs=%.17g tolerance=1e-12 reference=full_native_AO_coefficients\n",error);fflush(stdout);}
+  if(!isfinite(error)||error>1e-12)die("state row provider differs from original native AO coefficients");
+ }return rc;
+}
 int CpuNSOCOwnerMode(void){const char*s=getenv("OPENMX_CPU_NSOC_OWNER_DM");if(!s||!strcmp(s,"0"))return 0;if(!strcmp(s,"1"))return 1;die("flag must be0 or1");return 0;}
 void CpuNSOCOwnerValidate(int md_iter){
- int local[2]={CpuNSOCOwnerMode(),MD_switch==0&&md_iter==1&&Solver==2&&SpinP_switch==0&&SO_switch==0&&Cnt_switch==0&&Mixing_switch==1&&SCF_Control_Temp==0&&LNO_flag==0&&cal_partial_charge==0&&xanes_calc==0&&CWF_Calc==0&&flag_export_DM==0&&MO_fileout==0&&CDDF_on==0&&LNAO_calc_flag==0&&LNBO_calc_flag==0&&NBO_switch==0&&Dos_fileout==0&&DosGauss_fileout==0&&Hub_U_switch==0&&core_hole_state_flag==0},lo[2],hi[2];
+ int local[2]={CpuNSOCOwnerMode(),MD_switch==0&&md_iter==1&&Solver==2&&SpinP_switch==0&&SO_switch==0&&Cnt_switch==0&&CpuNSocMemoryMixingAccepted()&&SCF_Control_Temp==0&&LNO_flag==0&&cal_partial_charge==0&&xanes_calc==0&&CWF_Calc==0&&flag_export_DM==0&&MO_fileout==0&&CDDF_on==0&&LNAO_calc_flag==0&&LNBO_calc_flag==0&&NBO_switch==0&&Dos_fileout==0&&DosGauss_fileout==0&&Hub_U_switch==0&&core_hole_state_flag==0},lo[2],hi[2];
  MPI_Allreduce(local,lo,2,MPI_INT,MPI_MIN,mpi_comm_level1);MPI_Allreduce(local,hi,2,MPI_INT,MPI_MAX,mpi_comm_level1);
  if(lo[0]!=hi[0]||(hi[0]&&!lo[1]))die("requires agreed flag, fixed spin-off NSOC Cluster DM-mixing, no contraction/LNO/partial-charge/CWF/MO/DOS/DMmu/XANES/Hubbard/corehole");
 }
@@ -33,7 +46,7 @@ static double CpuNSOCOwnerDensityLegacy(int n,int first,int last,int global_entr
  if(n!=cached_n)die("basis changed without owner plan reset");
  int nk=last-first+1;if(nk<0)nk=0;double*f=malloc((size_t)(nk?nk:1)*sizeof(double));if(!f)die("occupation allocation");
  int po=0;for(int kk=0;kk<nk;kk++){int k=first+kk;double x=(eigenvalues[k]-ChemP)*Beta;if(x<=-60.)x=-60.;if(x>=60.)x=60.;f[kk]=FermiFunc(x,0,k,&po,&x);}
- if(CpuNOCompute(plan,nk,coeff,f,eigenvalues+first))die("owner density evaluation failed");free(f);
+ if(owner_compute(plan,n,first,last,coeff,f,eigenvalues+first))die("owner density evaluation failed");free(f);
  const double*d=CpuNODensity(plan),*e=CpuNOEnergyDensity(plan);size_t at=0;
  for(int g=1;g<=atomnum;g++)if(G2ID[g]==rank){int m=F_G2M[g],nr=Spe_Total_CNO[WhatSpecies[g]];if(m<1||m>Matomnum||M2G[m]!=g)die("owned atom map mismatch");for(int h=0;h<=FNAN[g];h++){int nc=Spe_Total_CNO[WhatSpecies[natn[g][h]]];for(int i=0;i<nr;i++){memcpy(dm[0][m][h][i],d+at,(size_t)nc*sizeof(double));memcpy(edm[0][m][h][i],e+at,(size_t)nc*sizeof(double));at+=(size_t)nc;}}}
  if(at!=CpuNOEntries(plan))die("owned output count mismatch");
@@ -71,11 +84,19 @@ double CpuNSOCOwnerDensity(int n,int first,int last,int global_entries,const dou
  if(!exact&&!candidate){if(!rank){printf("CPU_NSOC_REP_FALLBACK step=%d reason=incomplete_paired_weighted_subspace original_owner_kernel=1\n",representative_calls);fflush(stdout);}return CpuNSOCOwnerDensityLegacy(n,first,last,global_entries,coeff,eigenvalues,dm,edm,world);}
  int nk=last-first+1;if(nk<0)nk=0;double*f=malloc((size_t)(nk?nk:1)*sizeof(double));if(!f)die("representative occupations allocation");
  int po=0;for(int k=0;k<nk;k++){double x=(eigenvalues[first+k]-ChemP)*Beta;if(x < -60.)x=-60.;if(x > 60.)x=60.;f[k]=FermiFunc(x,0,first+k,&po,&x);}
- if(candidate){admitted=CpuRepTailAdmit(world,n,first,last,coeff,f,eigenvalues+first,cut_count,cut_ids,amplification,1e-13,&evidence);if(!rank){printf("CPU_NSOC_REP_TAIL_BOUND step=%d cut_states=%d covered_states=%d D_max_entry_bound=%.12e EDM_max_entry_bound=%.12e amplification=%.9g tolerance=1e-13 invalid=%d admitted=%d\n",representative_calls,evidence.cut_states,evidence.covered_states,evidence.density_bound,evidence.energy_density_bound,evidence.amplification,evidence.invalid,evidence.admitted);fflush(stdout);}}
+ if(candidate){
+  CpuNORowProvider provider;
+  if(CpuNSym_StateProvider(n,first,last,&provider)){
+   long double*norms=malloc((size_t)(nk?nk:1)*sizeof(long double));if(!norms)die("state tail norm allocation");
+   if(CpuNSym_StateCutNorms(first,last,cut_count,cut_ids,norms))die("state coefficient explicit AO tail norm failed");
+   admitted=CpuRepTailAdmitNorms(world,n,first,last,norms,f,eigenvalues+first,cut_count,cut_ids,amplification,1e-13,&evidence);free(norms);
+  }else admitted=CpuRepTailAdmit(world,n,first,last,coeff,f,eigenvalues+first,cut_count,cut_ids,amplification,1e-13,&evidence);
+  if(!rank){printf("CPU_NSOC_REP_TAIL_BOUND step=%d cut_states=%d covered_states=%d D_max_entry_bound=%.12e EDM_max_entry_bound=%.12e amplification=%.9g tolerance=1e-13 invalid=%d admitted=%d\n",representative_calls,evidence.cut_states,evidence.covered_states,evidence.density_bound,evidence.energy_density_bound,evidence.amplification,evidence.invalid,evidence.admitted);fflush(stdout);}
+ }
  if(!admitted){free(f);if(!rank){printf("CPU_NSOC_REP_FALLBACK step=%d reason=weighted_tail_bound_not_satisfied original_owner_kernel=1\n",representative_calls);fflush(stdout);}return CpuNSOCOwnerDensityLegacy(n,first,last,global_entries,coeff,eigenvalues,dm,edm,world);}
  if(mode==2)CpuNSOCOwnerDensityLegacy(n,first,last,global_entries,coeff,eigenvalues,dm,edm,world);
  if(!representative_plan){int count;CpuNOBlock*b=CpuRSym_RepresentativeBlocks(&count);representative_plan=CpuNOCreate(world,n,count,b,1024*1024);free(b);if(!representative_plan)die("representative owner plan allocation");}
- if(CpuNOCompute(representative_plan,nk,coeff,f,eigenvalues+first))die("representative D/EDM kernel failed");free(f);
+ if(owner_compute(representative_plan,n,first,last,coeff,f,eigenvalues+first))die("representative D/EDM kernel failed");free(f);
  CpuRSym_RepresentativeExpand(CpuNODensity(representative_plan),CpuNOEntries(representative_plan),dm[0]);
  CpuRSym_RepresentativeExpand(CpuNOEnergyDensity(representative_plan),CpuNOEntries(representative_plan),edm[0]);
  if(mode==2){

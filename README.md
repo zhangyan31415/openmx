@@ -4,16 +4,23 @@
 
 This CPU version of [OpenMX](https://www.openmx-square.org/) adds symmetry-based block solvers, density-matrix optimizations and memory improvements. One executable contains both NSOC and SOC paths and uses ordinary OpenMX inputs and MPI launches.
 
-**The CPU source is currently on `experiments/cpu-d3-20261019`. Clone that branch explicitly; the default branch does not contain `cpu/`.**
+**The CPU source is currently on `release/cpu-v6-clean`. Clone that branch explicitly; the default branch does not contain `cpu/`.**
+
+## Current CPU baseline
+
+The current release candidate retains the validated **v6-clean** native SCF baseline. Recent vacuum-height and z-grid experiments did not establish a useful general replacement. They are not enabled by this release, and the code does not silently lower the integration cutoff or relax the SCF criterion. Optional experimental density-startup modes remain disabled.
+
+The existing benchmark figure below describes its dated comparison, rather than a new v6-versus-stock measurement. See [v6 baseline and validation](cpu/docs/V6_BASELINE.md) for the retained memory paths, tested scope and accuracy limits.
+
 
 ## 1. Get and build
 
-The tested build uses Linux, Intel oneAPI 2022.3 classic compilers, Intel MPI 2021.7.1 and MKL 2022.2.1. The supplied Python environment includes NumPy, SciPy, spglib and complex PETSc/SLEPc for targeted bands. The builder expects this oneAPI installation layout; see the [build guide](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/BUILD.zh-CN.md) for details.
+The tested build uses Linux, Intel oneAPI 2022.3 classic compilers, Intel MPI 2021.7.1 and MKL 2022.2.1. The supplied Python environment includes NumPy, SciPy, spglib and complex PETSc/SLEPc for targeted bands. The builder expects this oneAPI installation layout; see the [build guide](https://github.com/zhangyan31415/openmx/blob/release/cpu-v6-clean/cpu/docs/BUILD.zh-CN.md) for details.
 
 Enabling `scf.Symmetry on` requires NumPy, SciPy and spglib in the Python environment. The MPI root process uses spglib during initialization to detect geometric symmetry; it is not called at every SCF iteration or linked into the OpenMX executable. Explicit `scf.Symmetry off` does not invoke these Python tools. The source builder itself still requires Python.
 
 ```bash
-git clone --branch experiments/cpu-d3-20261019 --single-branch \
+git clone --branch release/cpu-v6-clean --single-branch \
   https://github.com/zhangyan31415/openmx.git openmx-cpu
 cd openmx-cpu
 
@@ -54,7 +61,7 @@ Multi-node runs use the same executable with the site's MPI or scheduler setting
 
 ## 3. NSOC, one-step SOC and H/S export
 
-The tested workflow is **fixed geometry, nonmagnetic, Gamma point: converge NSOC, then run one SOC step from that run's own checkpoint**. Use `Cluster` or Gamma `Band`, with `scf.eigen.lib elpa1` or `elpa2`. Add `scf.Symmetry on` to both inputs. Keep geometry, basis, physical settings and MPI layout consistent, and use native C2N restart for SOC. See the [run guide](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/WORKFLOW.zh-CN.md) for input and restart requirements. One SOC step is not a self-consistent SOC calculation.
+The tested workflow is **fixed geometry, nonmagnetic, Gamma point: converge NSOC, then run one SOC step from that run's own checkpoint**. Use `Cluster` or Gamma `Band`, with `scf.eigen.lib elpa1` or `elpa2`. Add `scf.Symmetry on` to both inputs. Keep geometry, basis, physical settings and MPI layout consistent, and use native C2N restart for SOC. See the [run guide](https://github.com/zhangyan31415/openmx/blob/release/cpu-v6-clean/cpu/docs/WORKFLOW.zh-CN.md) for input and restart requirements. One SOC step is not a self-consistent SOC calculation.
 
 Request H/S files with the ordinary `HS.fileout on` setting. Supported symmetry paths export H/S consistent with the selected group projection. OpenMX orbitals are nonorthogonal; post-processing requires the matching S.
 
@@ -67,7 +74,7 @@ Band.NumBands         20
 Band.ReferenceEnergy  Fermi
 ```
 
-This computes the 20 states nearest the reference at each k point using SLEPc, directly from native sparse H/S. `Fermi` is the default reference; a number specifies an absolute energy in **eV**. The normal `.Band` format and its **Hartree** energy units are retained. Zero or omitted `Band.NumBands` keeps the original full-spectrum path. Launch with the same `mpirun` command; no separate export, converter or moirekp installation is required. See the [band guide](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/TARGETED_BANDS.md).
+This computes the 20 states nearest the reference at each k point using SLEPc, directly from native sparse H/S. `Fermi` is the default reference; a number specifies an absolute energy in **eV**. The normal `.Band` format and its **Hartree** energy units are retained. Zero or omitted `Band.NumBands` keeps the original full-spectrum path. Launch with the same `mpirun` command; no separate export, converter or moirekp installation is required. See the [band guide](https://github.com/zhangyan31415/openmx/blob/release/cpu-v6-clean/cpu/docs/TARGETED_BANDS.md).
 
 For **all bands**, set `Band.NumBands 0` and choose `Band.Solver EVR` or `Auto`.
 `LAPACK`/`GVD`, `SLEPc` and `Legacy` are also selectable. GVD/EVR compute energies
@@ -81,20 +88,20 @@ count-dependent behavior; see the band guide for exact selection and limits.
 - The current default profile passed complete NSOC plus own one-step SOC for MoTe₂ at 9.43° (222 atoms) and 7.34° (366 atoms). Standard oriented C3/D3 slabs select the verified specialized SOC path; other supported cases use the general path and its operator checks.
 - Historical timing and memory results apply to their recorded configurations. More nodes do not guarantee lower core-hours or constant total memory.
 
-[Native switch validation](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/NATIVE_SYMMETRY_VALIDATION_20261106.md) · [Timing and memory benchmarks](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/BENCHMARKS_20261031.md) · [Acceptance criteria](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/ACCEPTANCE.zh-CN.md) (detailed reports are currently in Chinese).
+[Native switch validation](https://github.com/zhangyan31415/openmx/blob/release/cpu-v6-clean/cpu/docs/NATIVE_SYMMETRY_VALIDATION_20261106.md) · [Timing and memory benchmarks](https://github.com/zhangyan31415/openmx/blob/release/cpu-v6-clean/cpu/docs/BENCHMARKS_20261031.md) · [Acceptance criteria](https://github.com/zhangyan31415/openmx/blob/release/cpu-v6-clean/cpu/docs/ACCEPTANCE.zh-CN.md) (detailed reports are currently in Chinese).
 
 ## 5. Reference vs latest benchmarks
 
 Fresh same-node measurements: **node040, 64 MPI × 1**, same compiler options and physical inputs. Both versions complete NSOC followed by one SOC step from their own checkpoints. Each version/size was measured once.
 
-![Reference and latest CPU time and physical memory versus atom count](https://raw.githubusercontent.com/zhangyan31415/openmx/experiments/cpu-d3-20261019/cpu/docs/benchmarks/20261106/latest_vs_reference.png)
+![Reference and latest CPU time and physical memory versus atom count](https://raw.githubusercontent.com/zhangyan31415/openmx/release/cpu-v6-clean/cpu/docs/benchmarks/20261106/latest_vs_reference.png)
 
 | MoTe₂ | Reference → latest total time | Reference → latest physical peak |
 |---|---:|---:|
 | 9.43°, 222 atoms | 184.86 → **86.42 s** | 73.59 → **25.22 GiB** |
 | 7.34°, 366 atoms | 552.02 → **147.25 s** | 110.99 → **35.35 GiB** |
 
-The reference is the bundled CPU4.0 source snapshot, built without optimized replacements. Symmetry constraints and SCF trajectories change together with the implementation; this is not a claim of identical raw operators. See the [full report](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/benchmarks/20261106/README.md), [data](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/benchmarks/20261106/measurements.csv) and [physical differences](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/docs/benchmarks/20261106/physical_differences.json), including force errors exceeding the earlier physical gate. The two-point lines are not an extrapolated scaling law.
+The reference is the bundled CPU4.0 source snapshot, built without optimized replacements. Symmetry constraints and SCF trajectories change together with the implementation; this is not a claim of identical raw operators. See the [full report](https://github.com/zhangyan31415/openmx/blob/release/cpu-v6-clean/cpu/docs/benchmarks/20261106/README.md), [data](https://github.com/zhangyan31415/openmx/blob/release/cpu-v6-clean/cpu/docs/benchmarks/20261106/measurements.csv) and [physical differences](https://github.com/zhangyan31415/openmx/blob/release/cpu-v6-clean/cpu/docs/benchmarks/20261106/physical_differences.json), including force errors exceeding the earlier physical gate. The two-point lines are not an extrapolated scaling law.
 
 ## Source layout and credits
 
@@ -106,6 +113,6 @@ The reference is the bundled CPU4.0 source snapshot, built without optimized rep
 | `cpu/tools/` | Workflow, comparison and benchmark tools |
 | `cpu/tests/`, `cpu/docs/` | Tests and detailed documentation |
 
-[CPU documentation](https://github.com/zhangyan31415/openmx/blob/experiments/cpu-d3-20261019/cpu/README.md). Original OpenMX and ELPA copyright notices and licenses are retained in the sources and `cpu/vendor/`; provenance is recorded in `cpu/vendor/ORIGINS.json`.
+[CPU documentation](https://github.com/zhangyan31415/openmx/blob/release/cpu-v6-clean/cpu/README.md). Original OpenMX and ELPA copyright notices and licenses are retained in the sources and `cpu/vendor/`; provenance is recorded in `cpu/vendor/ORIGINS.json`.
 
 The GPU implementation comes from [dc1394/openmx4.0_gpu](https://github.com/dc1394/openmx4.0_gpu); please refer to that project.

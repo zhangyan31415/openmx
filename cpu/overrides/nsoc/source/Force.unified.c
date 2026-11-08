@@ -18,6 +18,7 @@
 #include <sys/time.h>
 #include <string.h>
 #include "openmx_common.h"
+#include "cpu_overlap_index.h"
 #include "mpi.h"
 #include "cpu_grid_fields_shared.unified.h"
 #include "cpu_c3.h"
@@ -27,6 +28,7 @@
 #include <omp.h>
 #include "mkl_service.h"
 #include "force3_tile_plan.h"
+static int CpuForce3OverlapGet(void *context,int h,int k){return CpuOverlapIndex1(*(int*)context,h,k);}
 /* FPROF_BEGIN */
 #include "cpu_force_profile.h"
 /* FPROF_END */
@@ -100,6 +102,17 @@ static void dHCH_SO(double *sumx0r, double *sumx0i, double *sumy0r, double *sumy
 
 static void MPI_OLP(double *****OLP1);
 static void Force3();
+#include "cpu_force_lifetime.h"
+#include "cpu_vna_stream.h"
+static int cpu_grid_force_release_pending=0;
+void CpuNSOCForceGridRelease_Arm(void)
+{
+  if(cpu_grid_force_release_pending || !CpuOverlapPairs || !CpuVnaShared_Deferred()){
+    fprintf(stderr,"CPU_NSOC_FORCE_LIFETIME invalid activation\n");
+    MPI_Abort(mpi_comm_level1,96);abort();
+  }
+  cpu_grid_force_release_pending=1;
+}
 static void CpuForceEarlyRelease(void);
 static void Force4();
 static void Force4B(double *****CDM0);
@@ -1540,6 +1553,19 @@ double Force(double *****H0,
 
   Force3();
 
+  if(cpu_grid_force_release_pending){
+    /* SCF2File would otherwise be the final orbital-grid consumer. Cache its
+     * native position/momentum operators before ending that grid lifetime. */
+    CpuSCFFileCacheOperators();
+    CpuGridLifetime_Release();
+    CpuMemoryPhase("force3_grid_released");
+    if(!CpuVnaForceStream_Mode || !CpuVnaForceStream_Mode()){
+      double dt=CpuVnaDeferred_Complete(DS_VNA);
+      if(myid==Host_ID){printf("CPU_VNA_DEFERRED_COMPLETE seconds=%.9f stage=after_force3 grid_released=1\n",dt);fflush(stdout);}
+    }
+    cpu_grid_force_release_pending=0;
+  }
+
   dtime(&etime);
 
 /* FPROF_BEGIN */
@@ -1566,7 +1592,7 @@ double Force(double *****H0,
     Force4();
   }
   else if (ProExpn_VNA==1 && F_VNA_flag==1){
-    Force4B(CDM0);
+    if(!CpuVnaForceStream_Run || !CpuVnaForceStream_Run(CDM0))Force4B(CDM0);
   }
 
   dtime(&etime);
@@ -2941,8 +2967,8 @@ static void CpuForce3Legacy()
 
 	  for (Nog = 0; Nog<NumOLG[Mc_AN][h_AN]; Nog++) {
 
-	    int Nc = GListTAtoms1[Mc_AN][h_AN][Nog];
-	    int Nh = GListTAtoms2[Mc_AN][h_AN][Nog];
+	    int Nc = CpuOverlapIndex1(Mc_AN,h_AN,Nog);
+	    int Nh = CpuOverlapIndex2(Mc_AN,h_AN,Nog);
 
 	    double** const ai_dorbs0 = dChi0[Nc];
 
@@ -2955,9 +2981,10 @@ static void CpuForce3Legacy()
 	      }
 	    } else {
 	      int j;
-	      for (j = 0; j<NO1; j++) {
-		orbs1[j] = Orbs_Grid_FNAN[Mc_AN][h_AN][Nog][j];
-	      }
+	      {const Type_Orbs_Grid *cpu_orbital_row_0=CpuOverlapRow(Mc_AN,h_AN,Nog);
+for (j = 0; j<NO1; j++) {
+		orbs1[j] = cpu_orbital_row_0[j];
+	      }}
 	    }
 
 	    int spin;
@@ -3120,8 +3147,8 @@ static void CpuForce3Tiled(int requested_tile,size_t index_budget)
 #pragma omp master
       {
         sumx=sumy=sumz=0.0;
-        tile_plan=CpuF3TilePrepare(FNAN[Gc_AN]+1,NumOLG[Mc_AN],GListTAtoms1[Mc_AN],
-                                 GridN_Atom[Gc_AN],capacity,index_budget,&metadata_bytes,&rescan_lists);
+        tile_plan=CpuF3TilePrepareIndexed(FNAN[Gc_AN]+1,NumOLG[Mc_AN],GListTAtoms1[Mc_AN],
+                                 GridN_Atom[Gc_AN],capacity,index_budget,&metadata_bytes,&rescan_lists,CpuForce3OverlapGet,&Mc_AN);
         if(metadata_bytes>metadata_peak)metadata_peak=metadata_bytes;
         rescan_total+=rescan_lists;
         for(int h=0;h<=FNAN[Gc_AN];h++)if(tile_plan[h].mode==2)
@@ -3715,17 +3742,17 @@ static void CpuForce3Tiled(int requested_tile,size_t index_budget)
 	  int Nog;
 
           int overlap_begin,overlap_end;
-          CpuF3TileBounds(&tile_plan[h_AN],NumOLG[Mc_AN][h_AN],GListTAtoms1[Mc_AN][h_AN],
-                          tile_no,tile_end,&overlap_begin,&overlap_end);
+          CpuF3TileBoundsIndexed(&tile_plan[h_AN],NumOLG[Mc_AN][h_AN],GListTAtoms1[Mc_AN][h_AN],
+                          tile_no,tile_end,&overlap_begin,&overlap_end,CpuForce3OverlapGet,&Mc_AN,h_AN);
           for(int visit=overlap_begin;visit<overlap_end;visit++) {
             Nog=tile_plan[h_AN].mode==1?tile_plan[h_AN].order[visit]:visit;
 
-	    int Nc = GListTAtoms1[Mc_AN][h_AN][Nog];
+	    int Nc = CpuOverlapIndex1(Mc_AN,h_AN,Nog);
             if(Nc<tile_begin || Nc>=tile_end)continue;
 #ifdef CPU_F3_TILE_TEST
             CpuF3OverlapVisit(Mc_AN,h_AN,Nog);
 #endif
-	    int Nh = GListTAtoms2[Mc_AN][h_AN][Nog];
+	    int Nh = CpuOverlapIndex2(Mc_AN,h_AN,Nog);
 
 	    double (*const ai_dorbs0)[3] = dChi0[Nc-tile_begin];
 
@@ -3738,9 +3765,10 @@ static void CpuForce3Tiled(int requested_tile,size_t index_budget)
 	      }
 	    } else {
 	      int j;
-	      for (j = 0; j<NO1; j++) {
-		orbs1[j] = Orbs_Grid_FNAN[Mc_AN][h_AN][Nog][j];
-	      }
+	      {const Type_Orbs_Grid *cpu_orbital_row_0=CpuOverlapRow(Mc_AN,h_AN,Nog);
+for (j = 0; j<NO1; j++) {
+		orbs1[j] = cpu_orbital_row_0[j];
+	      }}
 	    }
 
 	    int spin;
@@ -4045,8 +4073,8 @@ void Force3()
 	for (spin=0; spin<=SpinP_switch; spin++){
 	  for (Nog=0; Nog<NumOLG[Mc_AN][h_AN]; Nog++){
 
-	    Nc = GListTAtoms1[Mc_AN][h_AN][Nog];
-	    Nh = GListTAtoms2[Mc_AN][h_AN][Nog];
+	    Nc = CpuOverlapIndex1(Mc_AN,h_AN,Nog);
+	    Nh = CpuOverlapIndex2(Mc_AN,h_AN,Nog);
 
 	    for (k=0; k<3; k++){
 	      for (i=0; i<NO0; i++){
@@ -4060,7 +4088,7 @@ void Force3()
   	      for (j=0; j<NO1; j++) orbs1[j] = Orbs_Grid[Mh_AN][Nh][j];/* AITUNE */
 	    }
             else{
-  	      for (j=0; j<NO1; j++) orbs1[j] = Orbs_Grid_FNAN[Mc_AN][h_AN][Nog][j];/* AITUNE */
+  	      {const Type_Orbs_Grid *cpu_row=CpuOverlapRow(Mc_AN,h_AN,Nog); for (j=0; j<NO1; j++) orbs1[j] = cpu_row[j];}/* AITUNE */
             } 
 
 	    for (k=0; k<3; k++){

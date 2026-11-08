@@ -26,6 +26,7 @@
 #include "gsoc_density_provider.h"
 extern int CpuC3_AntiunitaryReal(void);
 #include <omp.h>
+#include "cpu_soc_memory_reclaim.h"
 
 #define  measure_time   1
 
@@ -1674,7 +1675,10 @@ double Calc_DM_Cluster_non_collinear_ScaLAPACK(
       if(err>1.0e-10*(1.0+scale)){fprintf(stderr,"CPU_DM_BLAS3 numerical mismatch\n");MPI_Abort(mpi_comm_level1,92);}
       memcpy(DM1,Work1,(size_t)size_H1*sizeof(double));
     }
-    if(calc_flag==6||calc_flag==10)cpu_soc_owner_free(&cpu_owner_components);
+    if(calc_flag==6||calc_flag==10){
+      cpu_soc_owner_free(&cpu_owner_components);
+      CpuSOCMemoryReclaim(calc_flag==6?"after_DM_components":"after_EDM_components");
+    }
   }
   dtime(&cp_end);
   if(!cpu_mode){

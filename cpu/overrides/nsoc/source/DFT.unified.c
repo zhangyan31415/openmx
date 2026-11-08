@@ -20,6 +20,19 @@
 #include "openmx_common.h"
 #include "cpu_nsoc_owner_openmx.h"
 #include "cpu_hassembly_workspace.h"
+#include "cpu_vna_shared.h"
+#include "cpu_sparse_lifetime.h"
+#include "cpu_force_lifetime.h"
+#include "cpu_overlap_index.h"
+#include "cpu_vna_stream.h"
+#include "mkl_service.h"
+#include <malloc.h>
+#include <omp.h>
+#include "cpu_soc_memory_reclaim.h"
+#include "cpu_direct_density_startup.h"
+#include "cpu_nsoc_symhistory_guard.h"
+#include "cpu_nsoc_history_capacity.unified.h"
+extern void CpuNSocSymHistoryDestroy(void);
 #include "cpu_nsoc_sym.h"
 #include "native_panel_solver.h"
 #include "cpu_realspace_d3.h"
@@ -51,6 +64,7 @@ double *rHs11_Re,*rHs12_Re,*rHs22_Re,*iHs11_Re,*iHs12_Re,*iHs22_Re;
 double *CDM1,*EDM1,*PDM1,*Work1;
 dcomplex *EVec1_NonCol;
 double **EVec1_Re;
+static size_t cpu_cluster_dense_bytes=0;
 double *H1,*S1;
 double ***EIGEN_Band;
 int *My_NZeros,*SP_NZeros,*SP_Atoms,*is2,*ie2,*MP,*order_GA;
@@ -229,6 +243,27 @@ double DFT(int MD_iter, int Cnt_Now)
   }
 
 
+  int cpu_defer_vna=cpu_release_buffers&&cpu_release_valid&&ProExpn_VNA==1&&
+    !Band_disp_switch&&!MO_fileout&&!Dos_fileout&&!DosGauss_fileout&&
+    !Wannier_Func_Calc&&!Wannier90_fileout&&!CWF_fileout_flag&&!CWF_Calc&&
+    !pop_anal_aow_flag&&!unfold_electronic_band&&!Polarization_ABC_flag&&
+    !xanes_gs_fileout&&!xanes_calc&&!scf_stress_flag&&
+    !LNAO_calc_flag&&!LNBO_calc_flag&&!NBO_switch&&!CDDF_on;
+
+  /* One-step SOC uses the same geometry-only overlap representation and a
+   * scalar VNA spin trace. Keep this independent of NSOC history retirement. */
+  int cpu_soc_memory=CpuSOCMemoryEligible();
+  int cpu_direct_density=CpuNSocDirectDensityStartup();
+  int cpu_soc_grid_suspended=0;
+  int cpu_soc_edm_done=0;
+  const char *cpu_soc_stream=getenv("OPENMX_CPU_VNA_FORCE_STREAM");
+  int cpu_soc_defer_vna=cpu_soc_memory&&ProExpn_VNA==1&&
+    omp_get_max_threads()==1&&cpu_soc_stream&&
+    (!strcmp(cpu_soc_stream,"1")||!strcmp(cpu_soc_stream,"2"));
+  if(cpu_soc_memory&&myid0==Host_ID){
+    printf("CPU_SOC_MEMORY active=1 overlap_indices=exact shared_rows=derived VNA_stream=%d native_energy_force_HS_retained=1\n",cpu_soc_defer_vna);fflush(stdout);
+  }
+
   /* Validate requested NSOC mode even when a different solver/spin path
    * would otherwise bypass Cluster_DFT_Col.  Disabled mode is a no-op. */
   CpuNSOCOwnerValidate(MD_iter);
@@ -352,6 +387,7 @@ double DFT(int MD_iter, int Cnt_Now)
   }
 
   time2 = Set_Nonlocal(HNL,DS_NL);
+  CpuSOCMemoryReclaim("after_nonlocal_integrals");
 
   if (core_hole_state_flag==1){
     if (MYID_MPI_COMM_WORLD==Host_ID && 0<level_stdout){
@@ -364,8 +400,15 @@ double DFT(int MD_iter, int Cnt_Now)
     if (MYID_MPI_COMM_WORLD==Host_ID && 0<level_stdout){
       printf("<MD=%2d>  Calculation of the VNA projector matrix\n",MD_iter);fflush(stdout);
     }
+    if(CpuVnaShared_Active()){
+      const char *stream=getenv("OPENMX_CPU_VNA_FORCE_STREAM");
+      int requested=stream&&(!strcmp(stream,"1")||!strcmp(stream,"2"));
+      if(cpu_defer_vna&&!requested)cpu_defer_vna=CpuVnaShared_WorthDeferring(cpu_cluster_dense_bytes);
+      CpuVnaShared_ConfigureDeferred(cpu_defer_vna||cpu_soc_defer_vna);
+    }
     time12 = Set_ProExpn_VNA(HVNA, HVNA2, DS_VNA);  
   }
+  CpuSOCMemoryReclaim("after_VNA_integrals");
 
   /* SCF loop */
   
@@ -722,13 +765,31 @@ double DFT(int MD_iter, int Cnt_Now)
      during (LSCF_iter-SCF_iter_shift)<=(Pulay_SCF/2). 
     ****************************************************/
 
-    if ( Mixing_switch==5 
+    cpu_direct_density=CpuNSocDirectDensityStartup();
+    if(cpu_direct_density&&SCF_iter==1&&myid0==Host_ID){
+      printf("CPU_NSOC_STARTUP mode=direct_density native_initial_DM=1 first_DIIS_history_step=2 requested_StartPulay=%d criterion_unchanged=1\n",Pulay_SCF);fflush(stdout);
+    }
+    if ( (!cpu_direct_density||SCF_iter==1) && (Mixing_switch==5 
        || ( Cnt_switch!=1 && SucceedReadingDMfile!=1 
        && (Mixing_switch==1 || Mixing_switch==6) 
        && (LSCF_iter-SCF_iter_shift)<=(Pulay_SCF/2))
-       && Solver!=4 ){
+       && Solver!=4 )){
 
       time6  += Mixing_H(MD_iter, LSCF_iter-SCF_iter_shift, SCF_iter-SCF_iter_shift);
+    }
+
+    if(cpu_soc_memory&&CpuC3_CompactEnabled()){
+      /* This is the last H-mixing call in a one-step calculation. DIIS stage1
+       * below uses residual slot2 only; slots0/1 have no reader in this scope.
+       * Current real/imaginary DM and all native H/S tensors remain live. */
+      size_t retired=0;
+      retired+=CpuSparseHistoryRelease(HisH1,List_YOUSO[39],0,4,Matomnum,S_M2G,WhatSpecies,Spe_Total_NO,FNAN);
+      retired+=CpuSparseHistoryRelease(HisH2,List_YOUSO[39],0,3,Matomnum,S_M2G,WhatSpecies,Spe_Total_NO,FNAN);
+      retired+=CpuSparseHistoryRelease(ResidualDM,2,0,4,Matomnum,M2G,WhatSpecies,Spe_Total_NO,FNAN);
+      retired+=CpuSparseHistoryRelease(iResidualDM,2,0,2,Matomnum,M2G,WhatSpecies,Spe_Total_NO,FNAN);
+      CpuSOCMemoryReclaim("after_last_H_mixing");
+      CpuGridShared_Suspend();cpu_soc_grid_suspended=1;
+      if(myid0==Host_ID){printf("CPU_SOC_EARLY_HISTORY_RELEASE local_rows=%zu current_DM_iDM_and_residual2_retained=1 H_S_retained=1\n",retired);fflush(stdout);}
     }
 
     /****************************************************
@@ -776,6 +837,7 @@ double DFT(int MD_iter, int Cnt_Now)
                                       rHs11_Re,rHs12_Re,rHs22_Re,iHs11_Re,iHs12_Re,iHs22_Re,
                                       Ss2_Cx,Hs2_Cx,Cs2_Cx,
 				      CDM1,size_H1,EVec1_NonCol,Work1);
+
 	}
 
 	break;
@@ -1240,6 +1302,37 @@ double DFT(int MD_iter, int Cnt_Now)
 			  Residual_ReRhok,Residual_ImRhok,
 			  ReVk,ImVk,ReRhoAtomk,ImRhoAtomk);
 
+      if(cpu_soc_grid_suspended){
+        /* Orbital_Moment, Mulliken and native first-step DIIS above read
+         * sparse DM/OLP, not orbital-grid values. The next native density
+         * evaluation is their first grid reader. Retire the now-dead mixing
+         * histories before rebuilding those grid pages. */
+        size_t retired=0;
+        retired+=CpuSparseHistoryRelease(DM,List_YOUSO[16],1,4,Matomnum,M2G,WhatSpecies,Spe_Total_NO,FNAN);
+        retired+=CpuSparseHistoryRelease(iDM,List_YOUSO[16],1,2,Matomnum,M2G,WhatSpecies,Spe_Total_NO,FNAN);
+        retired+=CpuSparseHistoryRelease(ResidualDM,List_YOUSO[16],0,4,Matomnum,M2G,WhatSpecies,Spe_Total_NO,FNAN);
+        retired+=CpuSparseHistoryRelease(iResidualDM,List_YOUSO[16],0,2,Matomnum,M2G,WhatSpecies,Spe_Total_NO,FNAN);
+        CpuSOCMemoryReclaim("after_last_DM_mixing");
+        /* W=C f(epsilon) epsilon C^dagger depends on this solve's C, ko,
+         * ChemP and fixed Beta, not on rho(r). Construct it after the exact
+         * native mixing, while the orbital grid is still suspended. This
+         * avoids retaining C and its work buffers alongside the rebuilt grid.
+         * This scope excludes partial/state exports and temperature control. */
+        for(int component=7;component<=10;component++){
+          time5+=Calc_DM_Cluster_non_collinear_ScaLAPACK(component,myid0,numprocs0,
+            size_H1,is2,ie2,MP,n,n*2,DM[0],iDM[0],EDM,ko_noncol,CDM1,Work1,EVec1_NonCol);
+        }
+        cpu_soc_edm_done=1;
+        CpuC3_CompactRelease();
+        free(CDM1);CDM1=NULL;free(Work1);Work1=NULL;
+        CpuSOCMemoryReclaim("after_EDM_before_grid_rebuild");
+        CpuGridShared_BeginRebuild();
+        double begin=MPI_Wtime();time10+=Set_Orbitals_Grid(Cnt_kind);
+        double elapsed=MPI_Wtime()-begin,critical=0.;
+        MPI_Reduce(&elapsed,&critical,1,MPI_DOUBLE,MPI_MAX,Host_ID,mpi_comm_level1);
+        cpu_soc_grid_suspended=0;
+        if(myid0==Host_ID){printf("CPU_SOC_GRID_REBUILD critical_seconds=%.9f exact_native_orbitals=1 coefficients_retained_for_EDM=1 retired_mixing_rows=%zu\n",critical,retired);fflush(stdout);}
+      }
       time11 += Set_Density_Grid(Cnt_kind,Calc_CntOrbital_ON,DM[0],Density_Grid_B);
 
       if (Solver==4) {
@@ -1476,7 +1569,7 @@ double DFT(int MD_iter, int Cnt_Now)
 
     {
       const char *history=getenv("OPENMX_CPU_ONESTEP_HISTORY");
-      if(history&&!strcmp(history,"1") && (DFTSCF_loop!=1||Mixing_switch!=1||
+      if((cpu_soc_memory||(history&&!strcmp(history,"1"))) && (DFTSCF_loop!=1||Mixing_switch!=1||
           MD_switch!=0||Cnt_switch||Pulay_SCF<4||SCF_Control_Temp)){
         fprintf(stderr,"CPU_SOC_HISTORY_CAPACITY rejects on-the-fly changes outside fixed one-step RMM-DIIS\n");
         MPI_Abort(mpi_comm_level1,96);
@@ -1540,6 +1633,7 @@ double DFT(int MD_iter, int Cnt_Now)
 
     /* EDM */
 
+    if(!cpu_soc_edm_done){
     time5 += Calc_DM_Cluster_non_collinear_ScaLAPACK( 7, myid0, numprocs0, size_H1, is2, ie2, MP, n, n*2,
 						      DM[0], iDM[0], EDM, ko_noncol, CDM1, Work1, EVec1_NonCol);
   
@@ -1551,9 +1645,16 @@ double DFT(int MD_iter, int Cnt_Now)
 
     time5 += Calc_DM_Cluster_non_collinear_ScaLAPACK( 10, myid0, numprocs0, size_H1, is2, ie2, MP, n, n*2,
 						      DM[0], iDM[0], EDM, ko_noncol, CDM1, Work1, EVec1_NonCol);
+    }
 
     gsoc_native_density_audit(ko_noncol);
     if(CpuGSOC_CompactEnabled()){CpuGSOC_CompactRelease();CpuMemoryPhase("after_gsoc_final_EDM_release");}
+    if(cpu_soc_memory&&CpuC3_CompactEnabled()&&!cpu_soc_edm_done){
+      /* EDM flags7..10 above are later than Cluster_DFT_NonCol's DM build.
+       * They are the final compact-vector readers in the audited scope. */
+      CpuC3_CompactRelease();
+      CpuSOCMemoryReclaim("after_last_density_reader");
+    }
 
     /* Partial_DM */
 
@@ -2253,6 +2354,59 @@ double DFT(int MD_iter, int Cnt_Now)
     if(myid0==Host_ID){printf("CPU_NSOC_SCF_BUFFERS_RELEASED components=3 elements_per_component=%d per_rank_bytes=%zu stage=before_force DM_EDM_retained=1 H_S_retained=1\n",size_H1,(CpuNSOCOwnerMode()?(CpuHAssembly_Compact()?3:((size_t)size_H1+2)):(size_t)size_H1*3)*sizeof(double));fflush(stdout);}
   }
 
+  if(cpu_defer_vna&&CpuVnaShared_Deferred()){
+    /* History30 remains intact throughout SCF, including its final mixing.
+     * Only DM[0] is read by native energy, force, restart and H/S output. */
+    if(CpuNSocSymHistoryEnabled()){
+      size_t rows=0;
+      CpuNSocSymHistoryDestroy();
+      rows+=CpuSparseHistoryRelease(DM,3,1,1,Matomnum,M2G,WhatSpecies,Spe_Total_NO,FNAN);
+      rows+=CpuSparseHistoryRelease(ResidualDM,3,0,1,Matomnum,M2G,WhatSpecies,Spe_Total_NO,FNAN);
+      rows+=CpuSparseHistoryRelease(HisH1,CpuNSocHamiltonianHistorySlots(),0,1,Matomnum,S_M2G,WhatSpecies,Spe_Total_NO,FNAN);
+      if(myid0==Host_ID){printf("CPU_NSOC_FINAL_HISTORY_RELEASE local_rows=%zu stage=after_last_SCF history30_during_SCF=unchanged current_DM_EDM_retained=1\n",rows);fflush(stdout);}
+    }
+    CpuNSym_ReleaseEigenScratch();
+    free(Cs_Re);Cs_Re=NULL;free(Hs_Re);Hs_Re=NULL;free(Ss_Re);Ss_Re=NULL;
+    for(int s=0;s<=SpinP_switch;s++){free(EVec1_Re[s]);EVec1_Re[s]=NULL;}
+    /* Large eigensolver BLAS teams can retain buffers after all matrix owners
+     * have died. The remaining force kernels need only their bounded tiles. */
+    int mkl_buffers=0;
+    MKL_INT64 mkl_cached=MKL_Mem_Stat(&mkl_buffers);
+    MKL_Free_Buffers();
+    int trimmed=malloc_trim(0);
+    if(myid0==Host_ID){printf("CPU_NSOC_SOLVER_CACHE_RELEASE local_MKL_bytes=%lld local_buffers=%d heap_trimmed=%d\n",(long long)mkl_cached,mkl_buffers,trimmed);fflush(stdout);}
+    if(myid0==Host_ID){printf("CPU_NSOC_DENSE_RELEASED components=Hs,Ss,Cs,EVec1 stage=before_VNA_derivative_build native_H_S_DM_EDM_retained=1\n");fflush(stdout);}
+    cpu_cluster_dense_bytes=0;
+    if(CpuOverlapPairs && CpuOverlapEligible() && !orbitalOpt_Force_Skip && F_VNA_flag==1){
+      CpuNSOCForceGridRelease_Arm();
+    }else if(!CpuVnaForceStream_Mode || !CpuVnaForceStream_Mode()){
+      CpuMemoryPhase("before_vna_derivatives");
+      double dt=CpuVnaDeferred_Complete(DS_VNA);time12+=dt;
+      if(myid0==Host_ID){printf("CPU_VNA_DEFERRED_COMPLETE seconds=%.9f derivatives=native_quadrature dense_scratch_released=1\n",dt);fflush(stdout);}
+      CpuMemoryPhase("after_vna_derivatives");
+    }
+  }
+
+  if(cpu_soc_memory&&CpuC3_CompactEnabled()){
+    /* Native first-step mixing and restart writing are complete. Keep the
+     * current real/imaginary density, EDM, H/S and all export operators. */
+    size_t retired=0;
+    retired+=CpuSparseHistoryRelease(DM,List_YOUSO[16],1,4,Matomnum,M2G,WhatSpecies,Spe_Total_NO,FNAN);
+    retired+=CpuSparseHistoryRelease(iDM,List_YOUSO[16],1,2,Matomnum,M2G,WhatSpecies,Spe_Total_NO,FNAN);
+    retired+=CpuSparseHistoryRelease(ResidualDM,List_YOUSO[16],0,4,Matomnum,M2G,WhatSpecies,Spe_Total_NO,FNAN);
+    retired+=CpuSparseHistoryRelease(iResidualDM,List_YOUSO[16],0,2,Matomnum,M2G,WhatSpecies,Spe_Total_NO,FNAN);
+    retired+=CpuSparseHistoryRelease(HisH1,List_YOUSO[39],0,4,Matomnum,S_M2G,WhatSpecies,Spe_Total_NO,FNAN);
+    retired+=CpuSparseHistoryRelease(HisH2,List_YOUSO[39],0,3,Matomnum,S_M2G,WhatSpecies,Spe_Total_NO,FNAN);
+    free(CDM1);CDM1=NULL;free(Work1);Work1=NULL;
+    CpuSOCMemoryReclaim("after_last_SCF_mixing");
+    if(myid0==Host_ID){printf("CPU_SOC_FINAL_HISTORY_RELEASE local_rows=%zu current_DM_iDM_EDM_HS_retained=1\n",retired);fflush(stdout);}
+  }
+  if(cpu_soc_defer_vna&&CpuVnaShared_Deferred()&&
+     (!CpuVnaForceStream_Mode||!CpuVnaForceStream_Mode())){
+    /* If a supported native force consumer cannot stream, materialize its
+     * exact derivatives before it can observe the deferred cache. */
+    time12+=CpuVnaDeferred_Complete(DS_VNA);
+  }
   CpuMemoryPhase("before_force");
   if (!orbitalOpt_Force_Skip) time7 += Force(H0,DS_NL,OLP,DM[0],EDM);
   CpuMemoryPhase("after_force");
@@ -4183,6 +4337,8 @@ void Allocate_Free_Cluster_Col(int todo_flag)
     MPI_Allreduce(&na_cols,&na_cols_max,1,MPI_INT,MPI_MAX,MPI_CommWD1[myworld1]);
     Cs_Re = (double*)malloc(sizeof(double)*na_rows_max*na_cols_max);
     CpuNSym_ReserveEigenScratch(&EVec1_Re[0],(size_t)k*n,(size_t)na_rows_max*na_cols_max);
+    /* Exclude S: most of its pages are reclaimed after factor packing. */
+    cpu_cluster_dense_bytes=((size_t)na_rows*na_cols+(size_t)na_rows_max*na_cols_max+CpuNSym_EigenAllocationCapacity((size_t)k*n))*sizeof(double);
 
     descinit_(descS, &n,   &n,   &nblk,  &nblk,  &ZERO, &ZERO, &ictxt1, &na_rows,  &info);
     descinit_(descH, &n,   &n,   &nblk,  &nblk,  &ZERO, &ZERO, &ictxt1, &na_rows,  &info);

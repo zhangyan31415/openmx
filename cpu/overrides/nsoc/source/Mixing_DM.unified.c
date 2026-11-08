@@ -6,6 +6,7 @@
 #include "cpu_nsoc_sym.h"
 #include "cpu_c3.h"
 #include "mpi.h"
+#include "cpu_direct_density_startup.h"
 
 
 
@@ -38,6 +39,15 @@ double Mixing_DM(int MD_iter,
 
   MPI_Barrier(mpi_comm_level1);
   dtime(&TStime);
+
+  if(CpuNSocDirectDensityStartup()){
+    /* The first native step establishes the actual first solver density as
+     * the next input. Step2 admits its matching residual; no H/DM variable
+     * switch or mixed-map history is introduced. The KS fixed point and
+     * convergence test are unchanged. */
+    DIIS_Mixing_DM(SCF_iter,ResidualDM,iResidualDM);
+    MPI_Barrier(mpi_comm_level1);dtime(&TEtime);return TEtime-TStime;
+  }
 
   /* Start a fresh DIIS history when the approximate C3 map is released.
    * Existing DIIS stage2 stores the first full residual and input density;

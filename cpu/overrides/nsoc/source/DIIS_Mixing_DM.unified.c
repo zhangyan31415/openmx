@@ -745,6 +745,9 @@ void Inverse(int n, double **a, double **ia)
   double w;
   double *x,*y;
   double **da;
+  /* LU order belongs to the Pulay system, not to physical DM storage slots.
+   * Representative history capacity is independent of physical DM slots. */
+  int workspace = n>=0 ? n+1 : List_YOUSO[16];
 
   /***************************************************
     allocation of arrays: 
@@ -754,12 +757,12 @@ void Inverse(int n, double **a, double **ia)
      da[List_YOUSO[16]][List_YOUSO[16]]
   ***************************************************/
 
-  x = (double*)malloc(sizeof(double)*List_YOUSO[16]);
-  y = (double*)malloc(sizeof(double)*List_YOUSO[16]);
+  x = (double*)malloc(sizeof(double)*workspace);
+  y = (double*)malloc(sizeof(double)*workspace);
 
-  da = (double**)malloc(sizeof(double*)*List_YOUSO[16]);
-  for (i=0; i<List_YOUSO[16]; i++){
-    da[i] = (double*)malloc(sizeof(double)*List_YOUSO[16]);
+  da = (double**)malloc(sizeof(double*)*workspace);
+  for (i=0; i<workspace; i++){
+    da[i] = (double*)malloc(sizeof(double)*workspace);
   }
 
   /* start calc. */
@@ -839,7 +842,7 @@ void Inverse(int n, double **a, double **ia)
   free(x);
   free(y);
 
-  for (i=0; i<List_YOUSO[16]; i++){
+  for (i=0; i<workspace; i++){
     free(da[i]);
   }
   free(da);

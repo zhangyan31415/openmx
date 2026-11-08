@@ -6,8 +6,8 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <string.h>
-int CpuRepTailAdmit(MPI_Comm comm,int nao,int first,int last,const double*c,const double*f,const double*energy,int count,const int*ids,double amplification,double tolerance,CpuRepTailEvidence*out){
- int np;MPI_Comm_size(comm,&np);int64_t span=last>=first?(int64_t)last-first+1:0;int nk=span<=INT_MAX?(int)span:0,bad=span>INT_MAX||nao<1||first<1||last<first-1||count<0||count==INT_MAX||(count&&!ids)||(nk&&(!c||!f||!energy))||!isfinite(amplification)||amplification<1.||!isfinite(tolerance)||tolerance<=0.||tolerance>1e-13;
+static int CpuRepTailAdmitInternal(MPI_Comm comm,int nao,int first,int last,const double*c,const long double*norms,const double*f,const double*energy,int count,const int*ids,double amplification,double tolerance,CpuRepTailEvidence*out){
+ int np;MPI_Comm_size(comm,&np);int64_t span=last>=first?(int64_t)last-first+1:0;int nk=span<=INT_MAX?(int)span:0,bad=span>INT_MAX||nao<1||first<1||last<first-1||count<0||count==INT_MAX||(count&&!ids)||(nk&&((!c&&!norms)||!f||!energy))||!isfinite(amplification)||amplification<1.||!isfinite(tolerance)||tolerance<=0.||tolerance>1e-13;
  if(!bad&&nk&&(size_t)nao>SIZE_MAX/sizeof(double)/(size_t)nk)bad=1;
  if(!bad)for(int q=0;q<count;q++)if(ids[q]<1||(q&&ids[q]<=ids[q-1]))bad=1;
  uint64_t hash=UINT64_C(1469598103934665603),bits;
@@ -22,7 +22,8 @@ int CpuRepTailAdmit(MPI_Comm comm,int nao,int first,int last,const double*c,cons
  if(!bad)for(int q=0;q<count;q++){
   int state=ids[q];if(state<first||state>last)continue;int local=state-first;covered++;coverage[q]=1;
   if(!isfinite(f[local])||!isfinite(energy[local])){bad=1;continue;}
-  long double norm=0.;for(int row=0;row<nao;row++){double x=c[(size_t)row*nk+local];if(!isfinite(x)){bad=1;break;}norm+=(long double)x*(long double)x;}
+  long double norm=0.;if(norms){norm=norms[local];if(!isfinite(norm)||norm<0.){bad=1;continue;}}
+  else for(int row=0;row<nao;row++){double x=c[(size_t)row*nk+local];if(!isfinite(x)){bad=1;break;}norm+=(long double)x*(long double)x;}
   long double weight=fabsl((long double)f[local]);d+=weight*norm;e+=weight*fabsl((long double)energy[local])*norm;
   if(!isfinite(norm)||!isfinite(d)||!isfinite(e))bad=1;
  }
@@ -42,6 +43,8 @@ int CpuRepTailAdmit(MPI_Comm comm,int nao,int first,int last,const double*c,cons
  int admitted=!bad&&db<=tolerance&&eb<=tolerance;
  if(out)*out=(CpuRepTailEvidence){admitted,count,covered,bad,db,eb,amplification,tolerance};return admitted;
 }
+int CpuRepTailAdmit(MPI_Comm comm,int nao,int first,int last,const double*c,const double*f,const double*energy,int count,const int*ids,double amplification,double tolerance,CpuRepTailEvidence*out){return CpuRepTailAdmitInternal(comm,nao,first,last,c,NULL,f,energy,count,ids,amplification,tolerance,out);}
+int CpuRepTailAdmitNorms(MPI_Comm comm,int nao,int first,int last,const long double*norms,const double*f,const double*energy,int count,const int*ids,double amplification,double tolerance,CpuRepTailEvidence*out){return CpuRepTailAdmitInternal(comm,nao,first,last,NULL,norms,f,energy,count,ids,amplification,tolerance,out);}
 
 double CpuRepTailAmplification(int operations,int species,const int*norb,const double*const*rotations,double*row_l1){
  if(operations<1||species<1||!norb||!rotations)return NAN;

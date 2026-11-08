@@ -15,7 +15,8 @@
 #include <string.h>
 #include <math.h>
 #include <time.h>
-#include "openmx_common.h" 
+#include "openmx_common.h"
+#include "cpu_rhok_scope.h" 
 #include "mpi.h"
 #include "cpu_nsoc_imag.h"
 #include "cpu_nsoc_symhistory_guard.h"
@@ -24,6 +25,7 @@ extern void CpuNSocSymHistoryDestroy(void);
 #include "cpu_nsoc_ghost.h"
 #include "cpu_grid_fields_shared.unified.h"
 #include "cpu_grid_shared.h"
+#include "cpu_overlap_index.h"
 #include "cpu_c3.h"
 #include "cpu_one_step_history.h"
 #include "cpu_local_hs.h"
@@ -125,7 +127,7 @@ double truncation(int MD_iter,int UCell_flag)
   }
   {
     int valid=(SpinP_switch==0 ? (MD_switch==0 && MD_iter==1 && Solver==2 && SpinP_switch==0 && SO_switch==0 &&
-      Cnt_switch==0 && Mixing_switch==1 && SCF_Control_Temp==0 &&
+      Cnt_switch==0 && CpuNSocMemoryMixingAccepted() && SCF_Control_Temp==0 &&
       ProExpn_VNA==1 && E_Field_switch==0 &&
       Hub_U_switch==0 && Constraint_NCS_switch==0 && Zeeman_NCS_switch==0 && Zeeman_NCO_switch==0 &&
       core_hole_state_flag==0 && scf_coulomb_cutoff_CoreHole==0 && xmcd_calc==0 && cal_partial_charge==0 &&
@@ -796,7 +798,7 @@ double truncation(int MD_iter,int UCell_flag)
   int cpu_local_hs=0,cpu_local_olp=0;
   if(SpinP_switch==0){
     if(CpuNSOCGhostAgree(mpi_comm_level1,(MD_switch==0 && MD_iter==1 && Solver==2 && SpinP_switch==0 && SO_switch==0 &&
-      Cnt_switch==0 && Mixing_switch==1 && SCF_Control_Temp==0 &&
+      Cnt_switch==0 && CpuNSocMemoryMixingAccepted() && SCF_Control_Temp==0 &&
       ProExpn_VNA==1 && E_Field_switch==0 &&
       Hub_U_switch==0 && Constraint_NCS_switch==0 && Zeeman_NCS_switch==0 && Zeeman_NCO_switch==0 &&
       core_hole_state_flag==0 && scf_coulomb_cutoff_CoreHole==0 && xmcd_calc==0 && cal_partial_charge==0 &&
@@ -3494,6 +3496,10 @@ double truncation(int MD_iter,int UCell_flag)
 	  Hwan = WhatSpecies[Gh_AN];
           NO1 = Spe_Total_NO[Hwan];
 
+          if(CpuOverlapPairs && CpuGridShared_IsAtom(Gh_AN)){
+            Orbs_Grid_FNAN[Mc_AN][h_AN]=NULL;
+            continue;
+          }
           /* AITUNE */
 	  Orbs_Grid_FNAN[Mc_AN][h_AN] = (Type_Orbs_Grid**)malloc(sizeof(Type_Orbs_Grid*)*(NumOLG[Mc_AN][h_AN]+1)); 
 	  int Nc;
@@ -5263,6 +5269,7 @@ void UCell_Box(int MD_iter, int estimate_switch, int CpyCell)
 
       GListTAtoms1 = (int***)malloc(sizeof(int**)*(Matomnum+1));
       GListTAtoms2 = (int***)malloc(sizeof(int**)*(Matomnum+1));
+      CpuOverlapInit();
       alloc_first[0] = 0;
     }
 
@@ -5435,8 +5442,8 @@ void UCell_Box(int MD_iter, int estimate_switch, int CpyCell)
 
 		    size_GListTAtoms1 += NumOLG[Mc_AN][i];
 
-		    GListTAtoms1[Mc_AN][i] = (int*)malloc(sizeof(int)*NumOLG[Mc_AN][i]);
-		    GListTAtoms2[Mc_AN][i] = (int*)malloc(sizeof(int)*NumOLG[Mc_AN][i]);
+		    GListTAtoms1[Mc_AN][i] = NULL;
+		    GListTAtoms2[Mc_AN][i] = NULL;
 
 		  }
 		}
@@ -5447,11 +5454,7 @@ void UCell_Box(int MD_iter, int estimate_switch, int CpyCell)
 
               if (h_AN<=FNAN[Gc_AN]){
 
-		for (Nog=0; Nog<NumOLG[Mc_AN][h_AN]; Nog++){
-
-		  GListTAtoms1[Mc_AN][h_AN][Nog] = TAtoms1[Nog];
-		  GListTAtoms2[Mc_AN][h_AN][Nog] = TAtoms2[Nog];
-		}
+                CpuOverlapStore(Mc_AN,h_AN,NumOLG[Mc_AN][h_AN],TAtoms1,TAtoms2);
 	      }
 	    }
 
@@ -5479,7 +5482,7 @@ void UCell_Box(int MD_iter, int estimate_switch, int CpyCell)
     } /* Mc_AN */ 
 
     if (estimate_switch==0){
-
+      CpuOverlapReport();
       if (firsttime){
       PrintMemory("truncation: GListTAtoms1", sizeof(int)*size_GListTAtoms1, NULL);
       PrintMemory("truncation: GListTAtoms2", sizeof(int)*size_GListTAtoms1, NULL);
@@ -5590,6 +5593,10 @@ void UCell_Box(int MD_iter, int estimate_switch, int CpyCell)
 
       } /* #pragma omp parallel */
 
+      if(GridN_Atom[Gc_AN]>0){
+        int *exact=realloc(MGridListAtom[Mc_AN],(size_t)GridN_Atom[Gc_AN]*sizeof(int));
+        if(exact)MGridListAtom[Mc_AN]=exact;
+      }
       dtime(&Etime_atom); 
       time_per_atom[Gc_AN] += Etime_atom - Stime_atom;
     }
@@ -7783,6 +7790,7 @@ void free_arrays_truncation0()
     }
     free(GListTAtoms2);
     free(GListTAtoms1);
+    CpuOverlapDestroy();
   }
 
   if (alloc_first[3]==0){
@@ -7965,27 +7973,6 @@ void free_arrays_truncation0()
       free(Vxc_Grid_D);
     }
 
-    /* Orbs_Grid */
-
-    for (Mc_AN=0; Mc_AN<=Matomnum; Mc_AN++){
-      if (Mc_AN==0){
-        Gc_AN = 0;
-        num = 1;
-      }
-      else{
-        Gc_AN = F_M2G[Mc_AN];
-        num = GridN_Atom[Gc_AN];
-      }
-
-      if (Mc_AN==0 || !CpuGridShared_IsAtom(Gc_AN)){
-      for (Nc=0; Nc<num; Nc++){
-        free(Orbs_Grid[Mc_AN][Nc]);
-      }
-      }
-      free(Orbs_Grid[Mc_AN]); 
-    }
-    free(Orbs_Grid); 
-
     /* COrbs_Grid */
 
     if (Cnt_switch!=0){
@@ -8008,43 +7995,7 @@ void free_arrays_truncation0()
       free(COrbs_Grid);
     }
 
-    /* Orbs_Grid_FNAN */
-
-    for (Mc_AN=0; Mc_AN<=Matomnum; Mc_AN++){
-
-      if (Mc_AN==0){
-        free(Orbs_Grid_FNAN[0][0][0]);
-        free(Orbs_Grid_FNAN[0][0]);
-      }
-      else{
-
-	Gc_AN = M2G[Mc_AN];    
-
-	for (h_AN=0; h_AN<=FNAN[Gc_AN]; h_AN++){
-
-	  Gh_AN = natn[Gc_AN][h_AN];
-
-	  if (G2ID[Gh_AN]!=myid){
-            num = NumOLG[Mc_AN][h_AN] + 1;  
-	  }
-	  else {
-            num = 1;
-	  }
-          if (G2ID[Gh_AN]==myid || !CpuGridShared_IsAtom(Gh_AN)){
-
-	  for (Nc=0; Nc<num; Nc++){
-	    free(Orbs_Grid_FNAN[Mc_AN][h_AN][Nc]);
-	  }
-          }
-	  free(Orbs_Grid_FNAN[Mc_AN][h_AN]);
-
-	} /* h_AN */
-      } /* else */
-
-      free(Orbs_Grid_FNAN[Mc_AN]);
-    }
-    free(Orbs_Grid_FNAN);
-    CpuGridShared_Destroy();
+    CpuGridLifetime_Release();
 
   }
 

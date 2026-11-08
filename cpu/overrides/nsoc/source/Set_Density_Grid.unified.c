@@ -16,6 +16,7 @@
 #include <time.h>
 #include <math.h>
 #include "openmx_common.h"
+#include "cpu_overlap_index.h"
 #include "mpi.h"
 #include "cpu_grid_fields_shared.unified.h"
 #include <omp.h>
@@ -410,15 +411,15 @@ double Set_Density_Grid(int Cnt_kind, int Calc_CntOrbital_ON, double *****CDM, d
 #pragma omp for
 	for (Nog=0; Nog<NumOLG[Mc_AN][h_AN]-3; Nog+=4){
 
-	  Nc_0 = GListTAtoms1[Mc_AN][h_AN][Nog];
-	  Nc_1 = GListTAtoms1[Mc_AN][h_AN][Nog+1];
-	  Nc_2 = GListTAtoms1[Mc_AN][h_AN][Nog+2];
-	  Nc_3 = GListTAtoms1[Mc_AN][h_AN][Nog+3];
+	  Nc_0 = CpuOverlapIndex1(Mc_AN,h_AN,Nog);
+	  Nc_1 = CpuOverlapIndex1(Mc_AN,h_AN,Nog+1);
+	  Nc_2 = CpuOverlapIndex1(Mc_AN,h_AN,Nog+2);
+	  Nc_3 = CpuOverlapIndex1(Mc_AN,h_AN,Nog+3);
 	  
-	  Nh_0 = GListTAtoms2[Mc_AN][h_AN][Nog];
-	  Nh_1 = GListTAtoms2[Mc_AN][h_AN][Nog+1];
-	  Nh_2 = GListTAtoms2[Mc_AN][h_AN][Nog+2];
-	  Nh_3 = GListTAtoms2[Mc_AN][h_AN][Nog+3];
+	  Nh_0 = CpuOverlapIndex2(Mc_AN,h_AN,Nog);
+	  Nh_1 = CpuOverlapIndex2(Mc_AN,h_AN,Nog+1);
+	  Nh_2 = CpuOverlapIndex2(Mc_AN,h_AN,Nog+2);
+	  Nh_3 = CpuOverlapIndex2(Mc_AN,h_AN,Nog+3);
 	  
 	  /* Now under the orbital optimization */
 	  if (Cnt_kind==0 && Cnt_switch==1){
@@ -453,12 +454,16 @@ double Set_Density_Grid(int Cnt_kind, int Calc_CntOrbital_ON, double *****CDM, d
 	      }
 	    }
             else{
-	      for (j=0; j<NO1; j++){
-		orbs1_0[j] = Orbs_Grid_FNAN[Mc_AN][h_AN][Nog  ][j];
-		orbs1_1[j] = Orbs_Grid_FNAN[Mc_AN][h_AN][Nog+1][j];
-		orbs1_2[j] = Orbs_Grid_FNAN[Mc_AN][h_AN][Nog+2][j];
-		orbs1_3[j] = Orbs_Grid_FNAN[Mc_AN][h_AN][Nog+3][j]; 
-	      }
+	      {const Type_Orbs_Grid *cpu_orbital_row_0=CpuOverlapRow(Mc_AN,h_AN,Nog  );
+const Type_Orbs_Grid *cpu_orbital_row_1=CpuOverlapRow(Mc_AN,h_AN,Nog+1);
+const Type_Orbs_Grid *cpu_orbital_row_2=CpuOverlapRow(Mc_AN,h_AN,Nog+2);
+const Type_Orbs_Grid *cpu_orbital_row_3=CpuOverlapRow(Mc_AN,h_AN,Nog+3);
+for (j=0; j<NO1; j++){
+		orbs1_0[j] = cpu_orbital_row_0[j];
+		orbs1_1[j] = cpu_orbital_row_1[j];
+		orbs1_2[j] = cpu_orbital_row_2[j];
+		orbs1_3[j] = cpu_orbital_row_3[j]; 
+	      }}
 	    }
 	  }
 	  
@@ -510,8 +515,8 @@ double Set_Density_Grid(int Cnt_kind, int Calc_CntOrbital_ON, double *****CDM, d
 	for (Nog = NumOLG[Mc_AN][h_AN] - (NumOLG[Mc_AN][h_AN] % 4); Nog<NumOLG[Mc_AN][h_AN]; Nog++){
 	  /*for (; Nog<NumOLG[Mc_AN][h_AN]; Nog++){*/
 	
-	  Nc = GListTAtoms1[Mc_AN][h_AN][Nog];
-	  Nh = GListTAtoms2[Mc_AN][h_AN][Nog]; 
+	  Nc = CpuOverlapIndex1(Mc_AN,h_AN,Nog);
+	  Nh = CpuOverlapIndex2(Mc_AN,h_AN,Nog); 
  
 
 	  if (Cnt_kind==0 && Cnt_switch==1){
@@ -533,9 +538,10 @@ double Set_Density_Grid(int Cnt_kind, int Calc_CntOrbital_ON, double *****CDM, d
 	      }
 	    }
 	    else{
-	      for (j=0; j<NO1; j++){
-		orbs1[j] = Orbs_Grid_FNAN[Mc_AN][h_AN][Nog][j];
-	      }
+	      {const Type_Orbs_Grid *cpu_orbital_row_0=CpuOverlapRow(Mc_AN,h_AN,Nog);
+for (j=0; j<NO1; j++){
+		orbs1[j] = cpu_orbital_row_0[j];
+	      }}
 	    }
 	  }
 

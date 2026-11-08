@@ -21,6 +21,9 @@
 #include "native_panel_solver.h"
 #include "cpu_hassembly_workspace.h"
 #include "cpu_realspace_d3.h"
+#include "cpu_overlap_index.h"
+#include "mkl_service.h"
+#include <malloc.h>
 #include "lapack_prototypes.h"
 #include <omp.h>
 #include <fftw3.h> 
@@ -259,6 +262,7 @@ double Cluster_DFT_Col(
   FILE *fp_EV;
   double stime, etime;
   double time1,time2,time3,time4,time5,time6,time7,time8;
+  int cpu_grid_rebuild=0;
 
   /* for OpenMP */
   int OMPID,Nthrds,Nprocs;
@@ -388,6 +392,7 @@ double Cluster_DFT_Col(
   CpuNSym_DirectConfigure();
   if (strcasecmp(mode,"scf")==0) CpuRSym_BeforeSolve(SCF_iter,nh,CntOLP);
   nsym_warm = CpuNSym_Prepare(SCF_iter);
+  if(CpuNSym_NativeReturnEnabled()&&(!nsym_warm||strcasecmp(mode,"scf")!=0)){fprintf(stderr,"CPU_NSOC_NATIVE_RETURN requires full projected SCF symmetry solving\n");MPI_Abort(mpi_comm_level1,95);}
   nsym_rebuild_s = CpuNSym_RawSRebuild();
   if (strcasecmp(mode,"scf")==0) direct_bypass=CpuNSym_DirectRegister(SCF_iter,n,nh,CntOLP);
   if (direct_bypass && SCF_iter==1) CpuNSym_DirectWorkspaceProve(Work1,CDM1,EDM1,cal_partial_charge?PDM1:NULL);
@@ -544,6 +549,10 @@ double Cluster_DFT_Col(
     Num_Rcv_EV[ID] = 0;
   }
 
+  index_Snd_i=index_Snd_j=index_Rcv_i=index_Rcv_j=NULL;
+  EVec_Snd=EVec_Rcv=NULL;
+  Max_Num_Snd_EV=Max_Num_Rcv_EV=0;
+  if(!(nsym_warm&&CpuNSym_NativeReturnEnabled())){
   for (i=0; i<na_rows; i++){
 
     ig = np_rows*nblk*((i)/nblk) + (i)%nblk + ((np_rows+my_prow)%np_rows)*nblk + 1;
@@ -590,6 +599,10 @@ double Cluster_DFT_Col(
   index_Rcv_j = (int*)malloc(sizeof(int)*Max_Num_Rcv_EV);
   EVec_Rcv = (double*)malloc(sizeof(double)*Max_Num_Rcv_EV);
 
+  }else if(myid0==Host_ID){
+    printf("CPU_NSOC_NATIVE_COMM_BUFFERS legacy_EVec_buffers=0 redundant_count_exchange=0 returned_states=unchanged\n");fflush(stdout);
+  }
+
   /* for PrintMemory */
 
   if (firsttime && memoryusage_fileout){
@@ -614,6 +627,24 @@ double Cluster_DFT_Col(
 
   if (nsym_warm){
     for (i1=0; i1<=n; i1++) ko[spin][i1] = 10000.0;
+    if(CpuNSym_NativeReturnEnabled())CpuNSym_SetNativeReturn(SCF_iter,EVec1[spin],
+      (size_t)n*(ie2[myid1]>=is2[myid1]?ie2[myid1]-is2[myid1]+1:0),is2[myid1],ie2[myid1]);
+    const char *grid_option=getenv("OPENMX_CPU_GRID_RECOMPUTE");
+    int requested=!grid_option||!strcmp(grid_option,"0")?0:!strcmp(grid_option,"1")?1:!strcmp(grid_option,"2")?2:-1;
+    int low,high;
+    MPI_Allreduce(&requested,&low,1,MPI_INT,MPI_MIN,mpi_comm_level1);
+    MPI_Allreduce(&requested,&high,1,MPI_INT,MPI_MAX,mpi_comm_level1);
+    if(low<0||low!=high||(high&&(!CpuNSym_NativeReturnEnabled()||!CpuOverlapPairs||
+        !CpuOverlapEligible()||strcasecmp(mode,"scf")))){
+      fprintf(stderr,"CPU_NSOC_GRID_RECOMPUTE requires agreed 0/1/2 and eligible fixed scalar projected SCF\n");
+      MPI_Abort(mpi_comm_level1,96);abort();
+    }
+    if(requested){
+      /* H/S have been assembled. Neither sector solving nor DM/EDM reads
+       * orbital-grid values. Keep the mappings and rebuild exact values after
+       * the last matrix reader, before Set_Density_Grid is allowed to run. */
+      CpuGridShared_Suspend();cpu_grid_rebuild=1;
+    }
     CpuNSym_Solve(SCF_iter,n,MaxN,ko[spin],Ss,Hs,Cs,nh,CntOLP);
     if (measure_time) dtime(&stime);
   }
@@ -699,6 +730,7 @@ double Cluster_DFT_Col(
 
   /* MPI communications of Hs */
 
+  if(!CpuNSym_NativeReturned(SCF_iter)){
   for (ID=0; ID<numprocs1; ID++){
     
     IDS = (myid1 + ID) % numprocs1;
@@ -766,6 +798,7 @@ double Cluster_DFT_Col(
       m = (jg-1)*(ie2[myid1]-is2[myid1]+1)+ig-is2[myid1]; 
       EVec1[spin][m] = EVec_Rcv[k];
     }
+  }
   }
 
   if (measure_time){
@@ -1626,6 +1659,16 @@ double Cluster_DFT_Col(
   free(Num_Snd_EV);
   free(ie1);
   free(is1);
+
+  if(cpu_grid_rebuild){
+    CpuNSym_RetireStateCoefficients(SCF_iter);
+    MKL_Free_Buffers();malloc_trim(0);
+    CpuGridShared_BeginRebuild();
+    double grid_start=MPI_Wtime();Set_Orbitals_Grid(0);
+    double local=MPI_Wtime()-grid_start,critical=0;
+    MPI_Reduce(&local,&critical,1,MPI_DOUBLE,MPI_MAX,Host_ID,mpi_comm_level1);
+    if(myid0==Host_ID){printf("CPU_NSOC_GRID_REBUILD step=%d critical_seconds=%.9f native_orbitals=1 grid_basis_precision=unchanged\n",SCF_iter,critical);fflush(stdout);}
+  }
 
   /* for elapsed time */
 

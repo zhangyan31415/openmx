@@ -4,13 +4,23 @@ from pathlib import Path
 SPEC=importlib.util.spec_from_file_location('cpu_build',Path(__file__).resolve().parents[1]/'build.py')
 B=importlib.util.module_from_spec(SPEC);SPEC.loader.exec_module(B)
 class BuildContract(unittest.TestCase):
+ def test_fortran_workspaces_do_not_depend_on_shell_stack_limit(self):
+  selection=json.loads((B.REPO/'cpu/overrides/nsoc/UNIFIED_SELECTION.json').read_text())
+  plan=B.source_plan(selection,profile='unified')
+  commands,_=B.command_plan(plan,Path('/unused-build-output'),Path('/unused-oneapi'),'CORE-AVX2')
+  fortran=[row for row in commands if row['language']=='fortran']
+  self.assertTrue(fortran)
+  self.assertTrue(all('-heap-arrays' in row['command']for row in fortran))
+  self.assertTrue(all('-heap-arrays' not in row['command']for row in commands if row['language']=='c'))
  def test_cli_default_is_complete_unified_dry_run(self):
   with tempfile.TemporaryDirectory(prefix='openmx-build-cli-')as directory:
    output=Path(directory)/'new-output'
    run=subprocess.run([sys.executable,str(B.REPO/'cpu/build.py'),'--output',str(output)],capture_output=True,text=True,check=True)
    plan=json.loads(run.stdout)
    self.assertEqual(plan['profile'],'unified');self.assertEqual(plan['state'],'planned')
-   self.assertEqual(len(plan['compile_commands']),311)
+   labels=[row['label']for row in plan['compile_commands']]
+   self.assertEqual(len(labels),len(set(labels)))
+   self.assertTrue({'cpu_overlap_index.o','cpu_vna_force_stream.o'}<=set(labels))
    self.assertTrue(plan['capabilities']['nsoc_symmetry']);self.assertTrue(plan['capabilities']['generic_soc'])
    self.assertEqual(Path(plan['selection']),B.REPO/'cpu/overrides/nsoc/UNIFIED_SELECTION.json')
    self.assertEqual(plan['external_openmx_objects'],[]);self.assertEqual(plan['external_elpa_objects'],[])

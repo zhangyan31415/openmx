@@ -1,3 +1,4 @@
+#include "cpu_reclaim.h"
 /* Optional fixed-geometry Gamma spinless D3 warmup. Stock raw solver resumes
  * before convergence. One additional distributed real matrix, no replicated
  * dense U/H/S. Original occupations, density, EDM and force routines retained. */
@@ -13,12 +14,15 @@
 #include "cpu_nsoc_sym.h"
 #include "cpu_nsoc_scratch.h"
 #include "cpu_nsoc_sparse.h"
+#include "cpu_nsoc_owner_openmx.h"
 #include "native_panel_solver.h"
+extern int flag_export_DM;
 static int direct_active=0;
 static int direct_mode=-1,direct_step=0;
 static double direct_reference_s_defect=0.;
 static void direct_assemble(int step,int kind,double*full,int*desc,double*work);
 static void direct_release(void);
+static void native_state_release(void);
 
 extern int numroc_(int*,int*,int*,int*,int*);
 extern void descinit_(int*,int*,int*,int*,int*,int*,int*,int*,int*,int*);
@@ -37,7 +41,7 @@ typedef struct {int n,ofs,nr,nc,nb,desc[9];size_t soff;} Sector;
 typedef struct {int row,col;double value;} Entry;
 typedef struct {double value;int source;} Eigen;
 #define NSYM_MAX_SECTORS 48
-static struct {int loaded,version,N,natoms,nnz,nsec,sz[NSYM_MAX_SECTORS],*perm,*c2perm,*ri,*rankmap;int64_t *cp;double *cv,*U,*partial_eval_cache;size_t cap,active,scap;Sector sec[NSYM_MAX_SECTORS];double shift[3],rot[9],c2shift[3];int partial_cache[NSYM_MAX_SECTORS],partial_cache_valid;} B;
+static struct {int loaded,version,N,natoms,nnz,nsec,sz[NSYM_MAX_SECTORS],*perm,*c2perm,*ri,*rankmap;int64_t *cp;double *cv,*U,*partial_eval_cache;size_t cap,active,scap,hcap,hoff[NSYM_MAX_SECTORS];Sector sec[NSYM_MAX_SECTORS];double shift[3],rot[9],c2shift[3];int partial_cache[NSYM_MAX_SECTORS],partial_cache_valid;} B;
 /* SECTOR_PARALLEL_PATCH_BEGIN */
 static void sector_parallel_release(void);
 /* SECTOR_PARALLEL_PATCH_END */
@@ -51,6 +55,22 @@ static void die(const char*s){int r;MPI_Comm_rank(mpi_comm_level1,&r);fprintf(st
 static void *mem(size_t n,size_t s){if(s&&n>SIZE_MAX/s)die("allocation overflow");void*p=calloc(n?n:1,s);if(!p)die("allocation failed");return p;}
 static void rd(void*p,size_t s,size_t n,FILE*f){if(fread(p,s,n,f)!=n)die("short real basis file");}
 static double option(const char*k,double fallback){const char*p=getenv(k);if(!p||!*p)return fallback;char*end;double q=strtod(p,&end);if(end==p||*end||!isfinite(q))die("invalid numeric environment setting");return q;}
+static struct {double*coeff;size_t capacity;int step,first,last,returned;} native_return;
+static int native_return_mode(void){
+ static int cached=-1;if(cached>=0)return cached;
+ double q=option("OPENMX_CPU_NSOC_NATIVE_RETURN",0);int v=(int)q,lo,hi;
+ if(q!=0&&q!=1&&q!=2&&q!=3&&q!=4)die("NATIVE_RETURN must be 0, 1, 2(audit), 3(provider) or 4(provider audit)");
+ MPI_Allreduce(&v,&lo,1,MPI_INT,MPI_MIN,mpi_comm_level1);MPI_Allreduce(&v,&hi,1,MPI_INT,MPI_MAX,mpi_comm_level1);
+ if(lo!=hi)die("NATIVE_RETURN differs across ranks");cached=v;return cached;
+}
+int CpuNSym_NativeReturnEnabled(void){return native_return_mode()!=0;}
+void CpuNSym_SetNativeReturn(int step,double*coeff,size_t capacity,int first,int last){
+ if(!CpuNSym_NativeReturnEnabled())return;
+ if(step<1||!coeff||last<first-1||(last>=first&&first<1))die("invalid native coefficient registration");
+ native_return.coeff=coeff;native_return.capacity=capacity;native_return.step=step;
+ native_return.first=first;native_return.last=last;native_return.returned=0;
+}
+int CpuNSym_NativeReturned(int step){return CpuNSym_NativeReturnEnabled()&&native_return.returned==step;}
 static int rank0(void){int r;MPI_Comm_rank(mpi_comm_level1,&r);return r==0;}
 static int raw_reset_at(void){
  double q=option("OPENMX_CPU_NSOC_RAW_RESET_AT",0);
@@ -91,7 +111,9 @@ void CpuNSym_ReserveEigenScratch(double **coeff,size_t native_capacity,size_t ma
  int rank;MPI_Comm_rank(mpi_comm_level1,&rank);
  printf("CPU_NSOC_EIGEN_SCRATCH_RESERVE rank=%d native_doubles=%zu matrix_doubles=%zu reserved_doubles=%zu extra_doubles=%zu owner=EVec1\n",rank,native_capacity,matrix_capacity,eigen_scratch.capacity,eigen_scratch.capacity-native_capacity);fflush(stdout);
 }
+size_t CpuNSym_EigenAllocationCapacity(size_t native_capacity){return eigen_scratch.ptr?eigen_scratch.capacity:native_capacity;}
 void CpuNSym_ReleaseEigenScratch(void){
+ native_state_release();
  direct_release();
 /* SECTOR_PARALLEL_PATCH_BEGIN */
  sector_parallel_release();
@@ -221,7 +243,7 @@ static void basis_init(int n){
   int rank;MPI_Comm_rank(mpi_comm_level1,&rank);
   printf("CPU_NSOC_EIGEN_SCRATCH_ACTIVE rank=%d reused_doubles=%zu removed_separate_bytes=%zu extra_distributed_matrices=0 ownership=borrowed_EVec1\n",rank,B.cap,B.cap*sizeof(double));fflush(stdout);
  }else B.U=mem(B.cap,8);
- B.scap=0;int ofs=0,zero=0,info;
+ B.scap=0;B.hcap=0;int ofs=0,zero=0,info;
  for(int k=0;k<B.nsec;k++){
   Sector*t=B.sec+k;t->n=B.sz[k];t->ofs=ofs;ofs+=t->n;t->nb=nblk;
   while(t->nb>1&&(t->nb*np_rows>t->n||t->nb*np_cols>t->n))t->nb/=2;
@@ -229,9 +251,11 @@ static void basis_init(int n){
   t->nr=numroc_(&t->n,&t->nb,&my_prow,&zero,&np_rows);t->nc=numroc_(&t->n,&t->nb,&my_pcol,&zero,&np_cols);int ld=t->nr?t->nr:1;
   descinit_(t->desc,&t->n,&t->n,&t->nb,&t->nb,&zero,&zero,&ictxt1,&ld,&info);if(info)die("sector descriptor initialization");
   t->soff=(paired_basis()&&k==1)?0:B.scap;if(!(paired_basis()&&k==1))B.scap+=(size_t)t->nr*t->nc*(c3_basis()&&k==0?2:1);
+  B.hoff[k]=B.hcap;B.hcap+=(size_t)t->nr*t->nc;
   if((size_t)t->nr*t->nc>B.cap)die("sector workspace exceeds stock allocation");
  }
  if(B.scap>B.active)die("overlap factor cache exceeds actual local stock S allocation");
+ if(CpuNSym_NativeReturnEnabled()&&B.hcap>B.active)die("packed sector H exceeds actual local stock H allocation");
  int p;MPI_Comm_size(mpi_comm_level1,&p);if(np_rows*np_cols!=p)die("requires one full real BLACS world");
  int me[2]={my_prow,my_pcol},*all=mem(2*p,4);MPI_Allgather(me,2,MPI_INT,all,2,MPI_INT,mpi_comm_level1);B.rankmap=mem(p,4);for(int k=0;k<p;k++)B.rankmap[k]=-1;
  for(int k=0;k<p;k++){int q=all[2*k]*np_cols+all[2*k+1];if(q<0||q>=p||B.rankmap[q]!=-1)die("invalid BLACS-to-MPI mapping");B.rankmap[q]=k;}free(all);
@@ -372,7 +396,7 @@ static void c3_complex_extract(double*full,int*desc,double*packed,double*scratch
  if(rank0()){printf("CPU_NSOC_C3_COMPLEX_COV step=%d field=%s diagonal_relative=%.12e cross_relative=%.12e n=%d\n",step,field,diagonal,cross,t->n);fflush(stdout);}
 }
 static void overlap_factors(double*S,double*work){
- double defect;
+ double defect;int packed_direct=direct_active&&direct_mode==1&&d3_basis()&&CpuNSym_NativeReturnEnabled();
  if(direct_active){
   if(direct_mode==2){congruence(S,descS,work,descC);direct_reference_s_defect=offblock_norm(S);}else direct_reference_s_defect=0.;
   direct_assemble(direct_step,2,S,descS,work);defect=direct_reference_s_defect;
@@ -380,6 +404,13 @@ static void overlap_factors(double*S,double*work){
  double strict=option("OPENMX_CPU_NSOC_GENERIC_COV_STRICT",1);double cov_tol=option("OPENMX_CPU_NSOC_GENERIC_COV_TOL",1e-5);
  if(!isfinite(cov_tol)||cov_tol<=0)die("GENERIC_COV_TOL must be positive");
  if(!isfinite(defect)||(d3_basis()&&defect>1e-5)||(B.version>=2&&strict!=0&&defect>cov_tol))die("raw overlap fails sector covariance; check the validated basis and operation convention");
+ if(packed_direct){
+  /* Rpa produced one E representative and both distinct A blocks. Their
+   * 32-block outputs were redistributed directly into the same packed
+   * factor descriptors; no full AO S or duplicate E was ever stored. */
+  for(int k=0;k<B.nsec;k++)if(k!=1){Sector*t=B.sec+k;int one=1,info;pdpotrf_("L",&t->n,S+t->soff,&one,&one,t->desc,&info);if(info)die("direct packed overlap Cholesky failed");}
+  if(rank0()){printf("CPU_NSOC_DIRECT_OVERLAP packed_factors=1 full_AO_S_intermediate=0 source_blocksize=32 target_sector_descriptors=unchanged equivalent_E=one_certified_representative\n");fflush(stdout);}
+ }else{
  if(c3_basis()){
   c3_complex_extract(S,descS,work,B.U,1,"S");Sector*t=B.sec;int one=1,info;
   pzpotrf_("L",&t->n,(dcomplex*)work,&one,&one,t->desc,&info);if(info)die("C3 complex overlap Cholesky failed");
@@ -392,6 +423,9 @@ static void overlap_factors(double*S,double*work){
   int one=1,info;pdpotrf_("L",&t->n,p,&one,&one,t->desc,&info);if(info)die("projected overlap Cholesky failed");
  }
  memcpy(S,B.U,B.scap*8);
+ }
+ size_t reclaimed=CpuReclaim_Pages(S,B.scap*8,B.active*8);
+ {int rank;MPI_Comm_rank(mpi_comm_level1,&rank);printf("CPU_NSOC_OVERLAP_RECLAIM rank=%d allocation_bytes=%zu live_factor_bytes=%zu returned_bytes=%zu virtual_capacity_retained=1\n",rank,B.active*8,B.scap*8,reclaimed);fflush(stdout);}
  if(rank0()){
   if(direct_active&&direct_mode==1)printf("CPU_NSOC_SYM_OVERLAP covariance=construction_certificate_actual_D3_AO_intertwiner_distinct_A_fresh_Reynolds raw_offblock_measurement=not_performed cached_factor_doubles=%zu\n",B.scap);
   else printf("CPU_NSOC_SYM_OVERLAP projected_offblock_relative=%.12e cached_factor_doubles=%zu\n",defect,B.scap);
@@ -427,6 +461,7 @@ static void reorder(double*ev,double*ko,int maxn,double*from,double*to){
  free(sort);free(inv);free(ct);free(rc);free(sd);free(rdp);free(pos);
 }
 #include "fused_return_native_v2.inc"
+#include "cpu_native_return.inc"
 /* CHECK uses only sampled O(N) vectors. Raw matrix blocks remain distributed
  * over owning atoms; the six local group contributions are summed once. */
 static void group_vector(const double*v,double*out,double*coeff,int power,int flip,int transpose){
@@ -560,15 +595,17 @@ static void CpuNSym_Solve_legacy(int step,int n,int maxn,double*ko,double*S,doub
 }
 
 static void solve_sector_once(int k,int wanted,double*Hsrc,double*Hdst,double*S,double*eval,double*work,int rows,int cols,int world,int one,double a,double b,int phase,int step){
- Sector*t=B.sec+k;double t0=MPI_Wtime();copyblock(Hsrc,descH,t,work);
- if(d3_basis()&&k==0){copyblock(Hsrc,descH,B.sec+1,B.U);if(B.version==3)paired_verify(paired_relative(work,B.U,(size_t)t->nr*t->nc,1.),"D3 Hamiltonian equivalent blocks disagree");for(size_t i=0;i<(size_t)t->nr*t->nc;i++)work[i]=.5*(work[i]+B.U[i]);}
+ Sector*t=B.sec+k;double t0=MPI_Wtime();int packed=CpuNSym_NativeReturnEnabled();
+ if(packed)memcpy(work,Hsrc+B.hoff[k],(size_t)t->nr*t->nc*sizeof(double));else copyblock(Hsrc,descH,t,work);
+ if(d3_basis()&&k==0){if(packed)memcpy(B.U,Hsrc+B.hoff[1],(size_t)t->nr*t->nc*sizeof(double));else copyblock(Hsrc,descH,B.sec+1,B.U);if(B.version==3)paired_verify(paired_relative(work,B.U,(size_t)t->nr*t->nc,1.),"D3 Hamiltonian equivalent blocks disagree");for(size_t i=0;i<(size_t)t->nr*t->nc;i++)work[i]=.5*(work[i]+B.U[i]);}
  double*sf=S+t->soff;
  pdtrsm_("L","L","N","N",&t->n,&t->n,&a,sf,&one,&one,t->desc,work,&one,&one,t->desc);
  pdtrsm_("R","L","T","N",&t->n,&t->n,&a,sf,&one,&one,t->desc,work,&one,&one,t->desc);
  pdtran_(&t->n,&t->n,&a,work,&one,&one,t->desc,&b,B.U,&one,&one,t->desc);for(size_t i=0;i<(size_t)t->nr*t->nc;i++)work[i]=.5*(work[i]+B.U[i]);double t1=MPI_Wtime();
  int nev=wanted;elpa_solve_evp_real_2stage_double_impl_(&t->n,&nev,work,&t->nr,eval+t->ofs,B.U,&t->nr,&t->nb,&t->nc,&rows,&cols,&world);if(nev!=wanted)die("ELPA changed returned state count");for(int q=wanted;q<t->n;q++)eval[t->ofs+q]=DBL_MAX;MPI_Bcast(eval+t->ofs,t->n,MPI_DOUBLE,0,mpi_comm_level1);double t2=MPI_Wtime();
- pdtrsm_("L","L","T","N",&t->n,&wanted,&a,sf,&one,&one,t->desc,B.U,&one,&one,t->desc);putblock_rect(B.U,t,wanted,Hdst,descH,t->ofs);
- if(d3_basis()&&k==0){putblock_rect(B.U,t,wanted,Hdst,descH,B.sec[1].ofs);memcpy(eval+B.sec[1].ofs,eval+t->ofs,t->n*8);}
+ pdtrsm_("L","L","T","N",&t->n,&wanted,&a,sf,&one,&one,t->desc,B.U,&one,&one,t->desc);
+ if(packed)memcpy(Hdst+B.hoff[k],B.U,(size_t)t->nr*t->nc*sizeof(double));else putblock_rect(B.U,t,wanted,Hdst,descH,t->ofs);
+ if(d3_basis()&&k==0){if(packed)memcpy(Hdst+B.hoff[1],B.U,(size_t)t->nr*t->nc*sizeof(double));else putblock_rect(B.U,t,wanted,Hdst,descH,B.sec[1].ofs);memcpy(eval+B.sec[1].ofs,eval+t->ofs,t->n*8);}
  double t3=MPI_Wtime();if(phase){int r;MPI_Comm_rank(mpi_comm_level1,&r);printf("CPU_NSOC_SYM_SECTOR rank=%d step=%d sector=%d n=%d nev=%d transform=%.6f eigen=%.6f recover=%.6f\n",r,step,k,t->n,wanted,t1-t0,t2-t1,t3-t2);fflush(stdout);}
 }
 
@@ -658,6 +695,22 @@ void CpuNSym_Solve(int step,int n,int maxn,double*ko,double*S,double*H,double*W,
 /* SECTOR_PARALLEL_PATCH_BEGIN */
  int parallel=sector_parallel_request(step);if(parallel)sector_parallel_prepare(S,H,W);
  int cfs_mode=CfsNativeRequest();(void)CfsNativeSelectedRequest(cfs_mode);
+ if(CpuNSym_NativeReturnEnabled()){
+  if(!d3_basis()||B.version!=3||!direct_active||direct_mode!=1||parallel||cfs_mode!=1||
+     CfsNativeSelectedRequest(cfs_mode)!=1||!compact_eigen_scratch()||
+     option("OPENMX_CPU_NSOC_DUMP",0)!=0||native_return.step!=step||native_return.coeff!=B.U)
+   die("NATIVE_RETURN requires registered borrowed EVec1, direct real D3 version3, full-projected full-spectrum, selected/fused return1, no sector parallel or dump");
+  if(native_return_mode()>=3&&(!CpuNSOCOwnerMode()||MO_fileout||level_fileout>=2||Dos_fileout||DosGauss_fileout||
+      flag_export_DM||CWF_Calc||CWF_fileout_flag||Wannier_Func_Calc||Wannier90_fileout||
+      pop_anal_aow_flag||unfold_electronic_band||Polarization_ABC_flag||xanes_calc||xanes_gs_fileout))
+   die("state coefficient provider requires owner DM without eigenstate-based output and level.fileout<2");
+  /* Previous iteration's native coefficients and packed return input have
+   * no readers after its DM/EDM finished. Their current-step first writes
+   * follow below; discard stale pages before sector solving, not afterwards. */
+  size_t old_u=CpuReclaim_Pages(B.U,0,eigen_scratch.capacity*sizeof(double));
+  size_t old_w=CpuReclaim_Pages(W,0,B.cap*sizeof(double));
+  if(phase){int rank;MPI_Comm_rank(mpi_comm_level1,&rank);printf("CPU_NSOC_NATIVE_DEAD_SCRATCH rank=%d step=%d old_coeff_pages_returned=%zu old_return_input_pages_returned=%zu previous_DM_complete=1\n",rank,step,old_u,old_w);fflush(stdout);}
+ }
 /* SECTOR_PARALLEL_PATCH_END */
 
  if(rank0()){printf("CPU_NSOC_SYM_PROJECT step=%d n=%d sectors=%d,%d,%d,%d maxn=%d evp_mode=%s\n",step,n,B.sz[0],B.sz[1],B.sz[2],B.sz[3],maxn,warm_partial?"partial_warm_adaptive":(partial?"partial_adaptive":"full"));fflush(stdout);}
@@ -707,11 +760,12 @@ double strict_h=option("OPENMX_CPU_NSOC_GENERIC_COV_STRICT",1);double cov_tol=op
  if(d3_basis())solved[1]=solved[0];
  if(rank0()&&partial){printf("CPU_NSOC_SYM_PARTIAL_COUNTS solved=%d,%d,%d,%d weighted=%d requested=%d\n",solved[0],solved[1],solved[2],solved[3],partial_weighted_count(solved),maxn);fflush(stdout);}
  double tE=MPI_Wtime(),tBack;
- if(cfs_mode){CfsNativeTail(step,n,maxn,eval,ko,H,W,phase,cfs_mode);tBack=MPI_Wtime();}
+ if(CpuNSym_NativeReturnEnabled()){CpuNativeReturnTail(step,n,maxn,eval,ko,H,W,phase);tBack=MPI_Wtime();}
+ else if(cfs_mode){CfsNativeTail(step,n,maxn,eval,ko,H,W,phase,cfs_mode);tBack=MPI_Wtime();}
  else{backtransform(step,n,H,W,phase);tBack=MPI_Wtime();reorder(eval,ko,maxn,W,H);}
  representative_record(n,maxn,eval);double end=MPI_Wtime();
  if(option("OPENMX_CPU_NSOC_CHECK",0)!=0)sampled_verify(step,maxn,ko,eval,W,H,nh,olp);
- if(step==1)dump_small(H,NULL,ko,maxn,"nsym_projected_eigen.bin",step);
+ if(step==1&&!CpuNSym_NativeReturnEnabled())dump_small(H,NULL,ko,maxn,"nsym_projected_eigen.bin",step);
  if(phase){int r;MPI_Comm_rank(mpi_comm_level1,&r);printf("CPU_NSOC_SYM_PHASE rank=%d step=%d overlap=%.6f rotate=%.6f sectors=%.6f backtransform=%.6f reorder=%.6f total=%.6f\n",r,step,tS-start,tH-tS,tE-tH,tBack-tE,end-tBack,end-start);fflush(stdout);}
  if(partial_opt==2&&d3_basis()&&!partial){if(!B.partial_eval_cache)B.partial_eval_cache=mem(n,8);memcpy(B.partial_eval_cache,eval,(size_t)n*8);B.partial_cache_valid=1;}
  if(partial)free(Hsrc);free(eval);MPI_Comm_free(&rowcomm);MPI_Comm_free(&colcomm);

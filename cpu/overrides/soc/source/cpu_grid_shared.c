@@ -9,9 +9,11 @@
 #include <errno.h>
 #include <sched.h>
 #include <sys/syscall.h>
+#include <sys/mman.h>
 #include <unistd.h>
 
 static MPI_Comm node_comm=MPI_COMM_NULL;
+static MPI_Comm grid_world=MPI_COMM_NULL; /* borrowed: native calculation owns it */
 static MPI_Win grid_win=MPI_WIN_NULL;
 static unsigned char *grid_base=NULL;
 static size_t *atom_offsets=NULL;
@@ -24,9 +26,14 @@ static unsigned char *replica_base=NULL;
 static int numa_enabled=0,local_numa=-1,numa_rank=0,numa_size=0,numa_domains=0;
 static int node_leader=-1,world_nodes=0;
 static int *atom_owner_numa=NULL;
+static size_t *replica_offsets=NULL;
+static size_t legacy_remote_copy_bytes=0;
+static int replica_atoms=0;
 static size_t replica_mapped=0,replica_copy_bytes=0;
 static unsigned long long publish_epoch=0;
 static double last_copy_rankmax=0.0,last_publish_rankmax=0.0;
+static int grid_ready=0,grid_suspended=0,grid_rebuilding=0,last_suspend_removed=0;
+static unsigned long long suspend_epoch=0;
 
 static void fail(MPI_Comm comm, const char *message)
 {
@@ -93,6 +100,7 @@ void CpuGridShared_Init(MPI_Comm comm,int natoms,const int *owners,
   void *segment=NULL;
   size_t bytes=0, length;
   if(node_comm!=MPI_COMM_NULL) CpuGridShared_Destroy();
+  grid_world=comm;
   MPI_Comm_rank(comm,&rank);
   MPI_Comm_size(comm,&nrank);
   const char *domain=getenv("OPENMX_CPU_GRID_DOMAIN");
@@ -206,7 +214,8 @@ static void init_numa(MPI_Comm comm,int natoms,const int *owners,int node_size)
   MPI_Allreduce(MPI_IN_PLACE,&node_leader,1,MPI_INT,MPI_MIN,node_comm);
   rank_domain=malloc((size_t)nrank*2*sizeof(*rank_domain));
   atom_owner_numa=malloc(((size_t)natoms+1)*sizeof(*atom_owner_numa));
-  collective_require(comm,rank_domain&&atom_owner_numa,"NUMA grid owner metadata allocation failed");
+  replica_offsets=malloc(((size_t)natoms+1)*sizeof(*replica_offsets));
+  collective_require(comm,rank_domain&&atom_owner_numa&&replica_offsets,"NUMA grid owner metadata allocation failed");
   /* Linux NUMA IDs are host-local: the physical-node identity must participate
      before comparing them. No address or row for another host is exposed. */
   identity[0]=node_leader;identity[1]=local_numa;
@@ -218,23 +227,42 @@ static void init_numa(MPI_Comm comm,int natoms,const int *owners,int node_size)
     for(j=0;j<i;j++)if(rank_domain[2*j]==node_leader&&rank_domain[2*j+1]==rank_domain[2*i+1])break;
     if(j==i)numa_domains++;
   }
-  atom_owner_numa[0]=-1;replica_copy_bytes=0;valid=1;j=0;
+  atom_owner_numa[0]=-1;replica_copy_bytes=legacy_remote_copy_bytes=0;replica_atoms=0;valid=1;j=0;
+  unsigned char *needed=calloc((size_t)natoms+1,1);
+  collective_require(comm,needed&&FNAN&&natn,"NUMA grid demand graph allocation or neighbor metadata missing");
+  for(i=0;i<=natoms;i++)replica_offsets[i]=SIZE_MAX;
   for(i=0;i<nrank;i++)if(rank_domain[2*i]==node_leader)j++;
   if(j!=node_size)valid=0;
+  /* ReadRow consumers bind first-neighbor orbital rows for their owned
+     centers. Build the union for this physical node + NUMA identity before
+     freeing the rank-domain map. No off-node pointer is exposed. */
   for(i=1;i<=natoms;i++){
     atom_owner_numa[i]=-1;
     if(!CpuGridShared_IsAtom(i))continue;
     if(rank_domain[2*owners[i]]!=node_leader){valid=0;continue;}
     atom_owner_numa[i]=rank_domain[2*owners[i]+1];
-    if(atom_owner_numa[i]!=local_numa)replica_copy_bytes+=atom_bytes(i);
+    if(atom_owner_numa[i]!=local_numa)continue;
+    if(FNAN[i]<0||!natn[i]){valid=0;continue;}
+    for(int h=0;h<=FNAN[i];h++){
+      int atom=natn[i][h];if(atom<1||atom>natoms){valid=0;continue;}
+      if(CpuGridShared_IsAtom(atom))needed[atom]=1;
+    }
   }
-  free(rank_domain);
-  collective_require(comm,valid,"canonical owner must belong to local physical node");
+  for(i=1;i<=natoms;i++){
+    if(!CpuGridShared_IsAtom(i)||atom_owner_numa[i]==local_numa)continue;
+    legacy_remote_copy_bytes+=atom_bytes(i);
+    if(!needed[i])continue;
+    size_t next;
+    if(!CpuGridShared_PlanBytes((size_t)atom_grids[i],(size_t)atom_norbs[i],replica_copy_bytes,&next)){valid=0;continue;}
+    replica_offsets[i]=replica_copy_bytes;replica_copy_bytes=next;replica_atoms++;
+  }
+  free(needed);free(rank_domain);
+  collective_require(comm,valid,"invalid node/NUMA neighbor demand or replica byte-size overflow");
   rc=MPI_Comm_split(node_comm,local_numa,rank,&numa_comm);
   collective_require(comm,rc==MPI_SUCCESS&&numa_comm!=MPI_COMM_NULL,"NUMA communicator creation failed");
   MPI_Comm_set_errhandler(numa_comm,MPI_ERRORS_RETURN);
   MPI_Comm_rank(numa_comm,&numa_rank);MPI_Comm_size(numa_comm,&numa_size);
-  replica_mapped=replica_copy_bytes?grid_bytes:0;
+  replica_mapped=replica_copy_bytes; /* packed demand, without canonical/unused holes */
   valid=1;
   if(replica_mapped){
     rc=MPI_Win_allocate_shared(numa_rank==0?(MPI_Aint)replica_mapped:0,1,MPI_INFO_NULL,numa_comm,&segment,&replica_win);
@@ -252,17 +280,20 @@ static void init_numa(MPI_Comm comm,int natoms,const int *owners,int node_size)
   collective_require(comm,rc==MPI_SUCCESS,"NUMA replica access epoch failed");
   numa_enabled=1;publish_epoch=0;
   if(numa_rank==0){
-    printf("[CPU_GRID_NUMA] active=1 numa_id=%d domains=%d numa_ranks=%d canonical_bytes=%zu replica_mapped_capacity_bytes=%zu replica_copy_payload_bytes=%zu locality_verified=0 node_leader_rank=%d physical_nodes=%d scope=node_owned remote_ghosts=native_evaluation\n",
-      local_numa,numa_domains,numa_size,grid_bytes,replica_mapped,replica_copy_bytes,node_leader,world_nodes);fflush(stdout);
+    printf("[CPU_GRID_NUMA] active=1 numa_id=%d domains=%d numa_ranks=%d canonical_bytes=%zu replica_mapped_capacity_bytes=%zu replica_copy_payload_bytes=%zu locality_verified=0 node_leader_rank=%d physical_nodes=%d scope=node_owned remote_ghosts=native_evaluation replica_cached_atoms=%d all_remote_copy_bytes=%zu policy=first_neighbor_demand packing=compact\n",
+      local_numa,numa_domains,numa_size,grid_bytes,replica_mapped,replica_copy_bytes,node_leader,world_nodes,replica_atoms,legacy_remote_copy_bytes);fflush(stdout);
   }
 }
 Type_Orbs_Grid *CpuGridShared_ReadRow(int atom,int grid)
 {
+  if(grid_suspended||grid_rebuilding)return NULL;
   Type_Orbs_Grid *canonical=CpuGridShared_Row(atom,grid);
   if(!canonical||!numa_enabled||atom_owner_numa[atom]==local_numa)return canonical;
-  /* Own-domain gaps in replica storage must never be returned or accessed. */
+  /* Unanticipated consumers retain a correct canonical row. Replication is
+     a locality optimization, not a condition for numerical correctness. */
+  if(!replica_offsets||replica_offsets[atom]==SIZE_MAX)return canonical;
   if(!replica_base||publish_epoch==0)return NULL;
-  return (Type_Orbs_Grid*)(replica_base+atom_offsets[atom]+(size_t)grid*(size_t)atom_norbs[atom]*sizeof(Type_Orbs_Grid));
+  return (Type_Orbs_Grid*)(replica_base+replica_offsets[atom]+(size_t)grid*(size_t)atom_norbs[atom]*sizeof(Type_Orbs_Grid));
 }
 static void replica_sync(void)
 {
@@ -302,14 +333,16 @@ void CpuGridShared_Publish(void)
 {
   double started,copy_started,copy_seconds,publish_seconds;size_t copied=0,ordinal=0;int atom,node_rank;
   unsigned long long local_bytes,all_bytes,mapped,all_mapped;
-  if(!numa_enabled){CpuGridShared_Sync();return;}
+  if(node_comm==MPI_COMM_NULL)return;
+  collective_require(grid_world,!grid_suspended,"Publish requires BeginRebuild after Suspend");
+  if(!numa_enabled){CpuGridShared_Sync();grid_ready=1;grid_rebuilding=0;return;}
   started=MPI_Wtime();CpuGridShared_Sync();copy_started=MPI_Wtime();
   for(atom=1;atom<=atom_count;atom++){
     if(!CpuGridShared_IsAtom(atom))continue;
-    if(atom_owner_numa[atom]==local_numa)continue;
+    if(!replica_offsets||replica_offsets[atom]==SIZE_MAX)continue;
     if(ordinal++%(size_t)numa_size!=(size_t)numa_rank)continue;
     size_t bytes=atom_bytes(atom);
-    if(bytes){memcpy(replica_base+atom_offsets[atom],grid_base+atom_offsets[atom],bytes);copied+=bytes;}
+    if(bytes){memcpy(replica_base+replica_offsets[atom],grid_base+atom_offsets[atom],bytes);copied+=bytes;}
   }
   copy_seconds=MPI_Wtime()-copy_started;replica_sync();publish_epoch++;
   publish_seconds=MPI_Wtime()-started;
@@ -324,6 +357,82 @@ void CpuGridShared_Publish(void)
       publish_epoch,all_bytes,all_mapped,last_copy_rankmax,last_publish_rankmax);fflush(stdout);
   }
   report_numa_pages();
+  grid_ready=1;grid_rebuilding=0;
+}
+
+/* MADV_DONTNEED would leave the shared backing store resident. MADV_REMOVE
+ * punches the backing-store hole and makes all aliases observe zero pages.
+ * Keep allocator/MPI boundaries intact by discarding only whole interior
+ * pages. Failure leaves that mapping intact; it never changes the algorithm. */
+static size_t remove_shared_payload(unsigned char *base,size_t bytes,
+                                   size_t *attempted,int *error)
+{
+  *attempted=0;*error=0;
+  if(!base||!bytes)return 0;
+  long page=sysconf(_SC_PAGESIZE);
+  if(page<=0){*error=EINVAL;return 0;}
+  uintptr_t begin=(uintptr_t)base,end;
+  if(bytes>UINTPTR_MAX-begin || begin>UINTPTR_MAX-(uintptr_t)(page-1)){
+    *error=EOVERFLOW;return 0;
+  }
+  end=begin+bytes;
+  uintptr_t lo=((begin+(uintptr_t)page-1)/(uintptr_t)page)*(uintptr_t)page;
+  uintptr_t hi=(end/(uintptr_t)page)*(uintptr_t)page;
+  if(hi<=lo)return 0;
+  *attempted=(size_t)(hi-lo);
+#if defined(CPU_GRID_TEST_REMOVE_UNSUPPORTED)
+  *error=ENOSYS;
+#elif defined(__linux__) && defined(MADV_REMOVE)
+  if(madvise((void*)lo,(size_t)(hi-lo),MADV_REMOVE)==0)return (size_t)(hi-lo);
+  *error=errno;
+#else
+  *error=ENOSYS;
+#endif
+  return 0;
+}
+int CpuGridShared_IsSuspended(void){return grid_suspended;}
+int CpuGridShared_Suspend(void)
+{
+  if(node_comm==MPI_COMM_NULL)return 0;
+  int state[2]={grid_suspended,grid_ready&&!grid_rebuilding},lo[2],hi[2];
+  MPI_Allreduce(state,lo,2,MPI_INT,MPI_MIN,grid_world);
+  MPI_Allreduce(state,hi,2,MPI_INT,MPI_MAX,grid_world);
+  collective_require(grid_world,lo[0]==hi[0]&&lo[1]==hi[1],"Suspend state differs across ranks");
+  if(grid_suspended)return last_suspend_removed;
+  collective_require(grid_world,grid_ready&&!grid_rebuilding,"Suspend requires published stable grids");
+  CpuGridShared_Sync();replica_sync();MPI_Barrier(grid_world);
+  int rank,node_rank,error=0,error_max;
+  MPI_Comm_rank(grid_world,&rank);MPI_Comm_rank(node_comm,&node_rank);
+  unsigned long long local[6]={0,0,0,0,0,0},sum[6];
+  if(node_rank==0){
+    size_t tried=0;int why=0;size_t removed=remove_shared_payload(grid_base,grid_bytes,&tried,&why);
+    local[0]=tried;local[1]=removed;local[4]+=why!=0;local[5]+=tried!=0;
+    if(why>error)error=why;
+  }
+  if(numa_enabled&&numa_rank==0){
+    size_t tried=0;int why=0;size_t removed=remove_shared_payload(replica_base,replica_mapped,&tried,&why);
+    local[2]=tried;local[3]=removed;local[4]+=why!=0;local[5]+=tried!=0;
+    if(why>error)error=why;
+  }
+  CpuGridShared_Sync();replica_sync();MPI_Barrier(grid_world);
+  MPI_Allreduce(local,sum,6,MPI_UNSIGNED_LONG_LONG,MPI_SUM,grid_world);
+  MPI_Allreduce(&error,&error_max,1,MPI_INT,MPI_MAX,grid_world);
+  grid_ready=0;grid_suspended=1;grid_rebuilding=0;suspend_epoch++;
+  last_suspend_removed=(sum[1]||sum[3])?1:0;
+  if(rank==0){
+    printf("[CPU_GRID_SUSPEND] epoch=%llu canonical_attempted_bytes=%llu canonical_removed_bytes=%llu replica_attempted_bytes=%llu replica_removed_bytes=%llu windows=%llu failed_windows=%llu errno_max=%d result=%s method=MADV_REMOVE virtual_capacity_retained=1 native_rebuild_required=1\n",
+      suspend_epoch,sum[0],sum[1],sum[2],sum[3],sum[5],sum[4],error_max,
+      !last_suspend_removed?"safe_noop":sum[4]?"partial":"removed");fflush(stdout);
+  }
+  return last_suspend_removed;
+}
+void CpuGridShared_BeginRebuild(void)
+{
+  if(node_comm==MPI_COMM_NULL)return;
+  collective_require(grid_world,grid_suspended,"BeginRebuild requires suspended grids");
+  /* No reader can become ready until all canonical owner writes and replica
+   * copies have passed the ordinary native publication barriers. */
+  MPI_Barrier(grid_world);grid_suspended=0;grid_rebuilding=1;grid_ready=0;
 }
 void CpuGridShared_NumaStats(CpuGridSharedNumaStats *out)
 {
@@ -339,10 +448,11 @@ void CpuGridShared_Destroy(void)
   if(numa_comm!=MPI_COMM_NULL)MPI_Comm_free(&numa_comm);
   if(grid_win!=MPI_WIN_NULL){MPI_Win_unlock_all(grid_win);MPI_Win_free(&grid_win);}
   if(node_comm!=MPI_COMM_NULL)MPI_Comm_free(&node_comm);
-  free(atom_offsets);free(atom_grids);free(atom_norbs);free(atom_owner_numa);
-  atom_offsets=NULL;atom_grids=NULL;atom_norbs=NULL;atom_owner_numa=NULL;
+  free(atom_offsets);free(atom_grids);free(atom_norbs);free(atom_owner_numa);free(replica_offsets);
+  atom_offsets=NULL;atom_grids=NULL;atom_norbs=NULL;atom_owner_numa=NULL;replica_offsets=NULL;legacy_remote_copy_bytes=0;replica_atoms=0;
   grid_base=NULL;grid_bytes=0;atom_count=0;replica_base=NULL;replica_mapped=replica_copy_bytes=0;
   numa_enabled=0;local_numa=-1;numa_rank=numa_size=numa_domains=0;publish_epoch=0;
   node_leader=-1;world_nodes=0;
   last_copy_rankmax=last_publish_rankmax=0.;
+  grid_world=MPI_COMM_NULL;grid_ready=grid_suspended=grid_rebuilding=last_suspend_removed=0;suspend_epoch=0;
 }

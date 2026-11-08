@@ -14,12 +14,18 @@ typedef struct {
 } RpaBasis;
 typedef struct {size_t retained_bytes,peak_bytes,local_representatives,
  endpoint_count,panels,routes,send_values,recv_values,max_panel_values;
+ size_t send_capacity_values,recv_capacity_values;
  double intertwiner_residual;int value_collectives;} RpaStats;
 /* blocks and packed values are local representative-owner data. Actual
  * periodic orbit validation belongs to the trusted RS metadata provider. */
 RpaPlan *Rpa_Create(MPI_Comm comm,const RpaBasis *basis,int blocks,
  const RpaBlock *block,int block_size,int grid_rows,int grid_cols,
  const int *actual_rank_coordinates,size_t cap,char *error,size_t error_size);
+enum { RPA_CREATE_OK=0, RPA_CREATE_RESOURCE=1, RPA_CREATE_RANGE=2, RPA_CREATE_INVALID=3 };
+RpaPlan *Rpa_CreateChecked(MPI_Comm comm,const RpaBasis *basis,int blocks,
+ const RpaBlock *block,int block_size,int grid_rows,int grid_cols,
+ const int *actual_rank_coordinates,size_t cap,char *error,size_t error_size,
+ int *failure_kind);
 uint64_t Rpa_ValueHash(const double *values,size_t count);
 size_t Rpa_InputSize(const RpaPlan *p);
 size_t Rpa_LocalSize(const RpaPlan *p,int sector); /* E,A+,A- */

@@ -24,14 +24,17 @@ static const char *cpu_band_helper(char *path,size_t size){
  return OPENMX_BAND_HELPER;
 }
 static int cpu_band_environment_keep(const char *entry){
- const char *prefix[]={"PMI_","PMIX_","I_MPI_","OMPI_","MPI_","HYDRA_","UCX_","FI_","KMP_","LD_PRELOAD=","LD_LIBRARY_PATH=",NULL};
+ const char *prefix[]={"PMI_","PMIX_","I_MPI_","OMPI_","MPI_","HYDRA_","UCX_","FI_","KMP_","LD_PRELOAD=","LD_LIBRARY_PATH=","MKL_DYNAMIC=",NULL};
  for(int i=0;prefix[i];i++)if(!strncmp(entry,prefix[i],strlen(prefix[i])))return 0;
  return 1;
 }
 static int cpu_band_spawn(char *const *argv,const char *log){
  size_t n=0;while(environ[n])n++;
- char **environment=calloc(n+1,sizeof(char*));if(!environment)return 1;
+ char **environment=calloc(n+2,sizeof(char*));if(!environment)return 1;
  size_t j=0;for(size_t i=0;i<n;i++)if(cpu_band_environment_keep(environ[i]))environment[j++]=environ[i];
+ /* Sparse LU need not use the parent's dense-SCF thread-team policy.
+  * Keep the requested thread ceiling; permit MKL to size individual teams. */
+ environment[j++]="MKL_DYNAMIC=TRUE";
  posix_spawn_file_actions_t actions;int rc=posix_spawn_file_actions_init(&actions),status=0;pid_t child;
  if(rc){free(environment);return 1;}
  if(log){

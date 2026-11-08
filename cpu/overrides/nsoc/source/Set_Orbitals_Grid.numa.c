@@ -15,6 +15,7 @@
 #include <time.h>
 #include <math.h>
 #include "openmx_common.h"
+#include "cpu_overlap_index.h"
 #include "mpi.h"
 #include "cpu_grid_shared.h"
 #include <omp.h>
@@ -448,9 +449,10 @@ double Set_Orbitals_Grid(int Cnt_kind)
       Gh_AN = natn[Gc_AN][h_AN];
 
       if (G2ID[Gh_AN]!=myid){
+        if (CpuOverlapPairs && CpuGridShared_IsAtom(Gh_AN))continue;
         if (CpuGridShared_IsAtom(Gh_AN)){
           for (Nog=0; Nog<NumOLG[Mc_AN][h_AN]; Nog++){
-            int owner_grid = GListTAtoms2[Mc_AN][h_AN][Nog];
+            int owner_grid = CpuOverlapIndex2(Mc_AN,h_AN,Nog);
             Type_Orbs_Grid *row = CpuGridShared_ReadRow(Gh_AN,owner_grid);
             if (row==NULL){
               fprintf(stderr,"[CPU_GRID_SHARED] invalid owner grid atom=%d index=%d\n",Gh_AN,owner_grid);
@@ -514,7 +516,7 @@ double Set_Orbitals_Grid(int Cnt_kind)
 
 	  for (Nog=OMPID*NumOLG[Mc_AN][h_AN]/Nthrds; Nog<(OMPID+1)*NumOLG[Mc_AN][h_AN]/Nthrds; Nog++){
 
-	    Nc = GListTAtoms1[Mc_AN][h_AN][Nog];
+	    Nc = CpuOverlapIndex1(Mc_AN,h_AN,Nog);
 	    GNc = GridListAtom[Mc_AN][Nc];
 	    GRc = CellListAtom[Mc_AN][Nc]; 
 

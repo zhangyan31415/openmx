@@ -60,8 +60,17 @@ Band.kpath>
   A numerical value, for example `-4.85`, is an **absolute energy in eV**.
 - Zero or omitted `Band.NumBands`: return the full spectrum with the selected method.
 - Each path segment needs at least two samples. Band count must be less than
-  the matrix dimension minus one; a small buffer of extra converged states is
-  requested internally to select the nearest states.
+  the matrix dimension minus one. SLEPc is asked for exactly the requested
+  count (`search_nev = Band.NumBands`), with no extra-state padding or minimum
+  search count. The Krylov working subspace uses `min(N,max(4*nev,20))` vectors
+  to improve coverage of near-degenerate partners; this does not increase the
+  requested or returned band count. The audit records its actual `search_ncv`.
+  MUMPS keeps its parallel factorization and uses the conventional backsolve
+  after factorization, avoiding a verified silent error in its tree-parallel
+  solve path. BLAS thread settings are retained.
+  When explicitly enabled, residual and orthogonality checks validate returned
+  eigenpairs, not completeness of the nearest-state subset at a degenerate
+  boundary. Full-spectrum selection differences are reported separately.
 - This does not change SCF occupations or limit the number of occupied states
   used to form density. It does not guarantee equal numbers above and below the
   reference. In SOC mode the count includes both members of any returned pair.
@@ -79,11 +88,53 @@ Hermitian convention as the native full-band path. SLEPc solves the generalized
 problem H(k)c = S(k)c epsilon by Krylov-Schur with shift-invert. No TAPW basis
 truncation, identity-overlap replacement or overlap diagonal shift is used.
 
+Hermiticity is enforced once by construction: scalar blocks and spin-diagonal
+SOC blocks are built from the native lower triangle and conjugate counterparts;
+the spin-off-diagonal block is retained and paired with its conjugate transpose.
+Solver entry does not recheck and rebuild these CSR matrices. Compatible contiguous
+CSR indices and values are borrowed for PETSc; incompatible dtypes are converted.
+The input arrays remain alive until PETSc objects are destroyed. Strict audit mode
+can measure Hermiticity without rewriting the supplied operator.
+
+原生装配按下三角及其共轭关系一次生成厄米 H/S。求解入口直接复用 CSR，不重复计算
+厄米误差或重建矩阵；类型兼容时不额外复制数组。SOC 的自旋非对角块不单独强制厄米。
+
 Workers are assigned to the first min(MPI ranks, k points) ranks, each using
 the native `-nt` thread count. Their MPI/loader environment is isolated from the
 parent oneAPI process. Files and the build-time Python must be visible on all
 nodes. This is k-point parallelism, not one eigensolve distributed over all
 OpenMX ranks. LU fill-in can still require substantial memory.
+
+The worker sets `MKL_DYNAMIC=TRUE` while retaining the requested thread ceiling.
+It does not inherit a parent dense-SCF policy that disables dynamic MKL teams.
+In the tested MKL2026/PETSc3.25.2/SLEPc3.25.1/MUMPS environment, disabling that
+policy produced invalid eigenpairs for the 13000-order Si example; enabling it
+passed independent residual, overlap-orthogonality and full-spectrum checks.
+The native parent environment is unchanged.
+
+SLEPc has no matrix-order threshold for overlap preprocessing. It keeps S sparse
+and checks finite entries and a valid positive diagonal, without an extra dense
+Cholesky factorization or minimum-overlap eigenvalue solve. Positive-definite S
+is the generalized Hermitian solver's input requirement; these necessary input
+checks do not certify its full spectrum, and the audit explicitly records that
+no global positivity certificate was computed. Convergence, returned-state count
+and finite-real-eigenvalue checks remain enabled. An ill-conditioned or indefinite
+basis can still make the solver fail.
+
+SLEPc 对所有矩阵规模使用同一条稀疏路径，不设置按阶数切换的门槛，也不额外求
+S 的最小本征值。保留输入合法性、收敛状态、返回数量和有限实数检查。正定的 S
+仍是广义厄米问题的输入要求。
+
+The expensive post-solve generalized-residual and S-orthogonality audit is
+**off by default**. Normal energy-only runs do not extract eigenvectors into
+Python or recompute Hc/Sc. Developers can enable it with `OPENMX_BAND_AUDIT=1`
+in the native launch environment, or `--audit` when invoking the helper directly.
+The JSON records `eigenpair_audit_enabled`; residual and Sorth are null when the
+audit was not performed, never reported as a successful zero-error check.
+SLEPc still computes its internal Ritz vectors during iteration.
+
+默认不提取波函数来复算广义残差和 S 正交性。调试时可设置
+`OPENMX_BAND_AUDIT=1` 开启；关闭时 JSON 中这两项为 null，并记录开关状态。
 
 Dense methods retain matching nonorthogonal S and compute no eigenvectors. They
 check S by Cholesky and the rigorous lower bound
@@ -110,9 +161,12 @@ profile is not claimed certified with this new postprocessor.
   selected count, reference energy, parallelism and work directory.
 - `.openmx-bands-*` contains native block snapshots, worker logs and per-k JSON
   audits. It is created by the program; users do not prepare these files.
-- Audits check finite values, raw Hermiticity defects, overlap conditioning. SLEPc additionally checks generalized eigenpair
-  residuals and S orthogonality. Bases needing
-  the stock overlap-penalty regularization are explicitly rejected in this mode.
+- All methods check finite values; Hermiticity diagnostics are opt-in. Dense methods
+  also validate overlap conditioning. SLEPc performs sparse input checks and
+  optionally validates generalized eigenpair residuals and S orthogonality; it does not
+  certify the complete overlap spectrum. The worker does not apply the stock
+  overlap-penalty regularization: detected invalid inputs or failed solves are
+  reported explicitly.
 - The targeted output is an energy window selection, not a guarantee of a fixed
   global band index or continuous subspace when that window changes along k.
 

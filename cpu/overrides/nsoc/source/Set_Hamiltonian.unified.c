@@ -18,6 +18,8 @@
 #include <time.h>
 #include "mpi.h"
 #include "openmx_common.h"
+#include "cpu_overlap_index.h"
+static const float *CpuHGridOverlapRow(int mc,int h,int nog){return CpuOverlapRow(mc,h,nog);}
 #include "cpu_grid_fields_shared.unified.h"
 #include "lapack_prototypes.h"
 #include <omp.h>
@@ -408,15 +410,15 @@ void Calc_MatrixElements_dVH_Vxc_VNA_by_TO(int Cnt_kind)
 
       for (Nog=0; Nog<NumOLG[Mc_AN][h_AN]-3; Nog+=4){
 
-        Nc_0 = GListTAtoms1[Mc_AN][h_AN][Nog+0];
-        Nc_1 = GListTAtoms1[Mc_AN][h_AN][Nog+1];
-        Nc_2 = GListTAtoms1[Mc_AN][h_AN][Nog+2];
-        Nc_3 = GListTAtoms1[Mc_AN][h_AN][Nog+3];
+        Nc_0 = CpuOverlapIndex1(Mc_AN,h_AN,Nog+0);
+        Nc_1 = CpuOverlapIndex1(Mc_AN,h_AN,Nog+1);
+        Nc_2 = CpuOverlapIndex1(Mc_AN,h_AN,Nog+2);
+        Nc_3 = CpuOverlapIndex1(Mc_AN,h_AN,Nog+3);
 
-        Nh_0 = GListTAtoms2[Mc_AN][h_AN][Nog+0];
-        Nh_1 = GListTAtoms2[Mc_AN][h_AN][Nog+1];
-        Nh_2 = GListTAtoms2[Mc_AN][h_AN][Nog+2];
-        Nh_3 = GListTAtoms2[Mc_AN][h_AN][Nog+3];
+        Nh_0 = CpuOverlapIndex2(Mc_AN,h_AN,Nog+0);
+        Nh_1 = CpuOverlapIndex2(Mc_AN,h_AN,Nog+1);
+        Nh_2 = CpuOverlapIndex2(Mc_AN,h_AN,Nog+2);
+        Nh_3 = CpuOverlapIndex2(Mc_AN,h_AN,Nog+3);
 
 	/* store ChiV0 in tmp_ChiV0 */
  
@@ -465,8 +467,8 @@ void Calc_MatrixElements_dVH_Vxc_VNA_by_TO(int Cnt_kind)
  
 	for (Nog=NumOLG[Mc_AN][h_AN]-mm; Nog<NumOLG[Mc_AN][h_AN]; Nog++){
  
-	  Nc = GListTAtoms1[Mc_AN][h_AN][Nog];
-	  Nh = GListTAtoms2[Mc_AN][h_AN][Nog];
+	  Nc = CpuOverlapIndex1(Mc_AN,h_AN,Nog);
+	  Nh = CpuOverlapIndex2(Mc_AN,h_AN,Nog);
 
 	  /* store ChiV0 in tmp_ChiV0_0 */
  
@@ -739,15 +741,15 @@ void Calc_MatrixElements_dVH_Vxc_VNA_by_AI(int Cnt_kind)
         if(cpu_h_this_pair){
           CpuHGridView view={NO0,NO1,NOLG,cpu_h_max_no,G2ID[Gh_AN]!=myid,
             (const float*const*)Orbs_Grid[Mc_AN],(const float*const*)(G2ID[Gh_AN]==myid?Orbs_Grid[Mh_AN]:Orbs_Grid_FNAN[Mc_AN][h_AN]),
-            GListTAtoms1[Mc_AN][h_AN],GListTAtoms2[Mc_AN][h_AN],MGridListAtom[Mc_AN],GridListAtom[Mc_AN],Vpot_Grid[0],GridVol,CpuGridFields_Index};
+            GListTAtoms1[Mc_AN][h_AN],GListTAtoms2[Mc_AN][h_AN],MGridListAtom[Mc_AN],GridListAtom[Mc_AN],Vpot_Grid[0],GridVol,CpuGridFields_Index,CpuOverlapPairs?CpuOverlapIndex:NULL,CpuOverlapPairs?CpuHGridOverlapRow:NULL,Mc_AN,h_AN};
           if(CpuHGridAccumulate(&view,&cpu_h_ws,AI_tmpH[0][0],cpu_h_grid_profile?&cpu_h_tm:NULL)){fprintf(stderr,"CPU_HGRID invalid view rank=%d\n",myid);abort();}
         }else{
 	int Nog;
 	for (Nog=0; Nog<NOLG; Nog++){
 
-	  int Nc = GListTAtoms1[Mc_AN][h_AN][Nog];
+	  int Nc = CpuOverlapIndex1(Mc_AN,h_AN,Nog);
 	  int MN = CpuGridFields_Index(MGridListAtom[Mc_AN][Nc],GridListAtom[Mc_AN][Nc]);
-	  int Nh = GListTAtoms2[Mc_AN][h_AN][Nog];
+	  int Nh = CpuOverlapIndex2(Mc_AN,h_AN,Nog);
 		
 	  double AI_tmp_GVVG = GridVol * Vpot_Grid[0][MN];
 	  
@@ -764,6 +766,8 @@ void Calc_MatrixElements_dVH_Vxc_VNA_by_AI(int Cnt_kind)
 	    }
 			
 	  }else{
+ const Type_Orbs_Grid *cpu_remote_orbital_row=CpuOverlapRow(Mc_AN,h_AN,Nog);
+
 	    int i;
 	    for (i=0; i<NO0; i++){
 					
@@ -771,7 +775,7 @@ void Calc_MatrixElements_dVH_Vxc_VNA_by_AI(int Cnt_kind)
 	      int j;
 
 	      for (j=0; j<NO1; j++){
-		AI_tmpH[0][i][j] += AI_tmp_i * Orbs_Grid_FNAN[Mc_AN][h_AN][Nog][j];
+		AI_tmpH[0][i][j] += AI_tmp_i * cpu_remote_orbital_row[j];
 	      }
 	    }
 	  }
@@ -834,9 +838,9 @@ void Calc_MatrixElements_dVH_Vxc_VNA_by_AI(int Cnt_kind)
 	int Nog;
 	for (Nog=0; Nog<NOLG; Nog++){
 
-	  int Nc = GListTAtoms1[Mc_AN][h_AN][Nog];
+	  int Nc = CpuOverlapIndex1(Mc_AN,h_AN,Nog);
 	  int MN = CpuGridFields_Index(MGridListAtom[Mc_AN][Nc],GridListAtom[Mc_AN][Nc]);
-	  int Nh = GListTAtoms2[Mc_AN][h_AN][Nog];
+	  int Nh = CpuOverlapIndex2(Mc_AN,h_AN,Nog);
 		
 	  double AI_tmp_GVVG = GridVol * Vpot_Grid[0][MN];
 	  double AI_tmp_GVVG1 = GridVol * Vpot_Grid[1][MN];
@@ -864,13 +868,15 @@ void Calc_MatrixElements_dVH_Vxc_VNA_by_AI(int Cnt_kind)
 	    }
 			
 	  }else{
+ const Type_Orbs_Grid *cpu_remote_orbital_row=CpuOverlapRow(Mc_AN,h_AN,Nog);
+
 	    int i;
 	    for (i=0; i<NO0; i++){
 					
 	      double AI_tmp_i = AI_tmp_GVVG * Orbs_Grid[Mc_AN][Nc][i];
 	      int j;
 	      for (j=0; j<NO1; j++){
-		AI_tmpH[0][i][j] += AI_tmp_i * Orbs_Grid_FNAN[Mc_AN][h_AN][Nog][j];
+		AI_tmpH[0][i][j] += AI_tmp_i * cpu_remote_orbital_row[j];
 	      }
 	    }
 			
@@ -879,7 +885,7 @@ void Calc_MatrixElements_dVH_Vxc_VNA_by_AI(int Cnt_kind)
 	      double AI_tmp_i = AI_tmp_GVVG1 * Orbs_Grid[Mc_AN][Nc][i];
 	      int j;
 	      for (j=0; j<NO1; j++){
-		AI_tmpH[1][i][j] += AI_tmp_i * Orbs_Grid_FNAN[Mc_AN][h_AN][Nog][j];
+		AI_tmpH[1][i][j] += AI_tmp_i * cpu_remote_orbital_row[j];
 	      }
 	    }
 	  }
@@ -1009,9 +1015,9 @@ void Calc_MatrixElements_dVH_Vxc_VNA_by_AI(int Cnt_kind)
 
 	for (Nog=0; Nog<NOLG; Nog++){
 
-	  int Nc = GListTAtoms1[Mc_AN][h_AN][Nog];
+	  int Nc = CpuOverlapIndex1(Mc_AN,h_AN,Nog);
 	  int MN = CpuGridFields_Index(MGridListAtom[Mc_AN][Nc],GridListAtom[Mc_AN][Nc]);
-	  int Nh = GListTAtoms2[Mc_AN][h_AN][Nog];
+	  int Nh = CpuOverlapIndex2(Mc_AN,h_AN,Nog);
 		
 	  double AI_tmp_GVVG = GridVol * Vpot_Grid[0][MN];
 	  double AI_tmp_GVVG1 = GridVol * Vpot_Grid[1][MN];
@@ -1060,6 +1066,8 @@ void Calc_MatrixElements_dVH_Vxc_VNA_by_AI(int Cnt_kind)
 	  }
 
           else{
+ const Type_Orbs_Grid *cpu_remote_orbital_row=CpuOverlapRow(Mc_AN,h_AN,Nog);
+
 
 	    int i;
 	    for (i=0; i<NO0; i++){
@@ -1067,7 +1075,7 @@ void Calc_MatrixElements_dVH_Vxc_VNA_by_AI(int Cnt_kind)
 	      double AI_tmp_i = AI_tmp_GVVG * Orbs_Grid[Mc_AN][Nc][i];
 
 	      for (j=0; j<NO1; j++){
-		AI_tmpH[0][i][j] += AI_tmp_i * Orbs_Grid_FNAN[Mc_AN][h_AN][Nog][j];
+		AI_tmpH[0][i][j] += AI_tmp_i * cpu_remote_orbital_row[j];
 	      }
 	    }
 			
@@ -1076,7 +1084,7 @@ void Calc_MatrixElements_dVH_Vxc_VNA_by_AI(int Cnt_kind)
 	      double AI_tmp_i = AI_tmp_GVVG1 * Orbs_Grid[Mc_AN][Nc][i];
 
 	      for (j=0; j<NO1; j++){
-		AI_tmpH[1][i][j] += AI_tmp_i * Orbs_Grid_FNAN[Mc_AN][h_AN][Nog][j];
+		AI_tmpH[1][i][j] += AI_tmp_i * cpu_remote_orbital_row[j];
 	      }
 	    }
 	    for (i=0; i<NO0; i++){
@@ -1084,7 +1092,7 @@ void Calc_MatrixElements_dVH_Vxc_VNA_by_AI(int Cnt_kind)
 	      double AI_tmp_i = AI_tmp_GVVG2 * Orbs_Grid[Mc_AN][Nc][i];
 
 	      for (j=0; j<NO1; j++){
-		AI_tmpH[2][i][j] += AI_tmp_i * Orbs_Grid_FNAN[Mc_AN][h_AN][Nog][j];
+		AI_tmpH[2][i][j] += AI_tmp_i * cpu_remote_orbital_row[j];
 		
 	      }
 	    }			
@@ -1093,7 +1101,7 @@ void Calc_MatrixElements_dVH_Vxc_VNA_by_AI(int Cnt_kind)
 	      double AI_tmp_i = AI_tmp_GVVG3 * Orbs_Grid[Mc_AN][Nc][i];
 
 	      for (j=0; j<NO1; j++){
-		AI_tmpH[3][i][j] += AI_tmp_i * Orbs_Grid_FNAN[Mc_AN][h_AN][Nog][j];
+		AI_tmpH[3][i][j] += AI_tmp_i * cpu_remote_orbital_row[j];
 	      }
 	    }
 	  }

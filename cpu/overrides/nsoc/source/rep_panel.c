@@ -5,22 +5,79 @@
 #include <string.h>
 #include <math.h>
 #include <limits.h>
+#include <errno.h>
 typedef union {size_t bytes;long double align;void*p;} Allocation;
 typedef struct {int begin,n,q[3];int*cols[3];double*u[4];} Endpoint;
 typedef struct {int block,left,right,sector;double weight;int first_route,routes;} Panel;
 typedef struct {int panel,dest,row,col,nr,nc;size_t offset;} Route;
 typedef struct {int sector,nr,nc;int*rows,*cols;size_t offset;} Incoming;
+typedef struct Batch {int begin,end;int*counts;struct Batch*next;} Batch;
 struct RpaPlan {
  MPI_Comm comm;int rank,np,nb,pr,pc,row,col,blocks,ne,npanel,nroute,nincoming,width[3],nr[3],nc[3];
  RpaContext context;size_t limit,used,peak,entries,ns,nrecv,max_panel,max_temp;
  Endpoint*endpoint;Panel*panel;Route*route;Incoming*incoming;RpaBlock*block;
  int *rankmap,*sc,*sd,*rc,*rd;double*send,*recv,*temp,*product;
- double proof;uint64_t last_h,last_s;int last_step,s_done;
+ Batch *batch,*last_batch;int nbatch,*incoming_first,*incoming_next,*send_cursor;size_t send_capacity,recv_capacity;
+ double proof;uint64_t last_h,last_s;int last_step,s_done,failure_kind;size_t failed_request;
 };
 static void msg(char*e,size_t z,const char*s){if(e&&z)snprintf(e,z,"%s",s);}
-static int agree(RpaPlan*p,int bad,char*e,size_t z,const char*s){int all;MPI_Allreduce(&bad,&all,1,MPI_INT,MPI_MAX,p->comm);if(all)msg(e,z,bad?s:"another rank rejected representative panel");return all;}
-static void *take(RpaPlan*p,size_t n,size_t w){if(w&&n>(SIZE_MAX-sizeof(Allocation))/w)return NULL;size_t z=n*w+sizeof(Allocation);if(p->used>p->limit||z>p->limit-p->used)return NULL;Allocation*a=calloc(1,z);if(!a)return NULL;a->bytes=z;p->used+=z;if(p->used>p->peak)p->peak=p->used;return a+1;}
+static int agree(RpaPlan*p,int bad,char*e,size_t z,const char*s){int all;if(bad&&!p->failure_kind)p->failure_kind=RPA_CREATE_INVALID;MPI_Allreduce(&bad,&all,1,MPI_INT,MPI_MAX,p->comm);if(all)msg(e,z,bad?s:"another rank rejected representative panel");return all;}
+static void *take(RpaPlan*p,size_t n,size_t w){
+ if(w&&n>(SIZE_MAX-sizeof(Allocation))/w){p->failure_kind=RPA_CREATE_RANGE;return NULL;}
+ size_t z=n*w+sizeof(Allocation);
+ if(p->used>p->limit||z>p->limit-p->used){p->failure_kind=RPA_CREATE_RESOURCE;p->failed_request=z;return NULL;}
+ Allocation*a=calloc(1,z);if(!a){p->failure_kind=RPA_CREATE_RESOURCE;p->failed_request=z;return NULL;}
+ a->bytes=z;p->used+=z;if(p->used>p->peak)p->peak=p->used;return a+1;
+}
 static void drop(RpaPlan*p,void*x){if(x){Allocation*a=(Allocation*)x-1;p->used-=a->bytes;free(a);}}
+/* Plan contiguous panel batches before allocating numerical payloads. Each
+ * panel is evaluated once per field. Receive pressure is checked collectively,
+ * including on ranks that own no input panels. Metadata remains reusable. */
+static int plan_batches(RpaPlan*p,char*e,size_t ez){
+ size_t bytes=8u*1024u*1024u;int bad=0;
+ const char*text=getenv("OPENMX_CPU_NSOC_PANEL_BUFFER_BYTES");
+ if(text){char*end;errno=0;unsigned long long v=strtoull(text,&end,10);if(errno||end==text||*end||*text=='-'||v>SIZE_MAX)bad=1;else bytes=(size_t)v;}
+ if(agree(p,bad,e,ez,"invalid panel buffer budget"))return 0;
+ /* Leave room for the schedule itself. The full planner budget still guards
+  * every allocation; this per-side value bound is not a memory reservation. */
+ size_t available=p->used<p->limit?(p->limit-p->used)/2:0;
+ if(bytes>available)bytes=available;
+ size_t target=bytes/(2*sizeof(double));if(target>INT_MAX)target=INT_MAX;
+ int begin=0;
+ for(;;){
+  int remaining=begin<p->npanel,any;MPI_Allreduce(&remaining,&any,1,MPI_INT,MPI_MAX,p->comm);if(!any)break;
+  int end=begin;size_t proposed=0;
+  while(end<p->npanel){Panel*x=p->panel+end;size_t z=0;for(int r=x->first_route;r<x->first_route+x->routes;r++)z+=(size_t)p->route[r].nr*p->route[r].nc;
+   if(end>begin&&(z>target||proposed>target-z))break;proposed+=z;end++;if(proposed>=target)break;
+  }
+  size_t ns=0,nr=0;
+  for(;;){
+   memset(p->sc,0,(size_t)p->np*sizeof(int));
+   for(int q=begin;q<end;q++){Panel*x=p->panel+q;for(int r=x->first_route;r<x->first_route+x->routes;r++){Route*y=p->route+r;p->sc[y->dest]+=y->nr*y->nc;}}
+   MPI_Alltoall(p->sc,1,MPI_INT,p->rc,1,MPI_INT,p->comm);ns=nr=0;
+   for(int r=0;r<p->np;r++){ns+=(size_t)p->sc[r];nr+=(size_t)p->rc[r];}
+   bad=ns>target||nr>target;int overflow;MPI_Allreduce(&bad,&overflow,1,MPI_INT,MPI_MAX,p->comm);if(!overflow)break;
+   int shrink=end-begin>1,can_shrink;MPI_Allreduce(&shrink,&can_shrink,1,MPI_INT,MPI_MAX,p->comm);
+   if(can_shrink){end=begin+(end-begin+1)/2;continue;}
+   /* Fan-in from many single-panel senders can exceed a receiver's budget.
+    * Serialize only this exceptional batch, not the entire normal exchange. */
+   int candidate=end>begin?p->rank:INT_MAX,first;
+   MPI_Allreduce(&candidate,&first,1,MPI_INT,MPI_MIN,p->comm);
+   int senders=end>begin,total_senders;MPI_Allreduce(&senders,&total_senders,1,MPI_INT,MPI_SUM,p->comm);
+   if(total_senders<=1){p->failure_kind=RPA_CREATE_RESOURCE;msg(e,ez,"one panel cannot fit bounded communication buffers");return 0;}
+   if(p->rank!=first)end=begin;
+  }
+  Batch*b=take(p,1,sizeof(*b));bad=b==NULL;
+  if(b){if(p->last_batch)p->last_batch->next=b;else p->batch=b;p->last_batch=b;b->begin=begin;b->end=end;b->counts=take(p,(size_t)2*p->np,sizeof(int));bad=!b->counts;}
+  if(agree(p,bad,e,ez,"batch schedule exceeds planner budget"))return 0;
+  memcpy(b->counts,p->sc,(size_t)p->np*sizeof(int));memcpy(b->counts+p->np,p->rc,(size_t)p->np*sizeof(int));
+  p->nbatch++;if(ns>p->send_capacity)p->send_capacity=ns;if(nr>p->recv_capacity)p->recv_capacity=nr;begin=end;
+ }
+ p->send=take(p,p->send_capacity,sizeof(double));p->recv=take(p,p->recv_capacity,sizeof(double));
+ p->incoming_next=take(p,p->np,sizeof(int));p->send_cursor=take(p,p->np,sizeof(int));
+ bad=!p->send||!p->recv||!p->incoming_next||!p->send_cursor;
+ return !agree(p,bad,e,ez,"bounded buffers exceed planner budget");
+}
 static int owner(int i,int b,int p){return(i/b)%p;}
 static int local(int i,int b,int p){return((i/b)/p)*b+i%b;}
 static int count(int n,int b,int r,int p){int whole=n/b;return(whole/p)*b+(r<whole%p?b:0)+(r==whole%p?n%b:0);}
@@ -78,10 +135,11 @@ static int find_endpoint(RpaPlan*p,int begin,int rows,const RpaBasis*b,const int
  }
  return k;
 }
-RpaPlan *Rpa_Create(MPI_Comm comm,const RpaBasis*b,int blocks,const RpaBlock*block,int nb,int pr,int pc,const int*coords,size_t cap,char*e,size_t ez){
- RpaPlan*p=calloc(1,sizeof(*p));int bad=p==NULL,all;MPI_Allreduce(&bad,&all,1,MPI_INT,MPI_MAX,comm);if(all){free(p);msg(e,ez,"plan allocation");return NULL;}
+RpaPlan *Rpa_CreateChecked(MPI_Comm comm,const RpaBasis*b,int blocks,const RpaBlock*block,int nb,int pr,int pc,const int*coords,size_t cap,char*e,size_t ez,int*failure_kind){
+ if(failure_kind)*failure_kind=RPA_CREATE_INVALID;
+ RpaPlan*p=calloc(1,sizeof(*p));int bad=p==NULL,all;MPI_Allreduce(&bad,&all,1,MPI_INT,MPI_MAX,comm);if(all){free(p);if(failure_kind)*failure_kind=RPA_CREATE_RESOURCE;msg(e,ez,"plan allocation");return NULL;}
  p->comm=MPI_COMM_NULL;MPI_Comm_dup(comm,&p->comm);MPI_Comm_rank(comm,&p->rank);MPI_Comm_size(comm,&p->np);p->used=p->peak=sizeof(*p);p->limit=cap;p->nb=nb;p->pr=pr;p->pc=pc;p->blocks=blocks;
- bad=!b||blocks<0||(blocks&&!block)||nb<1||pr<1||pc<1||(int64_t)pr*pc!=p->np||!coords||cap<sizeof(*p);
+ bad=!b||blocks<0||(blocks&&!block)||nb<1||pr<1||pc<1||(int64_t)pr*pc!=p->np||!coords;
  if(!bad)bad=b->n<4||b->natoms<1||b->species<1||b->ng!=6||b->sectors[0]<1||b->sectors[0]!=b->sectors[1]||b->sectors[2]<1||b->sectors[3]<1||(int64_t)b->sectors[0]+b->sectors[1]+b->sectors[2]+b->sectors[3]!=b->n||!b->cp||!b->ri||!b->cv||!b->types||!b->norb||!b->permutations||!b->rotations||!b->context.geometry||!b->context.basis||!b->context.distribution||!b->context.projector_map;
  if(agree(p,bad,e,ez,"requires complete four-sector D3 scalar Gamma and nonzero generation context"))goto fail;
  p->context=b->context;p->width[0]=b->sectors[0];p->width[1]=b->sectors[2];p->width[2]=b->sectors[3];p->row=coords[2*p->rank];p->col=coords[2*p->rank+1];
@@ -118,24 +176,36 @@ RpaPlan *Rpa_Create(MPI_Comm comm,const RpaBasis*b,int blocks,const RpaBlock*blo
  int *rows=take(p,pr,4),*cols=take(p,pc,4);bad=!rows||!cols;
  if(!bad)for(int q=0;q<p->npanel;q++){Panel*x=p->panel+q;Endpoint*a=p->endpoint+x->left,*c=p->endpoint+x->right;memset(rows,0,(size_t)pr*4);memset(cols,0,(size_t)pc*4);for(int i=0;i<a->q[x->sector];i++)rows[owner(a->cols[x->sector][i],nb,pr)]++;for(int j=0;j<c->q[x->sector];j++)cols[owner(c->cols[x->sector][j],nb,pc)]++;for(int i=0;i<pr;i++)for(int j=0;j<pc;j++)if(rows[i]&&cols[j]){if(p->nroute==INT_MAX)bad=1;else p->nroute++;}}
  p->route=take(p,p->nroute,sizeof(Route));int*mc=take(p,p->np,4),*md=take(p,p->np,4),*mrc=take(p,p->np,4),*mrd=take(p,p->np,4);bad|=!p->route||!mc||!md||!mrc||!mrd;
- if(!bad){int at=0;for(int q=0;q<p->npanel;q++){Panel*x=p->panel+q;Endpoint*a=p->endpoint+x->left,*c=p->endpoint+x->right;x->first_route=at;memset(rows,0,(size_t)pr*4);memset(cols,0,(size_t)pc*4);for(int i=0;i<a->q[x->sector];i++)rows[owner(a->cols[x->sector][i],nb,pr)]++;for(int j=0;j<c->q[x->sector];j++)cols[owner(c->cols[x->sector][j],nb,pc)]++;for(int i=0;i<pr;i++)for(int j=0;j<pc;j++)if(rows[i]&&cols[j]){int dest=p->rankmap[i*pc+j],z=rows[i]*cols[j],meta=3+rows[i]+cols[j];if(p->sc[dest]>INT_MAX-z||mc[dest]>INT_MAX-meta){bad=1;break;}p->route[at++]=(Route){q,dest,i,j,rows[i],cols[j],(size_t)p->sc[dest]};p->sc[dest]+=z;mc[dest]+=meta;x->routes++;}}}
+ if(!bad){int at=0;for(int q=0;q<p->npanel;q++){Panel*x=p->panel+q;Endpoint*a=p->endpoint+x->left,*c=p->endpoint+x->right;x->first_route=at;memset(rows,0,(size_t)pr*4);memset(cols,0,(size_t)pc*4);for(int i=0;i<a->q[x->sector];i++)rows[owner(a->cols[x->sector][i],nb,pr)]++;for(int j=0;j<c->q[x->sector];j++)cols[owner(c->cols[x->sector][j],nb,pc)]++;for(int i=0;i<pr;i++)for(int j=0;j<pc;j++)if(rows[i]&&cols[j]){int dest=p->rankmap[i*pc+j],z=rows[i]*cols[j],meta=3+rows[i]+cols[j];if(p->sc[dest]>INT_MAX-z||mc[dest]>INT_MAX-meta){p->failure_kind=RPA_CREATE_RANGE;bad=1;break;}p->route[at++]=(Route){q,dest,i,j,rows[i],cols[j],(size_t)p->sc[dest]};p->sc[dest]+=z;mc[dest]+=meta;x->routes++;}}}
  drop(p,rows);drop(p,cols);
  if(agree(p,bad,e,ez,"panel routes exceed budget or MPI count range")){drop(p,mc);drop(p,md);drop(p,mrc);drop(p,mrd);goto fail;}
  MPI_Alltoall(p->sc,1,MPI_INT,p->rc,1,MPI_INT,p->comm);MPI_Alltoall(mc,1,MPI_INT,mrc,1,MPI_INT,p->comm);size_t sm=0,rm=0;
- for(int r=0;r<p->np;r++){if(p->ns>INT_MAX||p->nrecv>INT_MAX||sm>INT_MAX||rm>INT_MAX)bad=1;else{p->sd[r]=(int)p->ns;p->rd[r]=(int)p->nrecv;md[r]=(int)sm;mrd[r]=(int)rm;}p->ns+=(size_t)p->sc[r];p->nrecv+=(size_t)p->rc[r];sm+=(size_t)mc[r];rm+=(size_t)mrc[r];}if(p->ns>INT_MAX||p->nrecv>INT_MAX||sm>INT_MAX||rm>INT_MAX)bad=1;
- int*sent=take(p,sm,4),*received=take(p,rm,4),*cursor=take(p,p->np,4);p->send=take(p,p->ns,8);p->recv=take(p,p->nrecv,8);p->temp=take(p,p->max_temp,8);p->product=take(p,p->max_panel,8);
- bad|=!sent||!received||!cursor||!p->send||!p->recv||!p->temp||!p->product;
+ for(int r=0;r<p->np;r++){if(p->ns>INT_MAX||p->nrecv>INT_MAX||sm>INT_MAX||rm>INT_MAX){p->failure_kind=RPA_CREATE_RANGE;bad=1;}else{p->sd[r]=(int)p->ns;p->rd[r]=(int)p->nrecv;md[r]=(int)sm;mrd[r]=(int)rm;}p->ns+=(size_t)p->sc[r];p->nrecv+=(size_t)p->rc[r];sm+=(size_t)mc[r];rm+=(size_t)mrc[r];}if(p->ns>INT_MAX||p->nrecv>INT_MAX||sm>INT_MAX||rm>INT_MAX){p->failure_kind=RPA_CREATE_RANGE;bad=1;}
+ int*sent=take(p,sm,4),*received=take(p,rm,4),*cursor=take(p,p->np,4);p->temp=take(p,p->max_temp,8);p->product=take(p,p->max_panel,8);
+ bad|=!sent||!received||!cursor||!p->temp||!p->product;
  if(agree(p,bad,e,ez,"panel buffers/schedules exceed explicit cap")){drop(p,sent);drop(p,received);drop(p,cursor);drop(p,mc);drop(p,md);drop(p,mrc);drop(p,mrd);goto fail;}
  memcpy(cursor,md,(size_t)p->np*4);
  for(int q=0;q<p->nroute;q++){Route*x=p->route+q;Panel*pan=p->panel+x->panel;Endpoint*a=p->endpoint+pan->left,*c=p->endpoint+pan->right;int s=pan->sector,z=cursor[x->dest];sent[z++]=s;sent[z++]=x->nr;sent[z++]=x->nc;for(int i=0;i<a->q[s];i++)if(owner(a->cols[s][i],nb,pr)==x->row)sent[z++]=a->cols[s][i];for(int j=0;j<c->q[s];j++)if(owner(c->cols[s][j],nb,pc)==x->col)sent[z++]=c->cols[s][j];cursor[x->dest]=z;x->offset+=(size_t)p->sd[x->dest];}
  MPI_Alltoallv(sent,mc,md,MPI_INT,received,mrc,mrd,MPI_INT,p->comm);
  for(int r=0;r<p->np;r++){size_t at=(size_t)mrd[r],end=at+mrc[r];while(at<end){if(end-at<3){bad=1;break;}int s=received[at],a=received[at+1],c=received[at+2];if(s<0||s>=3||a<1||c<1||(size_t)(3+a+c)>end-at){bad=1;break;}p->nincoming++;at+=(size_t)3+a+c;}}
- p->incoming=take(p,p->nincoming,sizeof(Incoming));if(!p->incoming)bad=1;
- if(!bad){int q=0;for(int r=0;r<p->np;r++){size_t at=(size_t)mrd[r],end=at+mrc[r],value=(size_t)p->rd[r];while(at<end){Incoming*x=p->incoming+q++;x->sector=received[at++];x->nr=received[at++];x->nc=received[at++];x->offset=value;value+=(size_t)x->nr*x->nc;x->rows=take(p,x->nr,4);x->cols=take(p,x->nc,4);if(!x->rows||!x->cols){bad=1;break;}for(int i=0;i<x->nr;i++){int g=received[at++];if(g<0||g>=p->width[x->sector]||owner(g,nb,pr)!=p->row)bad=1;x->rows[i]=local(g,nb,pr);}for(int j=0;j<x->nc;j++){int g=received[at++];if(g<0||g>=p->width[x->sector]||owner(g,nb,pc)!=p->col)bad=1;x->cols[j]=local(g,nb,pc);}}if(value!=(size_t)p->rd[r]+p->rc[r])bad=1;}}
+ p->incoming=take(p,p->nincoming,sizeof(Incoming));p->incoming_first=take(p,(size_t)p->np+1,sizeof(int));if(!p->incoming||!p->incoming_first)bad=1;
+ if(!bad){int q=0;for(int r=0;r<p->np;r++){p->incoming_first[r]=q;size_t at=(size_t)mrd[r],end=at+mrc[r],value=(size_t)p->rd[r];while(at<end){Incoming*x=p->incoming+q++;x->sector=received[at++];x->nr=received[at++];x->nc=received[at++];x->offset=value;value+=(size_t)x->nr*x->nc;x->rows=take(p,x->nr,4);x->cols=take(p,x->nc,4);if(!x->rows||!x->cols){bad=1;break;}for(int i=0;i<x->nr;i++){int g=received[at++];if(g<0||g>=p->width[x->sector]||owner(g,nb,pr)!=p->row)bad=1;x->rows[i]=local(g,nb,pr);}for(int j=0;j<x->nc;j++){int g=received[at++];if(g<0||g>=p->width[x->sector]||owner(g,nb,pc)!=p->col)bad=1;x->cols[j]=local(g,nb,pc);}}if(value!=(size_t)p->rd[r]+p->rc[r])bad=1;}p->incoming_first[p->np]=q;}
  drop(p,sent);drop(p,received);drop(p,cursor);drop(p,mc);drop(p,md);drop(p,mrc);drop(p,mrd);
  if(agree(p,bad,e,ez,"received panel route violates true BLACS owner/budget"))goto fail;
- return p;
-fail:Rpa_Destroy(p);return NULL;
+ if(!plan_batches(p,e,ez))goto fail;
+ if(failure_kind)*failure_kind=RPA_CREATE_OK;return p;
+fail:{
+ int kind=p->failure_kind,collective_kind;
+ MPI_Allreduce(&kind,&collective_kind,1,MPI_INT,MPI_MAX,p->comm);
+ if(!collective_kind)collective_kind=RPA_CREATE_INVALID;
+ if(failure_kind)*failure_kind=collective_kind;
+ if(p->failure_kind==RPA_CREATE_RESOURCE){fprintf(stderr,"CPU_NSOC_PANEL_BUDGET_EXHAUSTED rank=%d budget_bytes=%zu retained_bytes=%zu failed_request_bytes=%zu\n",p->rank,p->limit,p->used,p->failed_request);fflush(stderr);}
+ Rpa_Destroy(p);return NULL;
+}
+}
+RpaPlan *Rpa_Create(MPI_Comm comm,const RpaBasis*b,int blocks,const RpaBlock*block,int nb,int pr,int pc,const int*coords,size_t cap,char*e,size_t ez){
+ return Rpa_CreateChecked(comm,b,blocks,block,nb,pr,pc,coords,cap,e,ez,NULL);
+
 }
 size_t Rpa_InputSize(const RpaPlan*p){return p?p->entries:0;}
 size_t Rpa_LocalSize(const RpaPlan*p,int s){return p&&s>=0&&s<3?(size_t)p->nr[s]*p->nc[s]:0;}
@@ -145,22 +215,38 @@ int Rpa_Apply(RpaPlan*p,const RpaStamp*stamp,const double*v,double*const*out,con
  if(agree(p,bad,e,ez,"stale/nonprojected field generation, changed values, wrong context or output"))return -1;
  uint64_t field[3]={stamp->revision,(uint64_t)stamp->kind,(uint64_t)stamp->step},lo[3],hi[3];MPI_Allreduce(field,lo,3,MPI_UINT64_T,MPI_MIN,p->comm);MPI_Allreduce(field,hi,3,MPI_UINT64_T,MPI_MAX,p->comm);for(int i=0;i<3;i++)if(lo[i]!=hi[i])bad=1;
  if(agree(p,bad,e,ez,"field revision/kind/step differs across ranks"))return -1;
- for(int q=0;q<p->npanel;q++){
+ for(int s=0;s<3;s++)if(Rpa_LocalSize(p,s))memset(out[s],0,Rpa_LocalSize(p,s)*8);
+ memcpy(p->send_cursor,p->sd,(size_t)p->np*sizeof(int));memcpy(p->incoming_next,p->incoming_first,(size_t)p->np*sizeof(int));
+ for(Batch*batch=p->batch;batch;batch=batch->next){
+  int ns=0,nr=0;for(int r=0;r<p->np;r++){p->sc[r]=ns;p->rc[r]=nr;ns+=batch->counts[r];nr+=batch->counts[p->np+r];}
+ for(int q=batch->begin;q<batch->end;q++){
   Panel*x=p->panel+q;Endpoint*a=p->endpoint+x->left,*b=p->endpoint+x->right;RpaBlock*block=p->block+x->block;int s=x->sector,ka=a->q[s],kb=b->q[s],first=s==0?0:s+1,last=s==0?1:first;
   for(int partner=first;partner<=last;partner++){
    cblas_dgemm(CblasRowMajor,CblasNoTrans,CblasNoTrans,a->n,kb,b->n,1.,v+block->offset,b->n,b->u[partner],kb,0.,p->temp,kb);
    cblas_dgemm(CblasRowMajor,CblasTrans,CblasNoTrans,ka,kb,a->n,x->weight,a->u[partner],ka,p->temp,kb,partner==first?0.:1.,p->product,kb);
   }
-  for(int r=x->first_route;r<x->first_route+x->routes;r++){Route*route=p->route+r;size_t at=route->offset;for(int i=0;i<ka;i++)if(owner(a->cols[s][i],p->nb,p->pr)==route->row)for(int j=0;j<kb;j++)if(owner(b->cols[s][j],p->nb,p->pc)==route->col)p->send[at++]=p->product[(size_t)i*kb+j];}
+  for(int r=x->first_route;r<x->first_route+x->routes;r++){Route*route=p->route+r;size_t at=(size_t)p->sc[route->dest]+route->offset-(size_t)p->send_cursor[route->dest];for(int i=0;i<ka;i++)if(owner(a->cols[s][i],p->nb,p->pr)==route->row)for(int j=0;j<kb;j++)if(owner(b->cols[s][j],p->nb,p->pc)==route->col)p->send[at++]=p->product[(size_t)i*kb+j];}
  }
- for(size_t k=0;k<p->ns;k++)if(!isfinite(p->send[k]))bad=1;
- if(agree(p,bad,e,ez,"nonfinite representative panel contraction"))return -1;
- MPI_Alltoallv(p->send,p->sc,p->sd,MPI_DOUBLE,p->recv,p->rc,p->rd,MPI_DOUBLE,p->comm);
- for(int s=0;s<3;s++)if(Rpa_LocalSize(p,s))memset(out[s],0,Rpa_LocalSize(p,s)*8);
- for(int q=0;q<p->nincoming;q++){Incoming*x=p->incoming+q;size_t at=x->offset;for(int i=0;i<x->nr;i++)for(int j=0;j<x->nc;j++)out[x->sector][(size_t)x->cols[j]*p->nr[x->sector]+x->rows[i]]+=p->recv[at++];}
+
+  for(int k=0;k<ns;k++)if(!isfinite(p->send[k]))bad=1;
+  if(agree(p,bad,e,ez,"nonfinite representative panel contraction"))return -1;
+  MPI_Alltoallv(p->send,batch->counts,p->sc,MPI_DOUBLE,p->recv,batch->counts+p->np,p->rc,MPI_DOUBLE,p->comm);
+  for(int r=0;r<p->np;r++){
+   size_t at=(size_t)p->rc[r],end=at+batch->counts[p->np+r];
+   while(at<end){
+    int q=p->incoming_next[r];if(q>=p->incoming_first[r+1]){bad=1;break;}Incoming*x=p->incoming+q;
+    if((size_t)x->nr*x->nc>end-at){bad=1;break;}
+    for(int i=0;i<x->nr;i++)for(int j=0;j<x->nc;j++)out[x->sector][(size_t)x->cols[j]*p->nr[x->sector]+x->rows[i]]+=p->recv[at++];
+    p->incoming_next[r]++;
+   }
+   p->send_cursor[r]+=batch->counts[r];
+  }
+  if(agree(p,bad,e,ez,"batch does not match whole incoming panel routes"))return -1;
+ }
+ for(int r=0;r<p->np;r++)if(p->incoming_next[r]!=p->incoming_first[r+1])bad=1;
  for(int s=0;s<3;s++)for(size_t k=0;k<Rpa_LocalSize(p,s);k++)if(!isfinite(out[s][k]))bad=1;
  if(agree(p,bad,e,ez,"nonfinite owner panel sum"))return -1;
  if(stamp->kind==1){p->last_step=stamp->step;p->last_h=stamp->revision;}else{p->s_done=1;p->last_s=stamp->revision;}return 0;
 }
-void Rpa_GetStats(const RpaPlan*p,RpaStats*s){if(!s)return;memset(s,0,sizeof(*s));if(p){s->retained_bytes=p->used;s->peak_bytes=p->peak;s->local_representatives=p->blocks;s->endpoint_count=p->ne;s->panels=p->npanel;s->routes=p->nroute;s->send_values=p->ns;s->recv_values=p->nrecv;s->max_panel_values=p->max_panel;s->intertwiner_residual=p->proof;s->value_collectives=1;}}
-void Rpa_Destroy(RpaPlan*p){if(!p)return;for(int k=0;k<p->ne;k++){Endpoint*x=p->endpoint+k;for(int s=0;s<3;s++)drop(p,x->cols[s]);for(int s=0;s<4;s++)drop(p,x->u[s]);}if(p->incoming)for(int k=0;k<p->nincoming;k++){drop(p,p->incoming[k].rows);drop(p,p->incoming[k].cols);}drop(p,p->endpoint);drop(p,p->panel);drop(p,p->route);drop(p,p->incoming);drop(p,p->block);drop(p,p->rankmap);drop(p,p->sc);drop(p,p->sd);drop(p,p->rc);drop(p,p->rd);drop(p,p->send);drop(p,p->recv);drop(p,p->temp);drop(p,p->product);if(p->comm!=MPI_COMM_NULL)MPI_Comm_free(&p->comm);free(p);}
+void Rpa_GetStats(const RpaPlan*p,RpaStats*s){if(!s)return;memset(s,0,sizeof(*s));if(p){s->retained_bytes=p->used;s->peak_bytes=p->peak;s->local_representatives=p->blocks;s->endpoint_count=p->ne;s->panels=p->npanel;s->routes=p->nroute;s->send_values=p->ns;s->recv_values=p->nrecv;s->max_panel_values=p->max_panel;s->intertwiner_residual=p->proof;s->value_collectives=p->nbatch;s->send_capacity_values=p->send_capacity;s->recv_capacity_values=p->recv_capacity;}}
+void Rpa_Destroy(RpaPlan*p){if(!p)return;for(int k=0;k<p->ne;k++){Endpoint*x=p->endpoint+k;for(int s=0;s<3;s++)drop(p,x->cols[s]);for(int s=0;s<4;s++)drop(p,x->u[s]);}if(p->incoming)for(int k=0;k<p->nincoming;k++){drop(p,p->incoming[k].rows);drop(p,p->incoming[k].cols);}while(p->batch){Batch*b=p->batch;p->batch=b->next;drop(p,b->counts);drop(p,b);}drop(p,p->incoming_first);drop(p,p->incoming_next);drop(p,p->send_cursor);drop(p,p->endpoint);drop(p,p->panel);drop(p,p->route);drop(p,p->incoming);drop(p,p->block);drop(p,p->rankmap);drop(p,p->sc);drop(p,p->sd);drop(p,p->rc);drop(p,p->rd);drop(p,p->send);drop(p,p->recv);drop(p,p->temp);drop(p,p->product);if(p->comm!=MPI_COMM_NULL)MPI_Comm_free(&p->comm);free(p);}

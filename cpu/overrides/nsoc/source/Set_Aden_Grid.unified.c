@@ -18,6 +18,7 @@
 #include "mpi.h"
 #include "cpu_grid_fields_shared.unified.h"
 #include <omp.h>
+#include "cpu_initial_density.h"
 
 
 double Set_Aden_Grid()
@@ -455,6 +456,8 @@ double Set_Aden_Grid()
       Density_Grid_B[3][BN] =-0.5*magy;
     }
   }
+
+  CpuInitialDensityApply();
 
   /******************************************************
              MPI: from the partitions B to C

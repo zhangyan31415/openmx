@@ -4,12 +4,17 @@
 #include <stdlib.h>
 #include <string.h>
 #include <limits.h>
+#include <errno.h>
+#include <unistd.h>
+#ifdef __linux__
+#include <sys/mman.h>
+#endif
 /* Raw projector values retain the native FP32 representation. Heavy payload is
  * stored once on each node needing the atom, never once per world rank. */
 #define PANEL_FLOATS ((size_t)262144)
 static struct {
- int active,rank,np,atoms,projectors,scratch_fan,scratch_norb,epoch,writing;
- int local_rank,nodes,node_id,raw0;
+ int active,rank,np,atoms,projectors,scratch_fan,scratch_norb,epoch,writing,deferred,derivatives_ready;
+ int local_rank,nodes,node_id,raw0,raw_dropped;
  int *owner,*fan,*norb,*neighbor,*image,*rank_node;
  unsigned char *need;
  size_t *block,*offset,*elements;
@@ -110,9 +115,9 @@ void CpuVnaShared_Publish(int epoch){
  double local=MPI_Wtime()-start,critical=0;MPI_Reduce(&local,&critical,1,MPI_DOUBLE,MPI_MAX,0,V.comm);MPI_Reduce(&sent,&total,1,MPI_UNSIGNED_LONG_LONG,MPI_SUM,0,V.comm);
  if(!V.rank){printf("[CPU_VNA_SHARED] publish=%s epoch=%d network_payload_bytes=%llu critical_seconds=%.9f\n",epoch?"weighted_derivatives":"raw",epoch,total,critical);fflush(stdout);}
 }
-void CpuVnaShared_BeginWeighted(void){if(!V.active||V.epoch!=0||V.writing)fail("invalid weighted writer epoch");/* Cross-node raw readers must finish before any owner mutates its source. */MPI_Barrier(V.comm);sync_node();V.writing=1;}
+void CpuVnaShared_BeginWeighted(void){if(!V.active||V.epoch!=0||V.writing||V.raw_dropped||(V.deferred&&!V.derivatives_ready))fail("invalid weighted writer epoch or deferred derivatives unavailable");/* Cross-node raw readers must finish before any owner mutates its source. */MPI_Barrier(V.comm);sync_node();V.writing=1;}
 void CpuVnaShared_BindAtom(float*****ds,int scratch,int a){
- if(!V.active||V.epoch<0||V.writing||!ds||scratch<0||a<1||a>V.atoms)fail("invalid complete-atom view");
+ if(!V.active||V.epoch<0||V.writing||V.raw_dropped||!ds||scratch<0||a<1||a>V.atoms)fail("invalid complete-atom view");
  for(int k=0;k<4;k++)for(int h=0;h<=V.fan[a];h++)for(int i=0;i<V.norb[a];i++)ds[k][scratch][h][i]=(V.raw0&&V.epoch==0&&k)?NULL:CpuVnaShared_Row(k,a,h,i);
 }
 void CpuVnaShared_BindCenter(float*****ds,int scratch,int a,int**reverse){
@@ -128,4 +133,57 @@ void CpuVnaShared_Destroy(void){
  if(!V.active)return;
  MPI_Barrier(V.comm);sync_node();MPI_Win_unlock_all(V.window);MPI_Win_free(&V.window);if(V.leaders!=MPI_COMM_NULL)MPI_Comm_free(&V.leaders);MPI_Comm_free(&V.node);
  free(V.owner);free(V.fan);free(V.norb);free(V.block);free(V.offset);free(V.elements);free(V.rank_node);free(V.need);free(V.neighbor);free(V.image);memset(&V,0,sizeof(V));
+}
+
+void CpuVnaShared_ConfigureDeferred(int enabled){
+ if(!V.active)return;int lo,hi;MPI_Allreduce(&enabled,&lo,1,MPI_INT,MPI_MIN,V.comm);MPI_Allreduce(&enabled,&hi,1,MPI_INT,MPI_MAX,V.comm);
+ if(lo!=hi||lo<0||hi>1||V.epoch!=-1)fail("invalid deferred derivative configuration");
+ V.deferred=enabled;if(enabled)V.raw0=1;
+ if(enabled&&!V.rank){printf("CPU_VNA_DEFERRED active=1 initial_components=1 force_components=4 capacity_unchanged=1 raw0_release_after_HVNA=1 derivative_writes=delayed_until_after_dense_release\n");fflush(stdout);}
+}
+int CpuVnaShared_Deferred(void){return V.active&&V.deferred;}
+int CpuVnaShared_Raw0Dropped(void){return V.active&&V.raw_dropped;}
+size_t CpuVnaShared_DropRaw0(void){
+ if(!V.active)return 0;
+ if(!V.deferred||!V.raw0||V.epoch!=0||V.writing||V.derivatives_ready||V.raw_dropped)fail("invalid raw0 discard epoch");
+ /* No derivative has been generated in this mode, so every payload page is
+  * dead after HVNA construction. Removing the whole interior also avoids
+  * retaining a boundary page at every atom's component-0 slice. Unlike
+  * MADV_DONTNEED on MAP_SHARED, MADV_REMOVE releases the shmem backing pages. */
+ MPI_Barrier(V.comm);sync_node();size_t advised=0;int error=0;
+ if(!V.local_rank&&V.cache_bytes){
+#if defined(__linux__) && defined(MADV_REMOVE)
+  long p=sysconf(_SC_PAGESIZE);
+  if(p>0){size_t page=(size_t)p;uintptr_t base=(uintptr_t)V.base;
+   if(V.cache_bytes<=UINTPTR_MAX-base){uintptr_t end=base+V.cache_bytes;
+    uintptr_t lo=base+(page-base%page)%page,hi=end-end%page;
+    if(hi>lo){if(!madvise((void*)lo,(size_t)(hi-lo),MADV_REMOVE))advised=(size_t)(hi-lo);else error=errno;}
+   }else error=EOVERFLOW;
+  }else error=EINVAL;
+#else
+  error=ENOSYS;
+#endif
+  printf("CPU_VNA_RAW0_DROPPED node=%d raw_payload_bytes=%zu advised_range_bytes=%zu shared_backing_removed=%d errno=%d method=%s\n",V.node_id,V.cache_bytes/4,advised,advised!=0,error,advised?"MADV_REMOVE":"safe_noop");fflush(stdout);
+ }
+ sync_node();MPI_Barrier(V.comm);V.raw_dropped=1;return advised;
+}
+void CpuVnaShared_RestoreRaw0(void){
+ if(!V.active||!V.deferred||!V.raw0||V.epoch!=0||V.writing||!V.raw_dropped||V.derivatives_ready)fail("invalid raw0 restore epoch");
+ double start=MPI_Wtime();sync_node();MPI_Barrier(V.comm);
+ unsigned long long sent=exchange(0),total=0;sync_node();MPI_Barrier(V.comm);V.raw_dropped=0;
+ double local=MPI_Wtime()-start,critical=0;MPI_Reduce(&local,&critical,1,MPI_DOUBLE,MPI_MAX,0,V.comm);MPI_Reduce(&sent,&total,1,MPI_UNSIGNED_LONG_LONG,MPI_SUM,0,V.comm);
+ if(!V.rank){printf("CPU_VNA_RAW0_RESTORED epoch=0 network_payload_bytes=%llu critical_seconds=%.9f\n",total,critical);fflush(stdout);}
+}
+void CpuVnaShared_DerivativesReady(void){
+ if(!V.active||!V.deferred||V.epoch!=0||V.writing||V.raw_dropped||V.derivatives_ready)fail("invalid deferred derivative completion");
+ sync_node();MPI_Barrier(V.comm);V.derivatives_ready=1;
+}
+
+int CpuVnaShared_WorthDeferring(size_t bytes){
+ if(!V.active)return 0;unsigned long long local=bytes,dense;
+ MPI_Allreduce(&local,&dense,1,MPI_UNSIGNED_LONG_LONG,MPI_SUM,V.node);
+ unsigned long long derivatives=(V.cache_bytes/4)*3;
+ int yes=dense>=derivatives,all;MPI_Allreduce(&yes,&all,1,MPI_INT,MPI_MIN,V.comm);
+ if(!V.local_rank){printf("CPU_VNA_LIFETIME_POLICY node=%d dead_dense_bytes=%llu deferred_derivative_bytes=%llu selected=%d rule=all_nodes_dense_can_cover_derivatives\n",V.node_id,dense,derivatives,all);fflush(stdout);}
+ return all;
 }

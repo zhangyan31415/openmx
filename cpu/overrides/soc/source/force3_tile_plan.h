@@ -19,8 +19,13 @@ static void *CpuF3Alloc(size_t bytes) {
 static size_t CpuF3CheckedProduct(size_t a,size_t b) {
   if(b && a>SIZE_MAX/b)CpuF3TileFail("workspace size overflow");return a*b;
 }
-static CpuF3TileIndex *CpuF3TilePrepare(int nh,const int *length,int **nc,int ng,int tile,
-                                      size_t budget,size_t *used,int *rescans) {
+typedef int (*CpuF3IndexGetter)(void *context,int neighbor,int point);
+static inline int CpuF3IndexRead(int **nc,CpuF3IndexGetter get,void *context,int h,int k){
+  return get?get(context,h,k):nc[h][k];
+}
+static CpuF3TileIndex *CpuF3TilePrepareIndexed(int nh,const int *length,int **nc,int ng,int tile,
+                                      size_t budget,size_t *used,int *rescans,
+                                      CpuF3IndexGetter get,void *context) {
   size_t base=CpuF3CheckedProduct((size_t)nh,sizeof(CpuF3TileIndex));
   if(base>budget)CpuF3TileFail("centre-neighbour plan exceeds metadata budget");
   CpuF3TileIndex *p=CpuF3Alloc(base);memset(p,0,base);*used=base;*rescans=0;
@@ -30,8 +35,8 @@ static CpuF3TileIndex *CpuF3TilePrepare(int nh,const int *length,int **nc,int ng
     int n=length[h],k,sorted=1;
     if(n<0)CpuF3TileFail("negative overlap length");
     for(k=0;k<n;k++) {
-      if(nc[h][k]<0 || nc[h][k]>=ng)CpuF3TileFail("overlap index outside centre grid");
-      if(k && nc[h][k]<nc[h][k-1])sorted=0;
+      if(CpuF3IndexRead(nc,get,context,h,k)<0 || CpuF3IndexRead(nc,get,context,h,k)>=ng)CpuF3TileFail("overlap index outside centre grid");
+      if(k && CpuF3IndexRead(nc,get,context,h,k)<CpuF3IndexRead(nc,get,context,h,k-1))sorted=0;
     }
     if(sorted)continue;
     size_t bytes=CpuF3CheckedProduct((size_t)n,sizeof(int));
@@ -43,10 +48,10 @@ static CpuF3TileIndex *CpuF3TilePrepare(int nh,const int *length,int **nc,int ng
     }
     p[h].mode=1;p[h].order=CpuF3Alloc(bytes);p[h].offset=CpuF3Alloc(offsets);
     memset(p[h].offset,0,offsets);
-    for(k=0;k<n;k++)p[h].offset[(size_t)nc[h][k]/(size_t)tile+1]++;
+    for(k=0;k<n;k++)p[h].offset[(size_t)CpuF3IndexRead(nc,get,context,h,k)/(size_t)tile+1]++;
     for(size_t t=1;t<=nt;t++)p[h].offset[t]+=p[h].offset[t-1];
     for(k=n;k-->0;) {
-      size_t t=(size_t)nc[h][k]/(size_t)tile;
+      size_t t=(size_t)CpuF3IndexRead(nc,get,context,h,k)/(size_t)tile;
       p[h].order[--p[h].offset[t+1]]=k;
     }
     /* In-place endpoint cursors now contain starts shifted by one bucket. */
@@ -56,15 +61,24 @@ static CpuF3TileIndex *CpuF3TilePrepare(int nh,const int *length,int **nc,int ng
   }
   return p;
 }
-static void CpuF3TileBounds(CpuF3TileIndex *p,int n,const int *nc,int tile_no,int end,
-                            int *begin,int *stop) {
+static void CpuF3TileBoundsIndexed(CpuF3TileIndex *p,int n,const int *nc,int tile_no,int end,
+                            int *begin,int *stop,CpuF3IndexGetter get,void *context,int h) {
   if(p->mode==0) {
     *begin=p->cursor;
-    while(p->cursor<n && nc[p->cursor]<end)p->cursor++;
+    while(p->cursor<n && (get?get(context,h,p->cursor):nc[p->cursor])<end)p->cursor++;
     *stop=p->cursor;
   } else if(p->mode==1) {
     *begin=(int)p->offset[tile_no];*stop=(int)p->offset[tile_no+1];
   } else {*begin=0;*stop=n;}
+}
+/* Native array API retained for the SOC/legacy paths and existing tests. */
+static CpuF3TileIndex *CpuF3TilePrepare(int nh,const int *length,int **nc,int ng,int tile,
+                                      size_t budget,size_t *used,int *rescans){
+  return CpuF3TilePrepareIndexed(nh,length,nc,ng,tile,budget,used,rescans,NULL,NULL);
+}
+static void CpuF3TileBounds(CpuF3TileIndex *p,int n,const int *nc,int tile_no,int end,
+                            int *begin,int *stop){
+  CpuF3TileBoundsIndexed(p,n,nc,tile_no,end,begin,stop,NULL,NULL,0);
 }
 static void CpuF3TileFree(CpuF3TileIndex *p,int nh) {
   for(int h=0;h<nh;h++){free(p[h].order);free(p[h].offset);}free(p);

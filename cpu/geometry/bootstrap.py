@@ -121,8 +121,14 @@ def check_scope(values, blocks, stage):
 def fast_memory_scope(values):
     """Conservative intersection of the verified sparse/cache native guards."""
     off = ('off','no','false','.false.','ng','0','none')
+    mixer = values.get('scf.mixing.type', 'simple').lower()
+    rhok = (mixer == 'rmm-diisk' and
+            os.environ.get('OPENMX_CPU_NSOC_RHOK_MODE','0') in ('1',) and
+            values.get('scf.spinpolarization','off').lower() == 'off' and
+            values.get('scf.eigenvaluesolver','').lower() == 'cluster' and
+            int(values.get('scf.mixing.history','5')) == 30)
     if (values.get('scf.eigenvaluesolver', '').lower() not in ('cluster','band') or
-            values.get('scf.mixing.type', 'simple').lower() != 'rmm-diis' or
+            (mixer != 'rmm-diis' and not rhok) or
             values.get('orbitalopt.method','off').lower() != 'off' or
             not native_logical(values.get('scf.proexpn.vna','on')) or
             int(values.get('level.of.fileout','1')) >= 2):
@@ -171,10 +177,22 @@ def profiles(prepared, q, api, *, threads=1, values=None, ranks_single_cpu_pinne
             **api.return_optimizations(group)}
     # Python stays serial; select native caches from the actual parent -nt.
     nenv['OPENMX_CPU_GRID_NUMA'] = '1' if threads == 1 and ranks_single_cpu_pinned else '0'
+    grid_recompute = os.environ.get('OPENMX_CPU_GRID_RECOMPUTE', '0')
+    if grid_recompute not in ('0', '1', '2'):
+        raise ValueError('OPENMX_CPU_GRID_RECOMPUTE must be 0, 1 or 2')
+    if grid_recompute == '2':
+        nenv['OPENMX_CPU_GRID_NUMA'] = '0'
     if threads > 1:
         nenv['OPENMX_CPU_VNA_SHARED'] = '0'
     values = values or {}
     fast_memory = fast_memory_scope(values)
+    rhok_mode = os.environ.get('OPENMX_CPU_NSOC_RHOK_MODE','0')
+    if rhok_mode not in ('0','1'):
+        raise ValueError('OPENMX_CPU_NSOC_RHOK_MODE requires 0 or 1')
+    if rhok_mode != '0' and (not fast_memory or group != 'D3' or
+            values.get('scf.mixing.type','').lower() != 'rmm-diisk' or
+            q['hamiltonian_policy'] != 'symmetrize'):
+        raise ValueError('reciprocal low-memory mode requires fresh scalar D3 Cluster RMM-DIISK History30')
     if not fast_memory:
         safe = set(prepared['NSOC_environment_additions']) | set(common) | set(api.return_optimizations(group))
         safe.update('OPENMX_CPU_NSOC_'+key for key in
@@ -182,6 +200,28 @@ def profiles(prepared, q, api, *, threads=1, values=None, ranks_single_cpu_pinne
         nenv = {k:v for k,v in nenv.items() if k in safe}
     if int(values.get('scf.mixing.history','5')) != 30 or q['hamiltonian_policy'] != 'symmetrize':
         nenv['OPENMX_CPU_NSOC_SYM_HISTORY'] = '0'
+    if rhok_mode != '0':
+        nenv.update(OPENMX_CPU_NSOC_RHOK_MODE=rhok_mode,
+                    OPENMX_CPU_NSOC_SYM_HISTORY='0',
+                    OPENMX_CPU_NSOC_H_HISTORY_COMPACT='0')
+    initial_grid = os.environ.get('OPENMX_CPU_NSOC_INITIAL_GRID')
+    if initial_grid is not None:
+        if initial_grid not in ('0','normalize'):
+            template = Path(initial_grid).expanduser().absolute()
+            if not template.is_file():
+                raise ValueError('initial density template must be an existing regular file')
+            initial_grid = str(template.resolve())
+        if initial_grid != '0' and (group != 'D3' or not fast_memory):
+            raise ValueError('experimental initial density requires fixed fresh scalar D3 NSOC')
+        nenv['OPENMX_CPU_NSOC_INITIAL_GRID'] = initial_grid
+    startup = os.environ.get('OPENMX_CPU_NSOC_STARTUP')
+    if startup is not None:
+        if startup not in ('0','1'):
+            raise ValueError('OPENMX_CPU_NSOC_STARTUP requires 0 or 1')
+        if startup != '0' and (group != 'D3' or not fast_memory or
+                nenv.get('OPENMX_CPU_NSOC_SYM_HISTORY') != '1'):
+            raise ValueError('direct density startup requires fresh scalar D3 RMM-DIIS History30')
+        nenv['OPENMX_CPU_NSOC_STARTUP'] = startup
     if q['hamiltonian_policy'] != 'symmetrize':
         nenv.update(OPENMX_CPU_NSOC_REPRESENTATIVE_DM='0', OPENMX_CPU_NSOC_REP_TAIL_BOUND='0')
     if q['export_policy'] == 'symmetrize' and q['hamiltonian_policy'] == 'free':
@@ -214,6 +254,15 @@ def profiles(prepared, q, api, *, threads=1, values=None, ranks_single_cpu_pinne
                 'OPENMX_CPU_GSOC_PROJECT':'1' if q['export_policy']=='symmetrize' else '0',
                 'OPENMX_CPU_GSOC_COV_TOL':format(q['covariance_tolerance'],'.17g'),
                 'OPENMX_CPU_GSOC_GEOMETRY_TOL_ANG':format(q['tolerance'],'.17g')}
+    soc_memory = os.environ.get('OPENMX_CPU_SOC_MEMORY', '0')
+    if soc_memory not in ('0', '1'):
+        raise ValueError('OPENMX_CPU_SOC_MEMORY must be 0 or 1')
+    if soc_memory == '1':
+        senv['OPENMX_CPU_SOC_MEMORY'] = '1'
+        if os.environ.get('OPENMX_CPU_VNA_FORCE_STREAM', '0') in ('1', '2'):
+            if threads != 1 or not fast_memory or prepared['SOC_route'] != 'legacy':
+                raise ValueError('SOC VNA streaming currently requires fixed legacy SOC, RMM-DIIS and one thread')
+            senv.update(OPENMX_CPU_VNA_SHARED='1', OPENMX_CPU_VNA_RAW0='1')
     return {'nsoc': nenv, 'soc': senv}
 
 

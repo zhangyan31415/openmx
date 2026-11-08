@@ -9,6 +9,19 @@ int CpuVnaShared_Requested(void);
 /* Call collectively and unconditionally before any flag-dependent Init. */
 int CpuVnaShared_Agree(MPI_Comm comm);
 int CpuVnaShared_Active(void);
+void CpuVnaShared_ConfigureDeferred(int enabled);
+int CpuVnaShared_Deferred(void);
+/* Collective lifetime transition for the deferred, fixed-geometry path.
+ * Drop invalidates raw values until owners rewrite them and Restore republishes
+ * them to every needed node. Returned bytes are successful local-node-leader
+ * MADV_REMOVE ranges, not a measured physical-memory saving. Unsupported shared
+ * mappings retain their pages and report that fact; numerical behavior is safe. */
+size_t CpuVnaShared_DropRaw0(void);
+int CpuVnaShared_Raw0Dropped(void);
+void CpuVnaShared_RestoreRaw0(void);
+int CpuVnaShared_WorthDeferring(size_t local_dead_dense_bytes);
+void CpuVnaShared_DerivativesReady(void);
+double CpuVnaDeferred_Complete(float *****view);
 void CpuVnaShared_Init(MPI_Comm comm,int atoms,const int*owners,const int*fan,
  int**natn,int**ncn,int**image4,const int*norb,int projectors,int scratch_fan,int scratch_norb);
 float*CpuVnaShared_Row(int component,int atom,int neighbor,int orbital);
