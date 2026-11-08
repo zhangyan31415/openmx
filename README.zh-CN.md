@@ -123,7 +123,6 @@ MoTe2、WSe2 均为 **2.13393 度、4326 原子，NSOC**。记录中的 80/150 R
 两组的 SCF 阈值和历史二进制也不同，因此不是只改 cutoff 的收敛测试；
 总能量和力差没有通过此前物理门限，不据此修改默认 cutoff。
 
-![MoTe2 截断与价带对比](cpu/docs/benchmarks/20261109-cutoff/MoTe2_aligned.png)
-![WSe2 截断与价带对比](cpu/docs/benchmarks/20261109-cutoff/WSe2_aligned.png)
+![Cutoff and valence-band comparison](cpu/docs/benchmarks/20261109-cutoff/cutoff_comparison.png)
 
 [设置、数值数据及适用范围](cpu/docs/benchmarks/20261109-cutoff/README.md)。

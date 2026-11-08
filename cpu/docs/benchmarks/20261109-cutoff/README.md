@@ -49,11 +49,18 @@ The figures share the reference valence maximum as their display zero.
 | MoTe2 | 27.476206 meV | 0.148710 meV | 0.359147 meV |
 | WSe2 | 12.827603 meV | 0.179587 meV | 0.436594 meV |
 
-![MoTe2, 2.13393 degrees, 4326 atoms](MoTe2_aligned.png)
-![WSe2, 2.13393 degrees, 4326 atoms](WSe2_aligned.png)
+![Two-material cutoff comparison](cutoff_comparison.png)
 
-Black solid: 150 Ry / 1e-7. Red dashed: aligned 80 Ry / 1e-6.
-Each figure has overlay, reference and candidate rows.
+Blue solid: 150 Ry / 1e-7. Coral dashed overlay: aligned 80 Ry / 1e-6.
+The columns show the two materials; the rows show overlay, reference, candidate,
+and aligned differences. All band panels share the same energy scale.
+The 13 sampled points are joined by straight segments, without smoothing.
+
+[Vector PDF](cutoff_comparison.pdf) · [SVG](cutoff_comparison.svg) ·
+[MoTe2 separately](MoTe2_aligned.pdf) · [WSe2 separately](WSe2_aligned.pdf).
+Run `python plot.py` with NumPy and Matplotlib to regenerate every figure from
+these CSVs. The script verifies their hashes and the reported aligned metrics.
+It uses an available serif font; no proprietary font files are bundled.
 
 ## Total energy and forces / 总能量与力
 

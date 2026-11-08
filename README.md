@@ -111,8 +111,7 @@ MoTe2 and WSe2, **2.13393 degrees, 4326 atoms each**, NSOC: the aligned highest
 historical binary; this is not a controlled cutoff-only convergence test.
 Total-energy/force differences fail the earlier physical thresholds.
 
-![MoTe2 cutoff comparison](cpu/docs/benchmarks/20261109-cutoff/MoTe2_aligned.png)
-![WSe2 cutoff comparison](cpu/docs/benchmarks/20261109-cutoff/WSe2_aligned.png)
+![Cutoff and valence-band comparison](cpu/docs/benchmarks/20261109-cutoff/cutoff_comparison.png)
 
 [Settings, numerical data and limitations](cpu/docs/benchmarks/20261109-cutoff/README.md).
 
