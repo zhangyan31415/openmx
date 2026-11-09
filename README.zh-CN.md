@@ -10,7 +10,7 @@
 
 当前候选版本保留已验证的 **v6-clean** 原生 SCF 基线。近期缩短真空层、减半 z 网格的实验没有得到值得通用替换的收益，因此不作为本次默认配置；程序不会自动降低积分网格截断或放宽 SCF 收敛阈值。实验性密度初猜保持关闭。
 
-下文已有的 bench 图对应标注日期的历史对照，不代表新的 v6 对原版测量。保留的内存路径、验证范围和精度边界见 [v6 基线说明](cpu/docs/V6_BASELINE.md)、[相对已发布 CPU 分支的改动](cpu/docs/CHANGES_V6.md)。
+保留的内存路径、验证范围和精度边界见 [v6 基线说明](cpu/docs/V6_BASELINE.md)、[相对已发布 CPU 分支的改动](cpu/docs/CHANGES_V6.md)。
 
 
 ## 1. 获取与安装
@@ -88,19 +88,6 @@ Band.ReferenceEnergy  Fermi
 - 历史加速和内存数据属于各自配置，不能当作当前入口的普遍保证。多节点也不保证核时下降或总内存不变。
 
 [原生开关验收](https://github.com/zhangyan31415/openmx/blob/develop/cpu/docs/NATIVE_SYMMETRY_VALIDATION_20261106.md) · [时间与内存基准](https://github.com/zhangyan31415/openmx/blob/develop/cpu/docs/BENCHMARKS_20261031.md) · [数值验收标准](https://github.com/zhangyan31415/openmx/blob/develop/cpu/docs/ACCEPTANCE.zh-CN.md)
-
-## 5. 原代码参考与最新版对比
-
-本次重新进行同节点实测：**node040，64 MPI × 1**，两版使用相同编译选项和物理输入，均完成 NSOC 后从自身检查点接一步 SOC。每个版本、每种原子数各测一次。
-
-![原代码参考与最新版的原子数、耗时和物理内存对比](https://raw.githubusercontent.com/zhangyan31415/openmx/develop/cpu/docs/benchmarks/20261106/latest_vs_reference.png)
-
-| MoTe₂ | 参考版 → 最新版总耗时 | 参考版 → 最新版物理峰值内存 |
-|---|---:|---:|
-| 9.43°，222 原子 | 184.86 → **86.42 秒** | 73.59 → **25.22 GiB** |
-| 7.34°，366 原子 | 552.02 → **147.25 秒** | 110.99 → **35.35 GiB** |
-
-参考版为仓库保留的 CPU4.0 源码快照，不使用优化替换。该对比包含对称约束及 SCF 轨迹变化，不代表原始算子逐项相同。完整设置、分阶段时间／内存和物理误差见[报告](https://github.com/zhangyan31415/openmx/blob/develop/cpu/docs/benchmarks/20261106/README.md)、[数据](https://github.com/zhangyan31415/openmx/blob/develop/cpu/docs/benchmarks/20261106/measurements.csv)及[物理差异](https://github.com/zhangyan31415/openmx/blob/develop/cpu/docs/benchmarks/20261106/physical_differences.json)，其中力差超过此前的物理门限。两点连线不是规模律拟合或外推。
 
 ## 代码目录与来源
 

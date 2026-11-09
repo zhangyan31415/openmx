@@ -10,7 +10,7 @@ This CPU version of [OpenMX](https://www.openmx-square.org/) adds symmetry-based
 
 The current release candidate retains the validated **v6-clean** native SCF baseline. Recent vacuum-height and z-grid experiments did not establish a useful general replacement. They are not enabled by this release, and the code does not silently lower the integration cutoff or relax the SCF criterion. Optional experimental density-startup modes remain disabled.
 
-The existing benchmark figure below describes its dated comparison, rather than a new v6-versus-stock measurement. See [v6 baseline and validation](cpu/docs/V6_BASELINE.md) · [Changes since the previous CPU branch](cpu/docs/CHANGES_V6.md) for the retained memory paths, tested scope and accuracy limits.
+See [v6 baseline and validation](cpu/docs/V6_BASELINE.md) · [Changes since the previous CPU branch](cpu/docs/CHANGES_V6.md) for the retained memory paths, tested scope and accuracy limits.
 
 
 ## 1. Get and build
@@ -89,19 +89,6 @@ count-dependent behavior; see the band guide for exact selection and limits.
 - Historical timing and memory results apply to their recorded configurations. More nodes do not guarantee lower core-hours or constant total memory.
 
 [Native switch validation](https://github.com/zhangyan31415/openmx/blob/develop/cpu/docs/NATIVE_SYMMETRY_VALIDATION_20261106.md) · [Timing and memory benchmarks](https://github.com/zhangyan31415/openmx/blob/develop/cpu/docs/BENCHMARKS_20261031.md) · [Acceptance criteria](https://github.com/zhangyan31415/openmx/blob/develop/cpu/docs/ACCEPTANCE.zh-CN.md) (detailed reports are currently in Chinese).
-
-## 5. Reference vs latest benchmarks
-
-Fresh same-node measurements: **node040, 64 MPI × 1**, same compiler options and physical inputs. Both versions complete NSOC followed by one SOC step from their own checkpoints. Each version/size was measured once.
-
-![Reference and latest CPU time and physical memory versus atom count](https://raw.githubusercontent.com/zhangyan31415/openmx/develop/cpu/docs/benchmarks/20261106/latest_vs_reference.png)
-
-| MoTe₂ | Reference → latest total time | Reference → latest physical peak |
-|---|---:|---:|
-| 9.43°, 222 atoms | 184.86 → **86.42 s** | 73.59 → **25.22 GiB** |
-| 7.34°, 366 atoms | 552.02 → **147.25 s** | 110.99 → **35.35 GiB** |
-
-The reference is the bundled CPU4.0 source snapshot, built without optimized replacements. Symmetry constraints and SCF trajectories change together with the implementation; this is not a claim of identical raw operators. See the [full report](https://github.com/zhangyan31415/openmx/blob/develop/cpu/docs/benchmarks/20261106/README.md), [data](https://github.com/zhangyan31415/openmx/blob/develop/cpu/docs/benchmarks/20261106/measurements.csv) and [physical differences](https://github.com/zhangyan31415/openmx/blob/develop/cpu/docs/benchmarks/20261106/physical_differences.json), including force errors exceeding the earlier physical gate. The two-point lines are not an extrapolated scaling law.
 
 ## Source layout and credits
 
