@@ -1,0 +1,10 @@
+{
+  "source_table_sha256": "503054b3bc9071b9ab94fe68a2d90370607140d5d2b1201453c8573e15b0b8ce",
+  "source_plan_sha256": "98c36dd8f008351f8a689e985982d8521360cfa4760181a8332f2b282f9727e6",
+  "records": 127,
+  "materials": 25,
+  "energy_pass": 122,
+  "metadata_verified": 127,
+  "issues": [],
+  "scope": "Historical 22-23 October 2026, 128 MPI x1, same node per stock/optimized pair; 150 Ry/1e-7/StartPulay15; complete NSOC + own one-step SOC; not latest unified build; no physical-memory peak comparison"
+}

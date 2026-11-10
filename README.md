@@ -27,6 +27,14 @@ All pairs use **64 MPI × 1, 150 Ry, criterion 10⁻⁷, History30, StartPulay15
 
 The upper panels use log–log axes for **atom count versus core-hours**; lower panels show memory on a linear vertical axis. D3/C3 and D2/C2 are labeled separately. Lines join measured cases, without extrapolation; missing original-code points are not zero or successful timings. The larger-case campaign is still in progress. [Measurements, method, per-stage times and numerical differences](cpu/docs/benchmarks/regular256_20261110/README.md) · [CSV](cpu/docs/benchmarks/regular256_20261110/paired.csv) · [PDF](cpu/docs/benchmarks/regular256_20261110/scaling.pdf).
 
+## Historical scaling across 25 materials
+
+The earlier bigmem campaign covered **25 materials / 127 structures**, down to **3.89°**. The figure below shows the 122 structures passing its energy threshold (24 materials); five WTe₂ cases failed and remain in the data. It measures an **earlier specialized build**, with 128 MPI × 1 and an original-code reference on the same node per pair. It is separate from the current-release measurements above.
+
+![Historical speedup versus atom count](cpu/docs/benchmarks/bigmem_historical_20261022/historical_speedup_scaling.svg)
+
+The larger cases generally show greater acceleration: MoTe₂ goes from **1.45× at 222 atoms to 3.97× at 1,302 atoms**; GaTe reaches **4.56× at 1,736 atoms**. The trend is not strictly monotonic for every material. These are measured historical NSOC + one-step SOC results, not a claim that the latest release has been retested on all 25 materials. Historical memory monitoring is not comparable to the current physical-peak metric. [Data, version boundaries and reproduction](cpu/docs/benchmarks/bigmem_historical_20261022/README.md).
+
 ## Current CPU baseline
 
 The current release candidate retains the validated **v6-clean** native SCF baseline. Recent vacuum-height and z-grid experiments did not establish a useful general replacement. They are not enabled by this release, and the code does not silently lower the integration cutoff or relax the SCF criterion. Optional experimental density-startup modes remain disabled.
