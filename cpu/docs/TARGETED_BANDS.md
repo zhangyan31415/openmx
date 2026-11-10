@@ -176,3 +176,19 @@ profile is not claimed certified with this new postprocessor.
 See [native checks and timing scope](TARGETED_BANDS_VALIDATION_20261106.md).
 
 See [full-spectrum method comparisons](BAND_METHODS_VALIDATION_20261106.md).
+
+### Floating-point roundoff and failures / 舍入误差与报错
+
+SLEPc's basis orthogonalization uses the matching nonorthogonal S inner
+product. Its imaginary-part roundoff guard is set to `256 * eps` for FP64
+(about `5.7e-14`), independently of the eigenpair convergence tolerance.
+This handles cancellation in the stock two-atom diamond example without
+changing H, S, the target, or the requested band count. S must still satisfy
+the positive-definite input contract. Materially complex overlap diagonals
+are rejected; only FP64 roundoff is tolerated. Optional audit mode remains off
+by default. Solver failures retain the original PETSc diagnostic, with any
+cleanup errors reported separately; there is no silent dense fallback.
+
+中文：内积检查允许浮点舍入范围内的微小虚部，不修改 H/S，也不改变目标
+能量、带数或本征求解收敛精度。求解失败时保留首个数值错误，清理对象时
+的后续错误单独记录，不再覆盖首个错误，也不会悄悄切换成全带求解。

@@ -10,6 +10,7 @@
 #include <mpi.h>
 #include <mkl.h>
 #include "openmx_common.h"
+#include "cpu_periodic_image_gauge.h"
 #include "cpu_soc_native.h"
 #include "cpu_gsoc.h"
 #include "cpu_c3.h"
@@ -215,6 +216,15 @@ static void rs_setup(void) {
   for(a=0;a<8;a++)for(j=0;j<8;j++)if(fabs(rs_spin_t[0][8*a+j]-(a==j))>1e-12)rs_die("spin operation0 not identity");
   if(fgetc(f)!=EOF)rs_die("metadata has trailing bytes");fclose(f);
   if(orth>1e-11)rs_die("orbital metadata is not exact orthogonal group; regenerate nominal-generator map");
+  {
+    int moved=0;char error[256];
+    for(a=0;a<3;a++)for(j=0;j<3;j++)
+      if(!isfinite(tv[a+1][j+1]*BohrR)||fabs(tv[a+1][j+1]*BohrR-rs_cell[3*a+j])>2e-7)
+        rs_die("cell differs from metadata; regenerate map");
+    if(cpu_periodic_image_rebase(rs_nat,rs_ng,rs_cell,rs_xyz,Gxyz,BohrR,
+        rs_perm,rs_w,rs_img,2e-7,&moved,error,sizeof(error)))rs_die(error);
+    if(moved&&rs_rank==Host_ID){printf("CPU_SYMMETRY_PERIODIC_GAUGE rebased_atoms=%d geometry_unchanged=1\n",moved);fflush(stdout);}
+  }
   rs_validate_metadata();
   b=0;for(a=1;a<=rs_nat;a++){if(rs_type[a-1]<0||rs_type[a-1]>=rs_ns||Spe_Total_CNO[WhatSpecies[a]]!=rs_norb[rs_type[a-1]])rs_die("native basis differs from metadata");b+=Spe_Total_CNO[WhatSpecies[a]];rs_nb+=FNAN[a]+1;}
   if(b!=rs_n)rs_die("native basis dimension mismatch");

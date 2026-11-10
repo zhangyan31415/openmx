@@ -23,8 +23,6 @@ This CPU version of [OpenMX](https://www.openmx-square.org/) adds symmetry-based
 
 All pairs use **64 MPI × 1, 150 Ry, criterion 10⁻⁷, History30, StartPulay15**, the same physical inputs and the same node for each material (Intel Xeon Gold 6530, about 251 GiB). Current results use `scf.Symmetry on` with the automatic profile and **no optional low-memory overrides**. Total time includes symmetry preparation and native force evaluation; memory includes shared pages once and file cache. Results are means of 1–2 runs, and include SCF iteration-count changes as well as per-step acceleration.
 
-**Numerical scope:** symmetry projection changes the discretized operator. Across these four pairs, the maximum energy difference is 0.0664 meV/atom. MoTe₂ has maximum force differences up to 12.5 meV/Å, while HgI₂ is below 0.24 meV/Å; the MoTe₂ cases therefore do **not** meet a 1 meV/Å force-equivalence target. Timing improvements are not a claim of identical forces or general accuracy convergence.
-
 ![Core-hours and peak memory versus atom count](cpu/docs/benchmarks/regular256_20261110/scaling.svg)
 
 The upper panels use log–log axes for **atom count versus core-hours**; lower panels show memory on a linear vertical axis. D3/C3 and D2/C2 are labeled separately. Lines join measured cases, without extrapolation; missing original-code points are not zero or successful timings. The larger-case campaign is still in progress. [Measurements, method, per-stage times and numerical differences](cpu/docs/benchmarks/regular256_20261110/README.md) · [CSV](cpu/docs/benchmarks/regular256_20261110/paired.csv) · [PDF](cpu/docs/benchmarks/regular256_20261110/scaling.pdf).

@@ -130,12 +130,27 @@ def libraries():
     return PETSc,SLEPc,factor
 
 
+def destroy_petsc_objects(objects, primary_error=None):
+    """Try all cleanups while retaining the original numerical exception."""
+    failures=[]
+    for value in objects:
+        if value is None:continue
+        try:value.destroy()
+        except Exception as error:failures.append(error)
+    if not failures:return
+    message='PETSc cleanup: '+'; '.join(str(error)for error in failures)
+    if primary_error is not None:
+        primary_error.add_note(message)
+        return
+    raise RuntimeError(message)from failures[0]
+
+
 def check_overlap(S):
     """Check sparse input without a separate overlap eigenproblem.
 
     GHEP requires positive-definite S as an input contract. These inexpensive
     necessary checks do not certify its global spectrum; report that explicitly.
-    The solve also checks every returned generalized eigenpair and S-orthogonality.
+    Optional audit mode checks returned eigenpairs and S-orthogonality.
     """
     import numpy as np
     start=time.monotonic()
@@ -144,9 +159,12 @@ def check_overlap(S):
     if not np.isfinite(S.data).all():raise ValueError('nonfinite overlap')
     diagonal=np.asarray(S.diagonal())
     if np.any(diagonal.real<=1e-9):raise ValueError('overlap requires native regularization')
-    if np.any(diagonal.imag!=0):raise ValueError('overlap diagonal is not real')
+    imag_max=float(np.max(abs(diagonal.imag),initial=0.))
+    imag_bound=64*np.finfo(np.float64).eps*np.maximum(1.,abs(diagonal.real))
+    if np.any(abs(diagonal.imag)>imag_bound):raise ValueError('overlap diagonal is not real beyond FP64 roundoff')
     return dict(overlap_lower_bound=None,overlap_min=None,
-                overlap_diagonal_min=float(diagonal.real.min()),
+                overlap_diagonal_min=float(diagonal.real.min()),overlap_diagonal_imag_max=imag_max,
+                overlap_diagonal_imag_tolerance_max=float(imag_bound.max()),
                 overlap_positive_definite_certified=False,
                 overlap_check_method='sparse input checks',overlap_check_seconds=time.monotonic()-start)
 
@@ -207,6 +225,9 @@ def solve(H,S,target,count,tolerance=1e-9,audit=False):
         m=PETSc.Mat().createAIJ(size=a.shape,csr=buffers,comm=PETSc.COMM_SELF)
         m.assemble();m.setOption(PETSc.Mat.Option.HERMITIAN,True);return m
     A=B=eps=vr=vi=None
+    # Preserve the original native PETSc error text if its Python wrapper only
+    # reports SystemError; cleanup failures remain secondary diagnostics.
+    PETSc.Sys.pushErrorHandler('traceback')
     try:
         setup_start=time.monotonic()
         A=petsc_matrix(H,'H');B=petsc_matrix(S,'S');B.setOption(PETSc.Mat.Option.SPD,True)
@@ -217,6 +238,12 @@ def solve(H,S,target,count,tolerance=1e-9,audit=False):
         # A wider working subspace retains near-degenerate partners without
         # increasing the requested or returned eigenstate count.
         eps.setDimensions(wanted,min(n,max(4*wanted,20)))
+        # BV checks z^H S z during orthogonalization. Its default 10*eps
+        # rejects harmless ~1e-14 imaginary cancellation in stock Cdia.dat,
+        # even for exactly Hermitian H/S and positive-definite S. This is a
+        # roundoff guard, independent of the eigenpair convergence tolerance.
+        inner_product_tolerance=256*np.finfo(np.float64).eps
+        eps.getBV().setDefiniteTolerance(inner_product_tolerance)
         eps.setWhichEigenpairs(SLEPc.EPS.Which.TARGET_REAL);eps.setTarget(target)
         st=eps.getST();st.setType('sinvert');st.setShift(target)
         ksp=st.getKSP();ksp.setType('preonly');pc=ksp.getPC();pc.setType('lu');pc.setFactorSolverType(factor)
@@ -253,12 +280,12 @@ def solve(H,S,target,count,tolerance=1e-9,audit=False):
             matrix_prepare_seconds=prepare_seconds,petsc_setup_seconds=setup_seconds,csr_python_buffers_shared=shared,
             eigenpair_audit_enabled=bool(audit),eigenvectors_extracted=bool(audit),eigenpair_audit_seconds=audit_seconds,
             solver='SLEPc KrylovSchur shift-invert',factor=factor,PETSc=PETSc.Sys.getVersion(),SLEPc=SLEPc.Sys.getVersion(),
-            matrix_dimension=n,requested=count,search_nev=wanted,search_ncv=ncv,search_ncv_policy='min(N,max(4*nev,20))',
+            matrix_dimension=n,requested=count,search_nev=wanted,search_ncv=ncv,search_ncv_policy='min(N,max(4*nev,20))',basis_inner_product_tolerance=inner_product_tolerance,
             converged=converged,solve_seconds=solve_seconds,worker_MKL_DYNAMIC=os.environ.get('MKL_DYNAMIC'),
             S_diagonal_shift=0.,native_triangle='assembled Hermitian CSR; no solve-time rewrite',full_spectrum=False)
     finally:
-        for value in (vi,vr,eps,B,A):
-            if value is not None:value.destroy()
+        try:destroy_petsc_objects((vi,vr,eps,B,A),sys.exc_info()[1])
+        finally:PETSc.Sys.popErrorHandler()
 
 
 def main():
@@ -310,4 +337,6 @@ if __name__=='__main__':
     try:raise SystemExit(main())
     except Exception as error:
         print('OPENMX_BANDS_ERROR: '+str(error),file=sys.stderr,flush=True)
+        for note in getattr(error,'__notes__',()):
+            print('OPENMX_BANDS_CLEANUP: '+note,file=sys.stderr,flush=True)
         raise SystemExit(2)

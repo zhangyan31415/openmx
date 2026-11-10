@@ -36,3 +36,17 @@ The fix is in the Python preparation resources. Newly built installations includ
 ## Visible solver selection
 
 The ordinary `.out` summary now includes the prepared solver path, why it was selected, the geometry scan upper bound and the actual detection tolerance. Standard eligible D3/C3 cells use the specialized path; supported other cases can use general spinor blocks. Explicitly writing the public default covariance value has the same route as omitting it. A genuinely non-default advanced covariance contract retains the generic native checks and a visible reason; it is not silently ignored. This normalization does not certify arbitrary large-system memory reductions.
+
+## Periodic coordinate representatives / 周期坐标代表
+
+When OpenMX wraps periodic fractional coordinates into the reference cell,
+native NSOC/SOC projector setup rebases the metadata image shifts to the
+actual atom representatives before neighbor routes are built. This changes
+only the image bookkeeping; the input file and physical geometry remain
+unchanged. A displacement that is not an integer lattice translation still
+fails the fixed-geometry check. This correction does not enlarge the requested
+symmetry tolerance.
+
+中文：无需手工折回周期等价坐标。NSOC/SOC 会在建立近邻映射前统一周期像
+索引，保留输入和物理几何；真正的非整晶格位移仍会报错，不会通过放宽容差
+掩盖坐标不一致。

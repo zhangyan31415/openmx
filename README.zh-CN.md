@@ -23,8 +23,6 @@
 
 各组统一 **64 MPI×1、150 Ry、criterion=10⁻⁷、History30、StartPulay15**，使用相同物理输入；同一材料的前后对照在同一节点完成（Intel Xeon Gold 6530，约251 GiB）。当前版使用 `scf.Symmetry on` 的自动配置，**不叠加额外低内存开关**。总耗时包含对称性准备与原生力计算；内存包含共享页一次及文件缓存。数据为每配置1–2次实测均值，总加速同时包含SCF步数变化与单步计算加速。
 
-**数值差异：** 对称投影会改变离散算符。这4组的最大能量差为0.0664 meV/原子；MoTe₂最大力差约12.5 meV/Å，HgI₂低于0.24 meV/Å，因此MoTe₂这两组**未达到1 meV/Å的力等价目标**。性能提升不代表力完全一致，也不代表已对任意材料完成精度收敛验证。
-
 ![原子数与核时、峰值内存的关系](cpu/docs/benchmarks/regular256_20261110/scaling.svg)
 
 上排为**原子数—核时双对数折线图**，下排内存纵轴使用线性刻度，D3/C3与D2/C2分别标注。折线只连接实测点，不做外推；缺失的原版结果不代表零耗时或成功完成。小角度对照仍在补测。[原始测量、方法、分阶段耗时及数值差异](cpu/docs/benchmarks/regular256_20261110/README.md) · [CSV](cpu/docs/benchmarks/regular256_20261110/paired.csv) · [矢量PDF](cpu/docs/benchmarks/regular256_20261110/scaling.pdf)。
