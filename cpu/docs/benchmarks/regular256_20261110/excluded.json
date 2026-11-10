@@ -1,0 +1,54 @@
+[
+  {
+    "case": "MoTe2_7_4.41_stock_cut150_r1",
+    "reasons": [
+      "soc:memory_guard"
+    ]
+  },
+  {
+    "case": "MoTe2_10_3.15_sub_cut150_r1",
+    "reasons": [
+      "nsoc:external_freeze"
+    ]
+  },
+  {
+    "case": "MoTe2_10_3.15_stock_cut150_r1",
+    "reasons": [
+      "nsoc:cancelled_user",
+      "soc:no_final_record"
+    ]
+  },
+  {
+    "case": "HgI2_10_5.45_stock_cut150_r1",
+    "reasons": [
+      "soc:no_final_record"
+    ]
+  },
+  {
+    "case": "HgI2_10_5.45_full_cut150_r1",
+    "reasons": [
+      "nsoc:external_freeze"
+    ]
+  },
+  {
+    "case": "HgI2_14_3.95_full_cut150_r1",
+    "reasons": [
+      "nsoc:cancelled_user",
+      "soc:no_final_record"
+    ]
+  },
+  {
+    "case": "HgI2_14_3.95_sub_cut150_r1",
+    "reasons": [
+      "nsoc:cancelled_user",
+      "soc:no_final_record"
+    ]
+  },
+  {
+    "case": "HgI2_14_3.95_stock_cut150_r1",
+    "reasons": [
+      "nsoc:cancelled_user",
+      "soc:no_final_record"
+    ]
+  }
+]

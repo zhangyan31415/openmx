@@ -1,0 +1,39 @@
+{
+  "snapshot": "2026-11-10T12:34:03.508959+08:00",
+  "source_commit": "2c63864f1231fe3e5cd0f865071c439a6cbb6d35",
+  "build_sha256": {
+    "stock": "af393cccd23597297788fff2410e2d742e16c62f000144574b4d8627615a893c",
+    "unified": "44ac965b2a1e705bc569c1db7f51613789903551cdc288e4571772019cffe710"
+  },
+  "materials": 2,
+  "groups": [
+    "D3",
+    "C3",
+    "D2",
+    "C2"
+  ],
+  "hardware": "Intel Xeon Gold 6530, 2 sockets x 32 physical cores, approximately 251 GiB/node",
+  "nodes": [
+    "node037",
+    "node039"
+  ],
+  "ranks": 64,
+  "threads": 1,
+  "cutoff_Ry": 150,
+  "criterion": 1e-07,
+  "history": 30,
+  "start_pulay": 15,
+  "workflow": "full fixed-geometry nonmagnetic Gamma NSOC + own-checkpoint single SOC step; not self-consistent SOC",
+  "memory": "max of dedicated NSOC/SOC cgroup memory.peak, includes shared pages once and file cache; not sum RSS; not whole-node MemUsed",
+  "runtime": "oneAPI2022.3 / Intel MPI2021.7.1 / MKL2022.2.1; shm transport; moirekp Python3.11.15",
+  "timing": "sum of launch_wall_seconds for NSOC/SOC; includes symmetry preparation and native force evaluation; excludes queue, compilation, bands and H/S comparison",
+  "geometries": {
+    "MoTe2": "published AA relaxed-cell qk structure",
+    "HgI2": "published AA fixed-cell qk structure"
+  },
+  "exclusions": "incomplete, memory-guard, frozen, interrupted and symmetry-off results; larger stock cases are not implied to fit memory",
+  "chart_inspiration": [
+    "https://vllm.ai/blog/2024-09-05-perf-update",
+    "https://docs.nvidia.com/cuml/latest/cuml-accel/benchmarks/"
+  ]
+}
