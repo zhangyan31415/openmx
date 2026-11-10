@@ -82,6 +82,107 @@ def prepare_soc_artifacts(soc_input,selected_path,out,kind,spinor,neighbor_setti
  return {'route':soc_route,'export_policy':export_policy,'export_HS':export_HS,
          'files':files,'env_additions':env}
 
+def tolerance_ladder(limit, supplied=None):
+ """Include the user's exact upper bound, without expanding the solve scope."""
+ import math
+ limit=float(limit)
+ if not math.isfinite(limit) or not 0<limit<=.02:
+  raise ValueError('geometry tolerance must be finite in (0,0.02] Angstrom')
+ if supplied is None:
+  values=[1e-6,3e-6,1e-5,2e-5,3e-5,5e-5,1e-4,
+          2e-4,3e-4,5e-4,1e-3,2e-3,3e-3,5e-3,1e-2,2e-2]
+ else:
+  values=[float(v)for v in supplied]
+  if not values or any(not math.isfinite(v)or v<=0 for v in values)or any(a>=b for a,b in zip(values,values[1:])):
+   raise ValueError('custom tolerance ladder must be finite, positive and strictly increasing')
+ values=[v for v in values if v<limit]
+ # A second upper-range probe allows a new symmetry plateau to be observed.
+ if not values or values[-1]<limit/2 or limit>1e-4:values.append(limit*.75)
+ values.append(limit)
+ return sorted(set(values))
+
+
+def failure_diagnostic(input_path, full, ladder, limit, detector, spinor, group):
+ """Inspect looser candidates, but never authorize them for a native solve."""
+ import math
+ def brief(item):
+  pg=item.get('point_group',{})
+  return {'symprec_Ang':item.get('symprec_Ang'), 'valid':bool(item.get('valid')),
+          'point_group':pg.get('symbol')if isinstance(pg,dict)else pg,
+          'operation_count':item.get('operation_count',0),
+          'max_geometry_residual_Ang':(float(item['max_geometry_residual_Ang'])if item.get('max_geometry_residual_Ang')is not None and math.isfinite(item['max_geometry_residual_Ang'])else None),
+          'error':item.get('error',item.get('reason'))}
+ scan=list(full.get('scan')or[full.get('selected',{})])
+ report={'schema':1,'requested_group':group,'requested_max_Ang':limit,
+         'solve_scan_Ang':list(ladder),'solve_scan':[brief(r)for r in scan],
+         'diagnostic_scan':[],'candidate':None,'absence_proven':False,
+         'runtime_launch_allowed':False,'geometry_modified':False,
+         'tolerance_automatically_increased':False}
+ nontrivial=[r for r in scan if r.get('valid')and r.get('operation_count',0)>1]
+ if nontrivial:
+  report['classification']='unsupported_subgroup'
+  for record in nontrivial:
+   try:kind,ops=select_subgroup(record,group,spinor)
+   except ValueError:continue
+   report['classification']='unstable_or_unusable_selection'
+   break
+  return report
+ report['classification']='operation_validation_failed'if any(not r.get('valid')for r in scan)else'identity_only_in_scanned_range'
+ probes=sorted({min(.02,limit*factor)for factor in (3,10,30)if min(.02,limit*factor)>limit})
+ structure=detector.parse_openmx(input_path)
+ candidates=[]
+ for tol in probes:
+  try:
+   record=detector.detect_at_tolerance(structure,tol,1.25)
+   item=brief(record)
+   residual=record.get('max_geometry_residual_Ang')
+   if record.get('valid')and record.get('operation_count',0)>1 and residual is not None and math.isfinite(residual)and residual<=tol:
+    try:kind,ops=select_subgroup(record,group,spinor)
+    except ValueError:pass
+    else:
+     item['supported_subgroup']=kind
+     candidates.append({'symprec_Ang':tol,'group':kind,'operation_count':len(ops),
+                        'max_geometry_residual_Ang':residual})
+  except (ValueError,RuntimeError)as exc:
+   item={'symprec_Ang':tol,'valid':False,'error':str(exc)}
+  report['diagnostic_scan'].append(item)
+ if candidates:
+  report['classification']='larger_tolerance_candidate'
+  report['candidate']=min(candidates,key=lambda r:(r['symprec_Ang'],-r['operation_count']))
+ return report
+
+
+def diagnostic_message(report):
+ limit=report['requested_max_Ang'];kind=report['classification']
+ lines=[f'No usable symmetry subgroup selected within scf.Symmetry.Tolerance={limit:.6e} Ang; diagnostic={kind}.']
+ if kind=='larger_tolerance_candidate':
+  c=report['candidate']
+  lines.append(f'Diagnostic-only scan found a validated {c["group"]} candidate at {c["symprec_Ang"]:.6e} Ang (maximum position residual {c["max_geometry_residual_Ang"]:.6e} Ang).')
+  lines.append(f'If that geometric approximation is appropriate, set scf.Symmetry.Tolerance {c["symprec_Ang"]:.6e} and rerun. A candidate alone does not establish physical accuracy or a stable tolerance platform.')
+ elif kind=='identity_only_in_scanned_range':
+  lines.append('Only the identity was validated in the solve scan; this does not prove that the structure has no symmetry. Inspect the geometry, or use scf.Symmetry off for an unrestricted calculation.')
+ elif kind=='operation_validation_failed':
+  lines.append('An operation/mapping validation failed; this is not a conclusion that the structure has no symmetry. Inspect the diagnostic mapping errors and geometry before increasing the tolerance.')
+ elif kind=='unsupported_subgroup':
+  lines.append('Nontrivial operations were detected, but no supported subgroup matches the request. Increasing the tolerance is not necessarily a remedy; inspect the group or use scf.Symmetry off.')
+ else:
+  lines.append('Nontrivial candidates occur in the scan but the selected operation set is unstable or unusable. Inspect the tolerance platform and mapping validation.')
+ if report['diagnostic_scan']:
+  tried=', '.join(f'{r["symprec_Ang"]:.6e}'for r in report['diagnostic_scan'])
+  lines.append('Additional diagnostic-only tolerances (Ang): '+tried+'.')
+ lines.append('Native SCF has not started. The geometry and requested solve tolerance were not changed automatically.')
+ return '\n'.join(lines)
+
+
+def stop_with_diagnostic(input_path,out,full,ladder,limit,detector,spinor,group,cause):
+ report=failure_diagnostic(input_path,full,ladder,limit,detector,spinor,group)
+ report['original_error']=str(cause)
+ path=out/'SYMMETRY_DIAGNOSTIC.json';dump(path,report)
+ message=diagnostic_message(report)+'\nOriginal validation error: '+str(cause)+'\nDiagnostic details: '+str(path)
+ (out/'symmetry-diagnostic.txt').write_text(message+'\n')
+ raise ValueError(message)from cause
+
+
 def prepare(nsoc_input,soc_input,output,group='auto',tolerances=None,atom_tol=5e-5,project_nsoc=False,*,soc_route='generic',export_policy='raw',detection_mode='auto',operations_file=None):
  _soc_options(group,soc_route,export_policy)
  nsoc_input=Path(nsoc_input).resolve();soc_input=Path(soc_input).resolve();out=Path(output).resolve()
@@ -92,17 +193,18 @@ def prepare(nsoc_input,soc_input,output,group='auto',tolerances=None,atom_tol=5e
  detector=module('unified_detector',TOOLS/'symmetry_detect.py')
  spinor=module('unified_spinor_prepare',HERE/'prepare_soc_basis.py')
  realspace=module('unified_realspace_prepare',TOOLS/'prepare_realspace_d3.py')
- ladder=tolerances or [1e-6,3e-6,1e-5,2e-5,3e-5,5e-5,1e-4]
  try:
   if detection_mode not in ('auto','user'):raise ValueError('detection mode must be auto or user')
-  ladder=[t for t in ladder if t<=atom_tol]
-  if len(ladder)<2:ladder=[atom_tol/3,atom_tol]
+  ladder=tolerance_ladder(atom_tol,tolerances)
   full=detector.run(nsoc_input,out/'detected.json',ladder,5e-6,1.25,
     mode=detection_mode,requested_symprec=atom_tol if detection_mode=='user'else None,
     operations_file=Path(operations_file)if operations_file else None)
   checked=full.get('selected',{})
-  if not checked.get('valid'):raise ValueError('no valid detected operation set')
-  kind,operations=select_subgroup(checked,group,spinor)
+  try:
+   if not checked.get('valid'):raise ValueError('no valid detected operation set')
+   kind,operations=select_subgroup(checked,group,spinor)
+  except ValueError as exc:
+   stop_with_diagnostic(nsoc_input,out,full,ladder,atom_tol,detector,spinor,group,exc)
   if operations_file and len(operations)!=checked['operation_count']:
    raise ValueError('OperationsFile must be exactly the requested supported subgroup; refusing silent subgroup reduction')
   structure=detector.parse_openmx(nsoc_input)
@@ -110,7 +212,7 @@ def prepare(nsoc_input,soc_input,output,group='auto',tolerances=None,atom_tol=5e
   selected=detector._build_operation_set(structure,[g['W']for g in operations],[g['t']for g in operations],
     symprec,1.25,source='unified_explicit_'+kind)
   if not selected.get('valid')or selected['max_geometry_residual_Ang']>atom_tol:
-   raise ValueError('selected subgroup fails fixed-geometry validation')
+   stop_with_diagnostic(nsoc_input,out,full,ladder,atom_tol,detector,spinor,group,ValueError('selected subgroup fails fixed-geometry validation'))
   metadata={'input':str(nsoc_input),'input_sha256':sha(nsoc_input),'selected':selected,'selected_group':kind,
             'source_metadata':str(out/'detected.json'),'source_metadata_sha256':sha(out/'detected.json'),
             'geometry_modified':False,'natoms':structure['natoms'],'species':structure['species'],'species_basis':structure['species_basis']}
@@ -147,7 +249,7 @@ def prepare(nsoc_input,soc_input,output,group='auto',tolerances=None,atom_tol=5e
     'NSOC_density_export_projection':False,
     'SOC_route':soc['route'],'SOC_export_policy':soc['export_policy'],'SOC_export_HS':soc['export_HS'],
     'scope':'fixed nonmagnetic Gamma NSOC -> one SOC; metadata only, no runtime covariance or physical accuracy claim',
-    'geometry_modified':False,'files':{k:str(v)for k,v in files.items()},'sha256':{k:sha(v)for k,v in files.items()},
+    'geometry_modified':False,'solve_tolerance_ladder_Ang':ladder,'requested_geometry_tolerance_Ang':atom_tol,'files':{k:str(v)for k,v in files.items()},'sha256':{k:sha(v)for k,v in files.items()},
     'NSOC_environment_additions':adds,'SOC_environment_additions':soc['env_additions'],
     'full_runtime_profile_required':True,'runtime_HS_covariance_checked':False}
   dump(out/'PREPARED.json',result);return result
