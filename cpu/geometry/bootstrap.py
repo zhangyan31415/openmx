@@ -145,14 +145,35 @@ def fast_memory_scope(values):
                for x in values.get('scf.electric.field','0 0 0').split())
 
 
+def custom_covariance_request(values):
+    """An explicitly repeated default is the same request as an omitted value."""
+    default = 1e-5 if values.get('scf.symmetry', 'off').lower() == 'on' else 1e-10
+    return ('scf.symmetry.covariancetolerance' in values and
+            float(values['scf.symmetry.covariancetolerance']) != default)
+
+
 def preferred_soc_route(values):
-    # Explicit advanced covariance requests retain the generic route and its
-    # declared diagnostics/guards rather than switching to the legacy route.
+    # A non-default covariance contract still needs the generic native checks.
+    # Merely spelling the public default must not change the algorithm.
     if (native_logical(values.get('band.dispersion','off')) or
             values.get('scf.eigenvaluesolver', '').lower() != 'cluster' or not fast_memory_scope(values) or
-            'scf.symmetry.covariancetolerance' in values):
+            custom_covariance_request(values)):
         return 'generic'
     return 'auto'
+
+
+def soc_route_reason(values, route):
+    if route == 'legacy':
+        return 'validated group and geometry select specialized SOC'
+    if native_logical(values.get('band.dispersion','off')):
+        return 'Band.dispersion requires generic SOC'
+    if values.get('scf.eigenvaluesolver','').lower() != 'cluster':
+        return 'this eigenvalue-solver setting requires generic SOC'
+    if not fast_memory_scope(values):
+        return 'input is outside specialized SOC eligibility (mixing, outputs, fields or observables)'
+    if custom_covariance_request(values):
+        return 'custom covariance tolerance requires generic SOC checks'
+    return 'detected group or cell orientation is outside specialized SOC eligibility'
 
 
 def profiles(prepared, q, api, *, threads=1, values=None, ranks_single_cpu_pinned=False):
@@ -285,6 +306,10 @@ def readable_symmetry_report(prepared, stage, request):
              '  Group operations      : '+str(len(operations)),
              '  Atoms                 : '+str(metadata['natoms']),
              '  Geometry residual     : '+format(selected['max_geometry_residual_Ang'], '.3e')+' Ang',
+             '  Geometry tolerance    : '+format(request['tolerance'], '.3e')+' Ang (scan upper bound)',
+             '  Detected at           : '+format(selected['symprec_Ang'], '.3e')+' Ang',
+             '  Solver path           : '+((prepared['selected_group']+' specialized (legacy)'if prepared['SOC_route']=='legacy'else prepared['selected_group']+' general spinor blocks (generic)')if stage=='soc'else prepared['selected_group']+' scalar symmetry blocks'),
+             '  Path reason           : '+(prepared.get('SOC_route_reason','validated subgroup')if stage=='soc'else 'validated subgroup '+prepared['selected_group']),
              '  H/S solve policy      : '+request['hamiltonian_policy'],
              '  H/S export policy     : '+request['export_policy'],
              '', '  Fractional column convention: x\' = W x + t.',
@@ -391,6 +416,7 @@ def bootstrap(input_path, output, stage, environment_file, *, runtime_cwd=None, 
                         atom_tol=q['tolerance'], project_nsoc=q['hamiltonian_policy'] == 'symmetrize',
                         soc_route=preferred_soc_route(values) if q['export_policy']=='symmetrize' else 'generic', export_policy=q['export_policy'],
                         detection_mode=q['mode'], operations_file=ops)
+        prepared['SOC_route_reason'] = soc_route_reason(values, prepared['SOC_route'])
         env = profiles(prepared, q, api, threads=threads, values=values, ranks_single_cpu_pinned=ranks_single_cpu_pinned)[stage]
         report_path = out/'symmetry-report.txt'
         atomic_text(report_path, readable_symmetry_report(prepared, stage, q))
@@ -408,7 +434,7 @@ def bootstrap(input_path, output, stage, environment_file, *, runtime_cwd=None, 
                 raise ValueError('unsafe native environment record: '+key)
         if sha(input_path) != provenance['actual_input_sha256']:
             raise ValueError('actual input changed while symmetry metadata was being prepared')
-        provenance.update(status='prepared', request=q, selected_group=prepared['selected_group'], SOC_route=prepared['SOC_route'],
+        provenance.update(status='prepared', request=q, selected_group=prepared['selected_group'], SOC_route=prepared['SOC_route'], SOC_route_reason=prepared['SOC_route_reason'],
                           actual_HS_export_requested=export_requested,
                           environment=env, environment_file=str(envfile),
                           symmetry_report={'path': str(report_path), 'sha256': sha(report_path)},
@@ -419,6 +445,9 @@ def bootstrap(input_path, output, stage, environment_file, *, runtime_cwd=None, 
                           prepared_manifest=str(out/'metadata/PREPARED.json'))
         atomic_text(out/'BOOTSTRAP.json', json.dumps(provenance, indent=2)+'\n')
         report_symmetry(prepared, stage, q)
+        if stage == 'soc':
+            print('CPU_SYMMETRY_ROUTE stage=soc path='+prepared['SOC_route']+
+                  ' reason='+json.dumps(prepared['SOC_route_reason']), flush=True)
         # This is deliberately the last successful write. C reads only this
         # final file after a successful helper exit; partial metadata is inert.
         atomic_text(envfile, ''.join(key+'='+env[key]+'\n' for key in sorted(env)))

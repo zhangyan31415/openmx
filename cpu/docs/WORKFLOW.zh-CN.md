@@ -8,6 +8,7 @@
 
 ```text
 System.Name                    openmx
+System.CurrrentDirectory        ./
 DATA.PATH                      /path/to/DFT_DATA19
 HS.fileout                     on
 level.of.fileout                0
@@ -41,17 +42,30 @@ scf.criterion                  1.0e-7
 
 示例为单节点 64 MPI×1；用站点匹配的 MPI 启动器，在计算资源上执行：
 
+先把同一材料的完整NSOC／SOC输入放到 `case/nsoc/input.dat`、`case/soc/input.dat`，两者均使用 `System.Name openmx`。SOC目录先保持无旧检查点的新状态。分目录运行可保留两个阶段各自的日志和H/S；两份输入均设原生关键字 `System.CurrrentDirectory ./`。若构建输出不在仓库的build/cpu目录，将OPENMX_BIN改为实际绝对路径。
+
 ```bash
-mpirun -np 64 /path/to/build/openmx-cpu nsoc.dat -nt 1 > nsoc.log 2>&1
-# 先核对 NSOC 收敛和检查点，再运行下一行。
-mpirun -np 64 /path/to/build/openmx-cpu soc.dat -nt 1 > soc.log 2>&1
+OPENMX_BIN="$(pwd)/build/cpu/openmx-cpu"  # 在切换目录之前解析绝对路径
+export OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
+
+(cd case/nsoc && mpirun -np 64 "$OPENMX_BIN" input.dat -nt 1 > stdout.log 2>&1)
 ```
+
+确认NSOC实际收敛且正常结束后，在同一个shell中继续：
+
+```bash
+cp -a case/nsoc/openmx_rst case/soc/
+(cd case/soc && mpirun -np 64 "$OPENMX_BIN" input.dat -nt 1 > stdout.log 2>&1)
+```
+
+这段命令中的64个进程必须属于实际分配；更改线程数时同步修改 `-nt` 和上述线程环境变量。只复制自己的本次NSOC检查点，MPI／线程布局保持相同。
 
 多节点主机、每节点进程数和线程绑定使用普通 MPI 或调度器配置。每个 MPI 进程的 OpenMP／BLAS 线程数应与 `-nt` 及分配的物理核一致，避免进程和线程嵌套超额。各节点须可访问相同的可执行文件、输入、基组和配套 Python 环境。准备和运行不要求用户手工生成 JSON 或元数据。
 
 ## 输出和错误
 
-启用对称性后，普通 `System.Name.out` 前部和标准输出都有可读的对称性摘要：采用的子群、检测点群、操作数量、几何残差及每个操作的旋转／平移表。残差用三位小数科学计数法；矩阵显示将接近 0、±1 的舍入噪声归整，仅影响显示。完整精度仍保留在元数据中。
+启用对称性后，普通 `System.Name.out` 前部和标准输出都有可读的对称性摘要：采用的子群、检测点群、操作数量、几何残差及每个操作的旋转／平移表，并打印实际求解路径、选择原因、容差上限和实际检测容差。残差用三位小数科学计数法；矩阵显示将接近 0、±1 的舍入噪声归整，仅影响显示。完整精度仍保留在元数据中。
 
 `.out` 在输入初始化后先写入对称性信息，并明确标记计算尚在进行；正常日志合并时保留该报告，再加入完整输入和物理结果。计算是否成功仍须检查原生正常结束及收敛状态，不能仅凭 `.out` 已存在判断。
 
@@ -72,3 +86,16 @@ mpirun -np 64 /path/to/build/openmx-cpu soc.dat -nt 1 > soc.log 2>&1
 ## 体网格输出
 
 体网格输出属于完整原生耗时。只需要 H/S 时，可以使用普通输入 `level.of.fileout 0` 并保留 `HS.fileout on`；参考和候选必须保持相同输出配置。历史 HgI₂ 7.63°、678 原子基准含 91,445,760 个网格点及约 4.816 GB 的 NSOC cube 输出，多节点输出成本明显，不能把关闭这些输出的收益当作求解器加速。
+
+## 常见问题
+
+| 现象 | 处理 |
+|---|---|
+| 开启对称性时找不到Python包 | 在运行节点加载构建时的Python环境，确认NumPy、SciPy、spglib可导入；无需安装moirekp。 |
+| 移动安装后找不到准备工具 | `openmx-cpu`和旁边的`resources/`一起移动，保留可访问的构建时Python环境。 |
+| 没有检测到可用群 | 查看启动诊断；较宽容差候选只作提示，不会自动用于SCF。[详细处理](SYMMETRY_TOLERANCE.md)。 |
+| SOC没有使用专用路径 | 查看`.out`的Solver path和Path reason。群／方向、求解器、观测量及高级检查契约都会影响适用范围。 |
+| 显式写默认值后路径改变 | 已修复与默认协变容差等价的请求；省略与显式默认值行为一致。自定义非默认契约仍保留其检查，不会被忽略。 |
+| SOC找不到重启文件 | 核对上一阶段System.Name、本次scf.restart.filename、复制后的`*_rst/`目录及相同MPI布局。 |
+| 程序退出但NSOC未收敛 | 正常结束不等于收敛；检查收敛标记和残差，不接未收敛检查点。 |
+| 更新源码后仍看到旧行为 | 准备工具随构建安装到resources；更新后重新构建至新的输出目录，勿覆盖运行中的安装。 |

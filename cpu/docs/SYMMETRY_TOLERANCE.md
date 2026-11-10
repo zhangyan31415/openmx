@@ -32,3 +32,7 @@ The fix is in the Python preparation resources. Newly built installations includ
 `cpu/tests/test_symmetry_scan.py` checks exact bound coverage, custom/invalid ladders, diagnostic-only candidates, identity-only structures, validation failures and unsupported groups. Real three-atom fixtures test P1 failure and a perturbed D3 structure requiring a tolerance above the old cap. Successful and failing preparation leave the original input unchanged, and a failure does not create a native-launch environment. Existing bootstrap and input-contract tests are also run.
 
 中文要点：只在用户允许的范围内选择有效对称群；范围外的探测仅用于提示。找到较宽容差候选时由用户决定是否增大；只找到恒等操作时提示可关闭对称性；映射失败、群不支持、平台不稳定分别报出，不伪称“材料没有对称性”。
+
+## Visible solver selection
+
+The ordinary `.out` summary now includes the prepared solver path, why it was selected, the geometry scan upper bound and the actual detection tolerance. Standard eligible D3/C3 cells use the specialized path; supported other cases can use general spinor blocks. Explicitly writing the public default covariance value has the same route as omitting it. A genuinely non-default advanced covariance contract retains the generic native checks and a visible reason; it is not silently ignored. This normalization does not certify arbitrary large-system memory reductions.

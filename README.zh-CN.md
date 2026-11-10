@@ -6,6 +6,8 @@
 
 **CPU 源码目前在 `develop` 分支。请按下面命令克隆；只克隆默认分支不会取得 `cpu/` 目录。**
 
+[安装](cpu/docs/BUILD.zh-CN.md) · [NSOC → SOC](cpu/docs/WORKFLOW.zh-CN.md) · [容差与错误处理](cpu/docs/SYMMETRY_TOLERANCE.md)
+
 ## 实测加速与内存
 
 **本轮覆盖2种材料、4条对称性路径：D3/C3和D2/C2。** 目前4组已完成的同节点原版对照中，自动D3/D2配置相对原版OpenMX 4.0，完整流程加速 **1.78–3.19倍**，峰值内存下降 **59%–70%**。测试流程为固定结构、非磁、Γ点的完整收敛NSOC，再从**各自的检查点接一步SOC**，并非全程自洽SOC。
@@ -68,14 +70,27 @@ python cpu/build.py --profile unified \
 
 ## 2. 开启对称性并运行
 
-将对称性开关放在输入前部，与其他 SCF 设置放在一起，位于长坐标块之前。新的 NSOC 计算例如：
+将对称性开关放在输入前部，与其他 SCF 设置放在一起，位于长坐标块之前。先复制本材料已有的可运行输入，再替换下面的控制区；物种、基组、晶胞和坐标块仍完整保留。新的 NSOC 计算例如：
 
 ```text
+System.Name                    openmx
+System.CurrrentDirectory        ./
+DATA.PATH                      /path/to/DFT_DATA19
 MD.Type                        Nomd
+HS.fileout                     on
+level.of.fileout                0
 scf.SpinPolarization           off
 scf.SpinOrbit.Coupling         off
 scf.Symmetry                   on
 scf.restart                    off
+scf.EigenvalueSolver           Cluster
+scf.eigen.lib                  elpa2
+scf.Kgrid                      1 1 1
+scf.Mixing.Type                rmm-diis
+scf.Mixing.History             30
+scf.Mixing.StartPulay           15
+scf.energycutoff               150
+scf.criterion                  1.0e-7
 ```
 
 可选设置 `scf.Symmetry.Tolerance 1.0e-3`，表示几何匹配容差上限，单位 **Å**；只写 `on` 时默认 `5.0e-5`。自动扫描会实际覆盖用户指定的上限。若未找到可用群，程序在SCF开始前停止，并区分“较宽容差下找到候选”“范围内仅有恒等操作”“映射／群验证失败”等原因；额外探测只作诊断，不自动放宽求解容差或修改结构。[容差设置与失败处理](cpu/docs/SYMMETRY_TOLERANCE.md)。
@@ -85,6 +100,8 @@ scf.restart                    off
 在已加载上述 oneAPI 运行库和 Python 环境的计算节点上，照常运行，例如 **64 MPI × 1 线程**：
 
 ```bash
+export OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
 mpirun -np 64 ./build/cpu/openmx-cpu input.dat -nt 1
 ```
 
@@ -95,6 +112,48 @@ mpirun -np 64 ./build/cpu/openmx-cpu input.dat -nt 1
 目前验证的工作流是**固定结构、非磁性、Gamma 点：NSOC 收敛后，从其自身检查点接一步 SOC**。输入使用 `Cluster` 或 Gamma `Band`，以及 `scf.eigen.lib elpa1` 或 `elpa2`。NSOC 和 SOC 输入均加入 `scf.Symmetry on`，保持结构、基组、物理参数及 MPI 布局一致；SOC 使用原生 C2N 重启。具体输入及重启要求见[运行说明](https://github.com/zhangyan31415/openmx/blob/develop/cpu/docs/WORKFLOW.zh-CN.md)。一步 SOC 不等于 SOC 自洽收敛。
 
 需要 H/S 时另设普通参数 `HS.fileout on`。开启对称性后，受支持路径导出与所选群投影一致的 H/S。OpenMX 基组非正交，后处理必须使用匹配的 S。
+
+NSOC和SOC使用独立目录，避免后一步覆盖前一步的输出：
+
+```text
+case/
+  nsoc/input.dat    # 从头NSOC；System.Name openmx
+  soc/input.dat     # 同一材料输入，替换为下列SOC控制区
+```
+
+SOC输入保留相同结构、基组、物理设置及MPI／线程布局，替换对应控制项：
+
+```text
+System.Name                    openmx
+System.CurrrentDirectory        ./
+scf.SpinPolarization           NC
+scf.SpinOrbit.Coupling         on
+scf.Symmetry                   on
+scf.restart                    c2n
+scf.restart.filename           openmx
+scf.maxIter                    1
+```
+
+先准备好两个输入，SOC目录使用**未运行过的新目录**。两份输入均设 `System.CurrrentDirectory ./`，确保输出写入各自目录（这是OpenMX原有关键字拼写）。若构建位置不同，将 `OPENMX_BIN` 改为实际绝对路径。下面在已分配的计算资源上执行：
+
+```bash
+OPENMX_BIN="$(pwd)/build/cpu/openmx-cpu"  # 在切换目录之前解析绝对路径
+export OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
+
+(cd case/nsoc && mpirun -np 64 "$OPENMX_BIN" input.dat -nt 1 > stdout.log 2>&1)
+```
+
+确认NSOC实际收敛且正常结束后，在同一个shell中继续：
+
+```bash
+cp -a case/nsoc/openmx_rst case/soc/
+(cd case/soc && mpirun -np 64 "$OPENMX_BIN" input.dat -nt 1 > stdout.log 2>&1)
+```
+
+NSOC日志须确认正常结束与实际收敛（`CPU_NSOC_SYM_FINAL ... converged=1`），达到步数上限不算收敛；SOC日志须确认 `<Restart> Found restart files`、恰好一步SCF及正常结束。两个目录分别保留自己的 `openmx.out`、`openmx.scfout` 和 `openmx_rst/`。H与S必须来自同一次匹配输出；一步SOC不是SOC自洽收敛。
+
+`.out`前部新增 **Solver path（实际求解路径）**、**Path reason（选择原因）**、**Geometry tolerance（几何容差上限）** 和 **Detected at（实际检测容差）**。符合条件的D3/C3采用专用SOC路径；其他群、方向或观测量可能使用通用自旋分块。省略与显式填写默认协变容差的路径选择保持一致；非默认高级协变检查仍保留相应通用检查路径。[逐步操作与常见问题](cpu/docs/WORKFLOW.zh-CN.md)。
 
 计算能带时，保留普通的 `Band.Nkpath` 和 `<Band.kpath` 路径设置，再写：
 

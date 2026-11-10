@@ -6,6 +6,8 @@ This CPU version of [OpenMX](https://www.openmx-square.org/) adds symmetry-based
 
 **The CPU source is currently on `develop`. Clone that branch explicitly; the default branch does not contain `cpu/`.**
 
+[Installation](#1-get-and-build) · [NSOC → SOC](#3-nsoc-one-step-soc-and-hs-export) · [Tolerance and errors](cpu/docs/SYMMETRY_TOLERANCE.md)
+
 ## Measured speed and memory
 
 **Two materials, four symmetry paths (D3/C3 and D2/C2).** Four completed, same-node comparisons of the automatic D3/D2 profile currently show **1.78–3.19× workflow speedup** and **59–70% lower peak memory** versus original OpenMX 4.0. These are fixed-geometry, nonmagnetic Gamma calculations: converged NSOC followed by **one SOC step from each run's own checkpoint**, not fully self-consistent SOC.
@@ -68,14 +70,27 @@ The output directory must not already exist. It will contain `openmx-cpu`, its c
 
 ## 2. Enable symmetry and run
 
-Place the symmetry setting beside the other SCF controls, before long coordinate blocks. For a fresh NSOC calculation:
+Place the symmetry setting beside the other SCF controls, before long coordinate blocks. Start from your working material input and replace the control fields below; retain its complete species, basis, cell and coordinate blocks. For a fresh NSOC calculation:
 
 ```text
+System.Name                    openmx
+System.CurrrentDirectory        ./
+DATA.PATH                      /path/to/DFT_DATA19
 MD.Type                        Nomd
+HS.fileout                     on
+level.of.fileout                0
 scf.SpinPolarization           off
 scf.SpinOrbit.Coupling         off
 scf.Symmetry                   on
 scf.restart                    off
+scf.EigenvalueSolver           Cluster
+scf.eigen.lib                  elpa2
+scf.Kgrid                      1 1 1
+scf.Mixing.Type                rmm-diis
+scf.Mixing.History             30
+scf.Mixing.StartPulay           15
+scf.energycutoff               150
+scf.criterion                  1.0e-7
 ```
 
 The optional `scf.Symmetry.Tolerance 1.0e-3` sets the maximum geometry matching tolerance in **Å**; the default with `on` is `5.0e-5`. The automatic scan includes the requested upper bound. If no usable subgroup is found, preparation stops before SCF and reports whether a larger-tolerance candidate was found, only the identity was validated, or mapping/group validation failed. Extra probes are diagnostic only: they do not silently loosen the solve tolerance or change the geometry. [Tolerance settings and failure handling](cpu/docs/SYMMETRY_TOLERANCE.md).
@@ -85,6 +100,8 @@ Symmetry is off by default; `scf.Symmetry off` disables it explicitly. When enab
 With the matching oneAPI runtime and Python environment available on the compute node, launch normally, for example **64 MPI ranks × 1 thread**:
 
 ```bash
+export OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
 mpirun -np 64 ./build/cpu/openmx-cpu input.dat -nt 1
 ```
 
@@ -95,6 +112,62 @@ Multi-node runs use the same executable with the site's MPI or scheduler setting
 The tested workflow is **fixed geometry, nonmagnetic, Gamma point: converge NSOC, then run one SOC step from that run's own checkpoint**. Use `Cluster` or Gamma `Band`, with `scf.eigen.lib elpa1` or `elpa2`. Add `scf.Symmetry on` to both inputs. Keep geometry, basis, physical settings and MPI layout consistent, and use native C2N restart for SOC. See the [run guide](https://github.com/zhangyan31415/openmx/blob/develop/cpu/docs/WORKFLOW.zh-CN.md) for input and restart requirements. One SOC step is not a self-consistent SOC calculation.
 
 Request H/S files with the ordinary `HS.fileout on` setting. Supported symmetry paths export H/S consistent with the selected group projection. OpenMX orbitals are nonorthogonal; post-processing requires the matching S.
+
+Use separate stage directories so the SOC output does not overwrite the NSOC result:
+
+```text
+case/
+  nsoc/input.dat    # fresh NSOC; System.Name openmx
+  soc/input.dat     # same material input, with the SOC controls below
+```
+
+Keep the same geometry, basis, physical settings and MPI/thread layout. In `case/soc/input.dat`, replace the corresponding NSOC controls with:
+
+```text
+System.Name                    openmx
+System.CurrrentDirectory        ./
+scf.SpinPolarization           NC
+scf.SpinOrbit.Coupling         on
+scf.Symmetry                   on
+scf.restart                    c2n
+scf.restart.filename           openmx
+scf.maxIter                    1
+```
+
+Prepare these inputs first, with a **fresh SOC directory**. Use `System.CurrrentDirectory ./` so each stage writes inside its own directory (the spelling is the original OpenMX keyword). If your build is elsewhere, set `OPENMX_BIN` to its actual absolute path. From the repository root, using allocated compute cores:
+
+```bash
+OPENMX_BIN="$(pwd)/build/cpu/openmx-cpu"  # resolve before changing directory
+export OMP_NUM_THREADS=1 MKL_NUM_THREADS=1
+export OPENBLAS_NUM_THREADS=1 NUMEXPR_NUM_THREADS=1
+
+(cd case/nsoc && mpirun -np 64 "$OPENMX_BIN" input.dat -nt 1 > stdout.log 2>&1)
+```
+
+After checking NSOC convergence and normal finish, continue in the same shell:
+
+```bash
+cp -a case/nsoc/openmx_rst case/soc/
+(cd case/soc && mpirun -np 64 "$OPENMX_BIN" input.dat -nt 1 > stdout.log 2>&1)
+```
+
+Check `case/nsoc/stdout.log` for normal finish and actual convergence (`CPU_NSOC_SYM_FINAL ... converged=1`); reaching the iteration limit is not convergence. The SOC log must contain `<Restart> Found restart files`, exactly one SCF step and normal finish. Each directory retains its own `openmx.out`, `openmx.scfout` and `openmx_rst/`. OpenMX H/S use a nonorthogonal basis: keep each H paired with its matching S. One SOC step is not self-consistent SOC.
+
+The front of `.out` now prints **Solver path**, **Path reason**, **Geometry tolerance** and **Detected at**. Standard eligible D3/C3 cases select the specialized SOC path; other groups, orientations or observables may require general spinor blocks. Repeating the default covariance value explicitly no longer changes that selection; advanced non-default covariance contracts remain on their checked general path. See [common problems and stage-by-stage use](cpu/docs/WORKFLOW.zh-CN.md).
+
+<details>
+<summary>Common installation and restart problems</summary>
+
+| Symptom | Action |
+|---|---|
+| A Python package is missing when symmetry is enabled | Make the build-time Python environment with NumPy/SciPy/spglib available on compute nodes. No moirekp installation is needed. |
+| The program cannot find its preparation helper after moving an installation | Move the executable together with its adjacent `resources/`; keep the recorded Python environment accessible. |
+| SOC cannot find a restart | Match `scf.restart.filename` to the NSOC `System.Name`, copy that run's `*_rst/` directory into the SOC directory, and keep the same MPI/thread layout. |
+| The program finished but NSOC did not converge | Check the convergence marker and residuals; do not continue from an unconverged checkpoint. |
+| A different solver path is selected | Read Solver path and Path reason at the front of `.out`; group/orientation, observables and advanced contracts affect eligibility. |
+| Pulling new source did not change installed behavior | Rebuild into a new output directory: preparation resources are installed with the executable. Keep running installations unchanged. |
+
+</details>
 
 For band dispersion, keep the usual `Band.Nkpath` and `<Band.kpath` definitions and add:
 
