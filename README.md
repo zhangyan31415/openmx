@@ -21,7 +21,7 @@ This CPU version of [OpenMX](https://www.openmx-square.org/) adds symmetry-based
 | HgI₂ 10.39° / 366 | D2 | 321.9 → 166.0 | **1.94×** | 105.3 → 43.0 | 59.1% |
 | HgI₂ 7.63° / 678 | D2 | 1160.2 → 364.1 | **3.19×** | 187.2 → 68.6 | 63.4% |
 
-All pairs use **64 MPI × 1, 150 Ry, criterion 10⁻⁷, History30, StartPulay15**, the same physical inputs and the same node for each material (Intel Xeon Gold 6530, about 251 GiB). Current results use `scf.Symmetry on` with the automatic profile and **no optional low-memory overrides**. Total time includes symmetry preparation and native force evaluation; memory includes shared pages once and file cache. Results are means of 1–2 runs, and include SCF iteration-count changes as well as per-step acceleration.
+All pairs use **64 MPI × 1, 150 Ry, criterion 10⁻⁷, History30, StartPulay15**, the same physical inputs and the same node for each material (Intel Xeon Gold 6530, about 251 GiB). Current results use `scf.Symmetry on` with the automatic profile and **no optional low-memory overrides**. These figures retain their recorded profiles; the automatic SOC memory policy described below has not been rerun across the entire chart. Total time includes symmetry preparation and native force evaluation; memory includes shared pages once and file cache. Results are means of 1–2 runs, and include SCF iteration-count changes as well as per-step acceleration.
 
 ![Core-hours and peak memory versus atom count](cpu/docs/benchmarks/regular256_20261110/scaling.svg)
 
@@ -150,6 +150,8 @@ cp -a case/nsoc/openmx_rst case/soc/
 ```
 
 Check `case/nsoc/stdout.log` for normal finish and actual convergence (`CPU_NSOC_SYM_FINAL ... converged=1`); reaching the iteration limit is not convergence. The SOC log must contain `<Restart> Found restart files`, exactly one SCF step and normal finish. Each directory retains its own `openmx.out`, `openmx.scfout` and `openmx_rst/`. OpenMX H/S use a nonorthogonal basis: keep each H paired with its matching S. One SOC step is not self-consistent SOC.
+
+For eligible one-step C3/D3 SOC with `Cluster`, RMM-DIIS and one thread per MPI rank, `scf.Symmetry on` also selects the verified low-memory path automatically. No additional environment variables are needed. The startup `.out` report shows **SOC memory policy**, **VNA streaming mode** and the selection reason. Other routes and layouts retain their existing implementation.
 
 The front of `.out` now prints **Solver path**, **Path reason**, **Geometry tolerance** and **Detected at**. Standard eligible D3/C3 cases select the specialized SOC path; other groups, orientations or observables may require general spinor blocks. Repeating the default covariance value explicitly no longer changes that selection; advanced non-default covariance contracts remain on their checked general path. See [common problems and stage-by-stage use](cpu/docs/WORKFLOW.zh-CN.md).
 

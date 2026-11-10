@@ -176,6 +176,35 @@ def soc_route_reason(values, route):
     return 'detected group or cell orientation is outside specialized SOC eligibility'
 
 
+def soc_memory_eligibility(prepared, values, threads):
+    """Intersection of the already validated one-step SOC memory guards."""
+    if prepared['SOC_route'] != 'legacy' or prepared['selected_group'] not in ('C3', 'D3'):
+        return False, 'this SOC solver route retains its existing memory layout'
+    if threads != 1:
+        return False, 'SOC streaming is validated with one thread per MPI rank'
+    if (values.get('scf.spinpolarization','off').lower() != 'nc' or
+            not native_logical(values.get('scf.spinorbit.coupling','off')) or
+            values.get('scf.restart','off').lower() != 'c2n' or
+            int(values.get('scf.maxiter','40')) != 1):
+        return False, 'requires one-step nonmagnetic C2N SOC'
+    if (values.get('scf.eigenvaluesolver','').lower() != 'cluster' or
+            values.get('scf.kgrid','1 1 1').split() != ['1','1','1'] or
+            values.get('md.type','nomd').lower() not in ('nomd','none') or
+            not fast_memory_scope(values)):
+        return False, 'input is outside fixed Gamma Cluster RMM-DIIS memory eligibility'
+    if int(values.get('scf.mixing.startpulay','6')) < 4:
+        return False, 'Pulay startup is outside the validated SOC memory scope'
+    off = ('off','no','false','.false.','ng','0','none')
+    auxiliary = ('band.dispersion','wannier.func.calc','wannier90.fileout',
+                 'cwf.fileout.flag','population.analysis.ao.wanniers',
+                 'unfolding.electronic.band','scf.polarization.abc','calc.abc.flag',
+                 'nho.fileout','nbo.fileout')
+    for key in auxiliary:
+        if values.get(key,'off').lower() not in off:
+            return False, key+' requires the existing observable/export memory layout'
+    return True, 'validated fixed one-step C3/D3 SOC memory lifetime'
+
+
 def profiles(prepared, q, api, *, threads=1, values=None, ranks_single_cpu_pinned=False):
     group = prepared['selected_group']
     templates = json.loads((CPU/'tools/examples/profile_templates.json').read_text())['templates']
@@ -275,15 +304,28 @@ def profiles(prepared, q, api, *, threads=1, values=None, ranks_single_cpu_pinne
                 'OPENMX_CPU_GSOC_PROJECT':'1' if q['export_policy']=='symmetrize' else '0',
                 'OPENMX_CPU_GSOC_COV_TOL':format(q['covariance_tolerance'],'.17g'),
                 'OPENMX_CPU_GSOC_GEOMETRY_TOL_ANG':format(q['tolerance'],'.17g')}
-    soc_memory = os.environ.get('OPENMX_CPU_SOC_MEMORY', '0')
-    if soc_memory not in ('0', '1'):
+    memory_request = os.environ.get('OPENMX_CPU_SOC_MEMORY')
+    stream_request = os.environ.get('OPENMX_CPU_VNA_FORCE_STREAM')
+    if memory_request is not None and memory_request not in ('0','1'):
         raise ValueError('OPENMX_CPU_SOC_MEMORY must be 0 or 1')
-    if soc_memory == '1':
-        senv['OPENMX_CPU_SOC_MEMORY'] = '1'
-        if os.environ.get('OPENMX_CPU_VNA_FORCE_STREAM', '0') in ('1', '2'):
-            if threads != 1 or not fast_memory or prepared['SOC_route'] != 'legacy':
-                raise ValueError('SOC VNA streaming currently requires fixed legacy SOC, RMM-DIIS and one thread')
-            senv.update(OPENMX_CPU_VNA_SHARED='1', OPENMX_CPU_VNA_RAW0='1')
+    if stream_request is not None and stream_request not in ('0','1','2'):
+        raise ValueError('OPENMX_CPU_VNA_FORCE_STREAM must be 0, 1 or 2')
+    eligible, reason = soc_memory_eligibility(prepared, values, threads)
+    enabled = memory_request == '1' or (memory_request is None and eligible)
+    stream = (stream_request if stream_request is not None else ('2' if eligible else '0')) if enabled else '0'
+    senv.update(OPENMX_CPU_SOC_MEMORY='1' if enabled else '0',
+                OPENMX_CPU_VNA_FORCE_STREAM=stream)
+    if enabled and stream != '0':
+        # Retain the previous explicit-override contract. Automatic activation
+        # additionally passed all native observable/lifetime guards above.
+        if threads != 1 or not fast_memory or prepared['SOC_route'] != 'legacy':
+            raise ValueError('SOC VNA streaming currently requires fixed legacy SOC, RMM-DIIS and one thread')
+        senv.update(OPENMX_CPU_VNA_SHARED='1', OPENMX_CPU_VNA_RAW0='1')
+    if memory_request is not None:
+        reason = 'explicit SOC memory override '+memory_request
+    prepared['SOC_memory_policy'] = {'enabled': enabled,
+        'selection': 'automatic' if memory_request is None else 'explicit',
+        'stream_mode': int(stream), 'reason': reason}
     return {'nsoc': nenv, 'soc': senv}
 
 
@@ -314,6 +356,11 @@ def readable_symmetry_report(prepared, stage, request):
              '  H/S export policy     : '+request['export_policy'],
              '', '  Fractional column convention: x\' = W x + t.',
              '  Matrices below are display-rounded; solver values are unchanged.']
+    if stage == 'soc' and 'SOC_memory_policy' in prepared:
+        policy=prepared['SOC_memory_policy']
+        lines.extend(['', '  SOC memory policy     : '+policy['selection']+' '+('on' if policy['enabled'] else 'off'),
+                      '  VNA streaming mode    : '+str(policy['stream_mode']),
+                      '  Memory policy reason  : '+policy['reason']])
     for index, operation in enumerate(operations, 1):
         lines.extend(['', '  Operation '+str(index)+' / '+str(len(operations))+
                       '    mapping residual = '+format(operation['residual_max_Ang'], '.3e')+' Ang',
@@ -435,6 +482,7 @@ def bootstrap(input_path, output, stage, environment_file, *, runtime_cwd=None, 
         if sha(input_path) != provenance['actual_input_sha256']:
             raise ValueError('actual input changed while symmetry metadata was being prepared')
         provenance.update(status='prepared', request=q, selected_group=prepared['selected_group'], SOC_route=prepared['SOC_route'], SOC_route_reason=prepared['SOC_route_reason'],
+                          SOC_memory_policy=prepared['SOC_memory_policy'] if stage=='soc' else None,
                           actual_HS_export_requested=export_requested,
                           environment=env, environment_file=str(envfile),
                           symmetry_report={'path': str(report_path), 'sha256': sha(report_path)},
@@ -445,6 +493,10 @@ def bootstrap(input_path, output, stage, environment_file, *, runtime_cwd=None, 
                           prepared_manifest=str(out/'metadata/PREPARED.json'))
         atomic_text(out/'BOOTSTRAP.json', json.dumps(provenance, indent=2)+'\n')
         report_symmetry(prepared, stage, q)
+        if stage == 'soc':
+            policy=prepared['SOC_memory_policy']
+            print('CPU_SOC_MEMORY_POLICY selection='+policy['selection']+' active='+str(int(policy['enabled']))+
+                  ' VNA_stream='+str(policy['stream_mode'])+' reason='+json.dumps(policy['reason']),flush=True)
         if stage == 'soc':
             print('CPU_SYMMETRY_ROUTE stage=soc path='+prepared['SOC_route']+
                   ' reason='+json.dumps(prepared['SOC_route_reason']), flush=True)

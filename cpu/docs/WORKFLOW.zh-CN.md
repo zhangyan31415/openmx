@@ -99,3 +99,16 @@ cp -a case/nsoc/openmx_rst case/soc/
 | SOC找不到重启文件 | 核对上一阶段System.Name、本次scf.restart.filename、复制后的`*_rst/`目录及相同MPI布局。 |
 | 程序退出但NSOC未收敛 | 正常结束不等于收敛；检查收敛标记和残差，不接未收敛检查点。 |
 | 更新源码后仍看到旧行为 | 准备工具随构建安装到resources；更新后重新构建至新的输出目录，勿覆盖运行中的安装。 |
+
+## 自动选择SOC内存布局
+
+普通用户保持 `scf.Symmetry on` 即可。对已验证的固定结构、非磁Gamma点、
+C3/D3专用路径、Cluster、RMM-DIIS、C2N一步SOC、每MPI进程1线程，初始化时
+自动选择SOC内存生命周期优化和VNA逐对流式收缩。几何、网格、History输入、
+SCF门限、返回态、能量、力及H/S输出要求保持不变。
+
+程序在stdout和`.out`的对称性摘要中输出`SOC memory policy`、
+`VNA streaming mode`和原因；BOOTSTRAP.json同时保存实际策略。
+一般用户不需要设置开发用环境变量。其他群、通用spinor路径、多线程布局或
+需要额外可观测量的配置继续使用其现有实现，并在摘要中说明选择原因。
+这次默认行为调整复用已有数值实现，不承诺SOC峰值一定低于NSOC。

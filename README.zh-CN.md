@@ -21,7 +21,7 @@
 | HgI₂ 10.39° / 366 | D2 | 321.9 → 166.0 | **1.94×** | 105.3 → 43.0 | 59.1% |
 | HgI₂ 7.63° / 678 | D2 | 1160.2 → 364.1 | **3.19×** | 187.2 → 68.6 | 63.4% |
 
-各组统一 **64 MPI×1、150 Ry、criterion=10⁻⁷、History30、StartPulay15**，使用相同物理输入；同一材料的前后对照在同一节点完成（Intel Xeon Gold 6530，约251 GiB）。当前版使用 `scf.Symmetry on` 的自动配置，**不叠加额外低内存开关**。总耗时包含对称性准备与原生力计算；内存包含共享页一次及文件缓存。数据为每配置1–2次实测均值，总加速同时包含SCF步数变化与单步计算加速。
+各组统一 **64 MPI×1、150 Ry、criterion=10⁻⁷、History30、StartPulay15**，使用相同物理输入；同一材料的前后对照在同一节点完成（Intel Xeon Gold 6530，约251 GiB）。当前版使用 `scf.Symmetry on` 的自动配置，**不叠加额外低内存开关**。图中保留各次实测的配置；下文新增的SOC默认内存策略尚未重测整张图。总耗时包含对称性准备与原生力计算；内存包含共享页一次及文件缓存。数据为每配置1–2次实测均值，总加速同时包含SCF步数变化与单步计算加速。
 
 ![原子数与核时、峰值内存的关系](cpu/docs/benchmarks/regular256_20261110/scaling.svg)
 
@@ -150,6 +150,8 @@ cp -a case/nsoc/openmx_rst case/soc/
 ```
 
 NSOC日志须确认正常结束与实际收敛（`CPU_NSOC_SYM_FINAL ... converged=1`），达到步数上限不算收敛；SOC日志须确认 `<Restart> Found restart files`、恰好一步SCF及正常结束。两个目录分别保留自己的 `openmx.out`、`openmx.scfout` 和 `openmx_rst/`。H与S必须来自同一次匹配输出；一步SOC不是SOC自洽收敛。
+
+符合已验证条件的 C3/D3 一步 SOC（`Cluster`、RMM-DIIS、每个 MPI 进程1线程），只需 `scf.Symmetry on`，程序自动开启对应的低内存优化，无需额外环境变量。`.out` 开头会显示 **SOC memory policy**、**VNA streaming mode** 及选择原因；其他路径和布局保留原实现。
 
 `.out`前部新增 **Solver path（实际求解路径）**、**Path reason（选择原因）**、**Geometry tolerance（几何容差上限）** 和 **Detected at（实际检测容差）**。符合条件的D3/C3采用专用SOC路径；其他群、方向或观测量可能使用通用自旋分块。省略与显式填写默认协变容差的路径选择保持一致；非默认高级协变检查仍保留相应通用检查路径。[逐步操作与常见问题](cpu/docs/WORKFLOW.zh-CN.md)。
 
